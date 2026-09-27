@@ -236,7 +236,10 @@ if customer then
 	Engine.signal(sellPrompt, "Triggered"):Fire(player)
 	Engine.signal(sellPrompt, "Triggered"):Fire(player) -- double press
 	task.wait(0.4)
-	check("sold once for 10", data.Coins == 20 and data.Stats.PotionsSold == 1, `coins {data.Coins} sold {data.Stats.PotionsSold}`)
+	local saleCue = lastRemote("Cue")
+	local tip = if saleCue and saleCue.args[1] == "Sale" then saleCue.args[2].Tip else -1
+	check("served right away: a 2 coin tip", tip == 2, tip)
+	check("sold once for 10 (+ tip)", data.Coins == 22 and data.Stats.PotionsSold == 1, `coins {data.Coins} sold {data.Stats.PotionsSold}`)
 	check("sold bottle leaves the counter", plot.Display.Slot1.Body.Transparency == 1)
 	check("effect fired to all", remoteCount("PlayEffect", "FireAllClients") == 1)
 	check("customer reacting", customer:GetAttribute("Phase") == "Reacting")
@@ -265,14 +268,14 @@ local RequestUpgrade = game:GetService("ReplicatedStorage").Remotes.RequestUpgra
 local RequestBrew = game:GetService("ReplicatedStorage").Remotes.RequestBrew
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
 task.wait(0.5)
-check("can't afford BrewSpeed at 20", (data.Upgrades.BrewSpeed or 0) == 0 and data.Coins == 20)
+check("can't afford BrewSpeed at 22", (data.Upgrades.BrewSpeed or 0) == 0 and data.Coins == 22)
 -- junk from a hacked client
 for _, junk in { 123, "Nope", {}, "BrewSpeed\0", string.rep("x", 500) } do
 	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, junk)
 	Engine.signal(RequestBrew, "OnServerEvent"):Fire(player, junk)
 end
 task.wait(0.6)
-check("junk remotes ignored", data.Coins == 20)
+check("junk remotes ignored", data.Coins == 22)
 data.Coins = 30000
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "FrostGrotto")
 task.wait(0.5)
@@ -696,7 +699,9 @@ if data2 then
 		local price = Config.Recipes[wants].SellPrice
 		local vip = waitingB:FindFirstChild("VipTag", true) ~= nil
 		local expected = math.floor(price * (if vip then 2 else 1) * 1.25 + 0.5)
-		check("sales pay 25% more after a rebirth", data2.Coins - before == expected, `{data2.Coins - before} vs {expected}`)
+		local cue = lastRemote("Cue")
+		local tipB = if cue and cue.args[1] == "Sale" then cue.args[2].Tip else 0
+		check("sales pay 25% more after a rebirth", data2.Coins - before == expected + tipB, `{data2.Coins - before} vs {expected} + {tipB}`)
 	end
 end
 

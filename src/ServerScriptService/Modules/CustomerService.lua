@@ -171,10 +171,15 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	slot.Phase = "Reacting"
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
 	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
+	local quick = now() - slot.WaitingSince <= T.TipWindow
+	local tip = if quick then math.ceil(price * T.TipShare) else 0
 	data.Potions[slot.Wants] = have - 1
-	data.Coins += price
+	data.Coins += price + tip
 	PlayerData.AddStat(data, "PotionsSold", 1)
-	PlayerData.AddStat(data, "CoinsEarned", price)
+	PlayerData.AddStat(data, "CoinsEarned", price + tip)
+	if tip > 0 then
+		PlayerData.AddStat(data, "Tips", 1)
+	end
 	if slot.Vip then
 		PlayerData.AddStat(data, "VipServed", 1)
 	end
@@ -190,7 +195,11 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	setPhase(model, "Reacting", T.EffectSeconds)
 
 	PlayerData.Push(player)
-	Net.Cue(player, "Sale", { Recipe = slot.Wants, Amount = price, Vip = slot.Vip, Position = torso.Position })
+	Net.Cue(
+		player,
+		"Sale",
+		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Position = torso.Position }
+	)
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
 

@@ -826,6 +826,8 @@ Tuning.Customers = {
 	EffectSeconds = 4.4, -- how long the customer stays after buying (drinking ~0.8s + the effect)
 	SellCooldown = 0.5,
 	Patience = 45, -- a waiting customer gives up and leaves after this long
+	TipWindow = 8, -- serve a customer this soon after they reach the counter for a tip
+	TipShare = 0.2, -- the tip, as a share of the price (rounded up)
 	StuckPatience = 6, -- ...or after this long if your shelf is full and none of their potion is on it
 	StockBias = 0.6, -- chance a customer asks for a potion you already have on your shelf
 	KidChance = 0.2, -- chance a customer is a kid (a bit smaller)
@@ -3416,10 +3418,15 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	slot.Phase = "Reacting"
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
 	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
+	local quick = now() - slot.WaitingSince <= T.TipWindow
+	local tip = if quick then math.ceil(price * T.TipShare) else 0
 	data.Potions[slot.Wants] = have - 1
-	data.Coins += price
+	data.Coins += price + tip
 	PlayerData.AddStat(data, "PotionsSold", 1)
-	PlayerData.AddStat(data, "CoinsEarned", price)
+	PlayerData.AddStat(data, "CoinsEarned", price + tip)
+	if tip > 0 then
+		PlayerData.AddStat(data, "Tips", 1)
+	end
 	if slot.Vip then
 		PlayerData.AddStat(data, "VipServed", 1)
 	end
@@ -3435,7 +3442,11 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	setPhase(model, "Reacting", T.EffectSeconds)
 
 	PlayerData.Push(player)
-	Net.Cue(player, "Sale", { Recipe = slot.Wants, Amount = price, Vip = slot.Vip, Position = torso.Position })
+	Net.Cue(
+		player,
+		"Sale",
+		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Position = torso.Position }
+	)
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
 
@@ -10131,11 +10142,20 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		if typeof(data.Position) == "Vector3" then
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
+			local tip = tonumber(data.Tip) or 0
+			if tip > 0 then
+				task.delay(0.35, function()
+					Popups.Show(data.Position + Vector3.new(1.5, 4.5, 0), `Speedy! +{tip} tip`, P.Good, true)
+				end)
+			end
 			local camera = workspace.CurrentCamera
 			if camera then
 				local point, onScreen = camera:WorldToScreenPoint(data.Position + Vector3.new(0, 2, 0))
 				if onScreen then
-					Hud.FlyCoins(Vector2.new(point.X, point.Y), tonumber(data.Amount) or 10)
+					Hud.FlyCoins(
+						Vector2.new(point.X, point.Y),
+						(tonumber(data.Amount) or 10) + (tonumber(data.Tip) or 0)
+					)
 				end
 			end
 		end

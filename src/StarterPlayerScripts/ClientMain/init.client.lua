@@ -628,11 +628,20 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		if typeof(data.Position) == "Vector3" then
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
+			local tip = tonumber(data.Tip) or 0
+			if tip > 0 then
+				task.delay(0.35, function()
+					Popups.Show(data.Position + Vector3.new(1.5, 4.5, 0), `Speedy! +{tip} tip`, P.Good, true)
+				end)
+			end
 			local camera = workspace.CurrentCamera
 			if camera then
 				local point, onScreen = camera:WorldToScreenPoint(data.Position + Vector3.new(0, 2, 0))
 				if onScreen then
-					Hud.FlyCoins(Vector2.new(point.X, point.Y), tonumber(data.Amount) or 10)
+					Hud.FlyCoins(
+						Vector2.new(point.X, point.Y),
+						(tonumber(data.Amount) or 10) + (tonumber(data.Tip) or 0)
+					)
 				end
 			end
 		end
