@@ -241,7 +241,7 @@ function Ui.scaledRoot(screenGui: ScreenGui): Frame
 			return
 		end
 		local viewport = camera.ViewportSize
-		local s = math.clamp(math.min(viewport.X / DESIGN_WIDTH, viewport.Y / DESIGN_HEIGHT), 0.62, 1.3)
+		local s = math.clamp(math.min(viewport.X / DESIGN_WIDTH, viewport.Y / DESIGN_HEIGHT), 0.62, 1.1)
 		scale.Scale = s
 		root.Size = UDim2.fromScale(1 / s, 1 / s)
 	end

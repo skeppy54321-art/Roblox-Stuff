@@ -225,7 +225,7 @@ function Hud.Init(parent: Frame)
 	local column = Ui.new("Frame", {
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -12, 0.42, 0),
+		Position = UDim2.new(1, -22, 0.42, 0),
 		Size = UDim2.fromOffset(156, 204),
 		BackgroundTransparency = 1,
 		Parent = root,
@@ -464,6 +464,11 @@ end
 -- Big banner in the middle of the screen for special moments.
 local celebrationToken = 0
 function Hud.Celebrate(title: string, subtitle: string, color: Color3)
+	for _, child in toastList:GetChildren() do
+		if child:IsA("TextLabel") then
+			child:Destroy() -- the banner says it all; don't stack messages under it
+		end
+	end
 	celebrationToken += 1
 	local token = celebrationToken
 	local titleLabel = celebration:FindFirstChild("Title") :: TextLabel

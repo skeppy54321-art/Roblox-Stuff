@@ -132,8 +132,7 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	end
 	PlayerData.Push(player)
 	if isNew then
-		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus })
-		Net.Notify(player, `New recipe: {recipe.DisplayName}! +{bonus} bonus coins`, "good")
+		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
 	else
 		Net.Cue(player, "PotionReady", { Recipe = brew.Recipe })
 	end

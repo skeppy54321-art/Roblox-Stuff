@@ -34,7 +34,7 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 	local recipe = Config.Recipes[recipeId]
 	local holder = Ui.new("Frame", {
 		Name = recipeId,
-		Size = UDim2.fromOffset(124, 136),
+		Size = UDim2.fromOffset(104, 124),
 		BackgroundColor3 = P.PanelCream,
 		LayoutOrder = layoutOrder,
 		Parent = parent,
@@ -50,13 +50,13 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 		Parent = holder,
 	})
 
-	local icon = Ui.bottle(recipe.Color, 30)
+	local icon = Ui.bottle(recipe.Color, 26)
 	icon.AnchorPoint = Vector2.new(0.5, 0)
-	icon.Position = UDim2.new(0.5, 0, 0, 8)
+	icon.Position = UDim2.new(0.5, 0, 0, 6)
 	icon.Parent = holder
 	Ui.label({
-		Position = UDim2.fromOffset(6, 54),
-		Size = UDim2.new(1, -12, 0, 32),
+		Position = UDim2.fromOffset(5, 46),
+		Size = UDim2.new(1, -10, 0, 28),
 		TextColor3 = P.TextDark,
 		TextWrapped = true,
 		Text = recipe.DisplayName,
@@ -65,8 +65,8 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 
 	-- ingredient dots with "have/need" counts
 	local row = Ui.new("Frame", {
-		Position = UDim2.fromOffset(4, 88),
-		Size = UDim2.new(1, -8, 0, 18),
+		Position = UDim2.fromOffset(3, 76),
+		Size = UDim2.new(1, -6, 0, 16),
 		BackgroundTransparency = 1,
 		Parent = holder,
 	}, {
@@ -81,14 +81,14 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 	local counts: { [string]: TextLabel } = {}
 	for i, ingredientId in Config.IngredientOrder do
 		if recipe.Ingredients[ingredientId] then
-			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, 14)
+			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, 12)
 			dot.LayoutOrder = i * 2
 			dot.Parent = row
 			local count = Ui.new("TextLabel", {
-				Size = UDim2.fromOffset(26, 18),
+				Size = UDim2.fromOffset(24, 16),
 				BackgroundTransparency = 1,
 				Font = Ui.FONT,
-				TextSize = 14,
+				TextSize = 13,
 				TextColor3 = P.TextDark,
 				Text = "",
 				LayoutOrder = i * 2 + 1,
@@ -100,8 +100,8 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 
 	local status = Ui.label({
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -6),
-		Size = UDim2.new(1, -12, 0, 22),
+		Position = UDim2.new(0.5, 0, 1, -5),
+		Size = UDim2.new(1, -10, 0, 20),
 		BackgroundTransparency = 0,
 		BackgroundColor3 = P.Button,
 		Text = "BREW",
@@ -138,18 +138,18 @@ function CauldronMenu.Init(root: Frame)
 		Name = "CauldronMenu",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -14),
-		Size = UDim2.new(0.6, 0, 0, 200),
+		Size = UDim2.new(0.6, 0, 0, 170),
 		BackgroundColor3 = P.PanelLight,
 		Visible = false,
 		Parent = root,
 	}, {
 		Ui.corner(18),
 		Ui.stroke(P.DarkWood, 3),
-		Ui.new("UISizeConstraint", { MinSize = Vector2.new(300, 200), MaxSize = Vector2.new(640, 200) }),
+		Ui.new("UISizeConstraint", { MinSize = Vector2.new(300, 170), MaxSize = Vector2.new(600, 170) }),
 	})
 	Ui.label({
-		Position = UDim2.fromOffset(14, 6),
-		Size = UDim2.new(0.5, 0, 0, 24),
+		Position = UDim2.fromOffset(14, 5),
+		Size = UDim2.new(0.5, 0, 0, 22),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = P.TextDark,
 		Text = "Brew a potion",
@@ -157,8 +157,8 @@ function CauldronMenu.Init(root: Frame)
 	}, 20)
 	hint = Ui.label({
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -14, 0, 8),
-		Size = UDim2.new(0.5, -20, 0, 20),
+		Position = UDim2.new(1, -14, 0, 7),
+		Size = UDim2.new(0.5, -20, 0, 18),
 		TextXAlignment = Enum.TextXAlignment.Right,
 		TextColor3 = P.Danger,
 		Text = "",
@@ -166,8 +166,8 @@ function CauldronMenu.Init(root: Frame)
 	}, 16)
 	local list = Ui.new("ScrollingFrame", {
 		Name = "Cards",
-		Position = UDim2.fromOffset(10, 36),
-		Size = UDim2.new(1, -20, 1, -44),
+		Position = UDim2.fromOffset(10, 30),
+		Size = UDim2.new(1, -20, 1, -36),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		CanvasSize = UDim2.new(),
@@ -185,7 +185,7 @@ function CauldronMenu.Init(root: Frame)
 		}),
 		Ui.new(
 			"UIPadding",
-			{ PaddingLeft = UDim.new(0, 2), PaddingTop = UDim.new(0, 10), PaddingBottom = UDim.new(0, 6) }
+			{ PaddingLeft = UDim.new(0, 2), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 4) }
 		),
 	})
 	for i, recipeId in Config.RecipeOrder do

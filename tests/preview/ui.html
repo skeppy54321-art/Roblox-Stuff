@@ -1,0 +1,211 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>HUD Preview</title>
+<link rel="stylesheet" href="./node_modules/@fontsource/fredoka-one/index.css">
+<style>
+  html, body { margin: 0; overflow: hidden; background: #333; }
+  #screen { position: relative; overflow: hidden; }
+  #bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #safe { position: absolute; }
+  .g { position: absolute; box-sizing: border-box; }
+  .t { position: absolute; inset: 0; display: flex; font-family: 'Fredoka One', sans-serif; line-height: 1.05;
+       white-space: pre-wrap; word-break: normal; overflow-wrap: normal; }
+  .inset { position: absolute; border: 1px dashed rgba(255,0,0,0.5); pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="screen"><img id="bg"><div id="safe"></div></div>
+<script type="module">
+// Draws a Roblox GUI tree dumped by tests/ui_snapshots.luau with Roblox-like layout rules.
+const q = new URLSearchParams(location.search);
+const data = await (await fetch(q.get('file'))).json();
+// Lune encodes empty tables as {}: make every child list an array
+(function fix(n) { n.k = Array.isArray(n.k) ? n.k : Object.values(n.k || {}); if (Array.isArray(n.p)) n.p = {}; n.k.forEach(fix); })(data.tree);
+const W = data.width, H = data.height;
+const device = q.get('device') || (W < 1000 ? 'phone' : 'desktop');
+// CoreUISafeInsets: the top bar, plus notch/home-bar areas on phones
+const inset = device === 'phone' ? { t: 58, l: 44, r: 44, b: 21 } : { t: 58, l: 0, r: 0, b: 0 };
+const screen = document.getElementById('screen');
+screen.style.width = W + 'px'; screen.style.height = H + 'px';
+const bg = document.getElementById('bg');
+if (q.get('bg')) bg.src = q.get('bg'); else bg.remove();
+const safe = document.getElementById('safe');
+Object.assign(safe.style, { left: inset.l + 'px', top: inset.t + 'px', width: (W - inset.l - inset.r) + 'px', height: (H - inset.t - inset.b) + 'px' });
+await document.fonts.load("20px 'Fredoka One'");
+
+const GUI = new Set(['Frame', 'TextLabel', 'TextButton', 'ScrollingFrame', 'ImageLabel', 'ImageButton', 'TextBox', 'CanvasGroup']);
+const mod = (n, c) => n.k.find(k => k.c === c && k.p.Enabled !== false);
+const kids = n => n.k.filter(k => GUI.has(k.c) && k.p.Visible !== false);
+const ud2 = (v, pw, ph) => v ? [v[0] * pw + v[1], v[2] * ph + v[3]] : [0, 0];
+const ud = (v, total) => v ? v[0] * total + v[1] : 0;
+const rgba = (c, t = 0) => `rgba(${Math.round(c[0] * 255)},${Math.round(c[1] * 255)},${Math.round(c[2] * 255)},${1 - t})`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+const measureCtx = document.createElement('canvas').getContext('2d');
+function textWidth(s, size) { measureCtx.font = `${size}px 'Fredoka One'`; return measureCtx.measureText(s).width; }
+function wrapLines(text, size, maxW) {
+  const lines = [];
+  for (const para of text.split('\n')) {
+    let line = '';
+    for (const word of para.split(' ')) {
+      const trial = line ? line + ' ' + word : word;
+      if (line && textWidth(trial, size) > maxW) { lines.push(line); line = word; } else line = trial;
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+function fits(text, size, w, h, wrap) {
+  const lines = wrap ? wrapLines(text, size, w) : text.split('\n');
+  const widest = Math.max(...lines.map(l => textWidth(l, size)));
+  return widest <= w + 0.5 && lines.length * size * 1.05 <= h + 0.5;
+}
+function scaledSize(text, w, h, max, min) {
+  let lo = min, hi = max, best = min;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (fits(text, mid, w, h, true)) { best = mid; lo = mid + 1; } else hi = mid - 1; }
+  return best;
+}
+function padding(n) {
+  const p = mod(n, 'UIPadding');
+  return p ? { l: ud(p.p.PaddingLeft, n.w), r: ud(p.p.PaddingRight, n.w), t: ud(p.p.PaddingTop, n.h), b: ud(p.p.PaddingBottom, n.h) } : { l: 0, r: 0, t: 0, b: 0 };
+}
+
+// size from Size + constraints (automatic size is fixed up after children)
+function sizeOf(n, pw, ph) {
+  let [w, h] = ud2(n.p.Size, pw, ph);
+  const auto = n.p.AutomaticSize || 'None';
+  const isText = (n.c === 'TextLabel' || n.c === 'TextButton') && n.p.Text;
+  if (isText && (auto === 'X' || auto === 'XY') && !n.p.TextScaled) w = Math.max(w, textWidth(n.p.Text, n.p.TextSize || 14) + 2);
+  const sc = mod(n, 'UISizeConstraint');
+  if (sc) { w = clamp(w, sc.p.MinSize[0], sc.p.MaxSize[0]); h = clamp(h, sc.p.MinSize[1], sc.p.MaxSize[1]); }
+  n.w = w; n.h = h;
+}
+
+function layoutInside(n) {
+  const pad = padding(n);
+  const cw = n.w - pad.l - pad.r, ch = n.h - pad.t - pad.b;
+  n.pad = pad;
+  const list = mod(n, 'UIListLayout'), grid = mod(n, 'UIGridLayout');
+  let ks = kids(n);
+  if (list || grid) {
+    const sortByName = (list || grid).p.SortOrder === 'Name';
+    ks = ks.map((k, i) => [k, i]).sort((a, b) => sortByName ? (a[0].n < b[0].n ? -1 : 1) : ((a[0].p.LayoutOrder || 0) - (b[0].p.LayoutOrder || 0)) || (a[1] - b[1])).map(x => x[0]);
+  }
+  if (grid) {
+    const [cwid, chei] = ud2(grid.p.CellSize, cw, ch), [px, py] = ud2(grid.p.CellPadding, cw, ch);
+    const cols = Math.max(1, Math.floor((cw + px) / (cwid + px)));
+    ks.forEach((k, i) => { k.w = cwid; k.h = chei; k.x = (i % cols) * (cwid + px); k.y = Math.floor(i / cols) * (chei + py); layoutInside(k); });
+    n.contentH = ks.length ? Math.ceil(ks.length / cols) * (chei + py) - py : 0;
+    n.contentW = cw;
+  } else {
+    for (const k of ks) { sizeOf(k, cw, ch); layoutInside(k); }
+    if (list) {
+      const vertical = (list.p.FillDirection || 'Vertical') === 'Vertical';
+      const gap = ud(list.p.Padding, vertical ? ch : cw);
+      let cursor = 0;
+      for (const k of ks) {
+        if (vertical) {
+          k.y = cursor; cursor += k.h + gap;
+          const ha = list.p.HorizontalAlignment || 'Left';
+          k.x = ha === 'Center' ? (cw - k.w) / 2 : ha === 'Right' ? cw - k.w : 0;
+        } else {
+          k.x = cursor; cursor += k.w + gap;
+          const va = list.p.VerticalAlignment || 'Top';
+          k.y = va === 'Center' ? (ch - k.h) / 2 : va === 'Bottom' ? ch - k.h : 0;
+        }
+      }
+      const total = Math.max(0, cursor - gap);
+      if (vertical) {
+        const va = list.p.VerticalAlignment || 'Top';
+        const shift = va === 'Center' ? (ch - total) / 2 : va === 'Bottom' ? ch - total : 0;
+        if (n.p.AutomaticSize !== 'Y' && n.p.AutomaticSize !== 'XY') ks.forEach(k => k.y += shift);
+        n.contentH = total; n.contentW = Math.max(0, ...ks.map(k => k.w));
+      } else {
+        const ha = list.p.HorizontalAlignment || 'Left';
+        const shift = ha === 'Center' ? (cw - total) / 2 : ha === 'Right' ? cw - total : 0;
+        if (n.p.AutomaticSize !== 'X' && n.p.AutomaticSize !== 'XY') ks.forEach(k => k.x += shift);
+        n.contentW = total; n.contentH = Math.max(0, ...ks.map(k => k.h));
+      }
+    } else {
+      for (const k of ks) {
+        const [x, y] = ud2(k.p.Position, cw, ch);
+        const a = k.p.AnchorPoint || [0, 0];
+        k.x = x - a[0] * k.w; k.y = y - a[1] * k.h;
+      }
+      n.contentH = Math.max(0, ...ks.map(k => k.y + k.h));
+      n.contentW = Math.max(0, ...ks.map(k => k.x + k.w));
+    }
+  }
+  const auto = n.p.AutomaticSize || 'None';
+  if (auto === 'Y' || auto === 'XY') n.h = Math.max(n.h, n.contentH + pad.t + pad.b);
+  if (auto === 'X' || auto === 'XY') n.w = Math.max(n.w, n.contentW + pad.l + pad.r);
+  n.shown = ks;
+}
+
+function draw(n, parentEl, parentPad) {
+  const el = document.createElement('div');
+  el.className = 'g';
+  el.title = n.n;
+  const x = n.x + parentPad.l, y = n.y + parentPad.t;
+  Object.assign(el.style, { left: x + 'px', top: y + 'px', width: n.w + 'px', height: n.h + 'px', zIndex: n.p.ZIndex || 1 });
+  const bgT = n.p.BackgroundTransparency ?? 0;
+  if (bgT < 1 && n.p.BackgroundColor3) el.style.background = rgba(n.p.BackgroundColor3, bgT);
+  const corner = mod(n, 'UICorner');
+  if (corner) el.style.borderRadius = Math.min(ud(corner.p.CornerRadius, Math.min(n.w, n.h)), Math.min(n.w, n.h) / 2) + 'px';
+  const stroke = mod(n, 'UIStroke');
+  if (stroke && stroke.p.ApplyStrokeMode !== 'Contextual') el.style.boxShadow = `0 0 0 ${stroke.p.Thickness}px ${rgba(stroke.p.Color, stroke.p.Transparency || 0)}`;
+  if (n.c === 'ScrollingFrame' || n.p.ClipsDescendants) el.style.overflow = 'hidden';
+  const transforms = [];
+  const scale = mod(n, 'UIScale');
+  if (scale && scale.p.Scale !== 1) { transforms.push(`scale(${scale.p.Scale})`); const a = n.p.AnchorPoint || [0, 0]; el.style.transformOrigin = `${a[0] * 100}% ${a[1] * 100}%`; }
+  if (n.p.Rotation) transforms.push(`rotate(${n.p.Rotation}deg)`);
+  if (transforms.length) el.style.transform = transforms.join(' ');
+  if ((n.c === 'TextLabel' || n.c === 'TextButton' || n.c === 'TextBox') && n.p.Text) {
+    const t = document.createElement('div');
+    t.className = 't';
+    const pad = n.pad;
+    const tw = n.w - pad.l - pad.r, th = n.h - pad.t - pad.b;
+    Object.assign(t.style, { inset: 'auto', left: pad.l + 'px', top: pad.t + 'px', width: tw + 'px', height: th + 'px' });
+    let size = n.p.TextSize || 14;
+    if (n.p.TextScaled) {
+      const c = mod(n, 'UITextSizeConstraint');
+      size = scaledSize(n.p.Text, tw, th, c ? c.p.MaxTextSize : 100, c ? c.p.MinTextSize || 1 : 1);
+    }
+    t.style.fontSize = size + 'px';
+    t.style.color = rgba(n.p.TextColor3 || [0, 0, 0], n.p.TextTransparency || 0);
+    const xa = n.p.TextXAlignment || 'Center', ya = n.p.TextYAlignment || 'Center';
+    t.style.justifyContent = xa === 'Left' ? 'flex-start' : xa === 'Right' ? 'flex-end' : 'center';
+    t.style.textAlign = xa.toLowerCase();
+    t.style.alignItems = ya === 'Top' ? 'flex-start' : ya === 'Bottom' ? 'flex-end' : 'center';
+    if (!(n.p.TextWrapped || n.p.TextScaled)) t.style.whiteSpace = 'pre';
+    if ((n.p.TextStrokeTransparency ?? 1) < 1) {
+      const sc = rgba(n.p.TextStrokeColor3 || [0, 0, 0], n.p.TextStrokeTransparency);
+      t.style.textShadow = `1px 1px 0 ${sc}, -1px -1px 0 ${sc}, 1px -1px 0 ${sc}, -1px 1px 0 ${sc}`;
+    }
+    const span = document.createElement('span');
+    span.textContent = n.p.Text;
+    t.appendChild(span);
+    el.appendChild(t);
+  }
+  for (const k of n.shown || []) draw(k, el, n.pad);
+  parentEl.appendChild(el);
+}
+
+// the ScreenGui fills the safe area
+const gui = data.tree;
+const area = { w: W - inset.l - inset.r, h: H - inset.t - inset.b };
+for (const k of kids(gui)) {
+  sizeOf(k, area.w, area.h);
+  layoutInside(k);
+  const [x, y] = ud2(k.p.Position, area.w, area.h);
+  const a = k.p.AnchorPoint || [0, 0];
+  k.x = x - a[0] * k.w; k.y = y - a[1] * k.h;
+  draw(k, safe, { l: 0, t: 0 });
+}
+if (q.get('insets')) { const i = document.createElement('div'); i.className = 'inset'; for (const k of ['left', 'top', 'width', 'height']) i.style[k] = safe.style[k]; screen.appendChild(i); }
+window.__ready = true;
+</script>
+</body>
+</html>

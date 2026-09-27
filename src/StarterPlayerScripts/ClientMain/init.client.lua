@@ -343,7 +343,18 @@ RunService.Heartbeat:Connect(function(dt)
 		and rootPart:IsA("BasePart")
 		and (rootPart.Position - hitbox.Position).Magnitude <= MENU_RANGE
 	local modalOpen = UpgradesPanel.IsOpen() or RecipeBook.IsOpen()
-	local show = near and not modalOpen and not isBrewing(cauldron) and state ~= nil
+	local s = state
+	local canBrewSomething = false
+	if s and Config.PotionTotal(s.Potions) < Config.GetMaxPotions(s.Upgrades) then
+		for _, recipeId in Config.RecipeOrder do
+			if Config.IsRecipeUnlocked(s.Upgrades, recipeId) and Config.HasIngredientsFor(s.Ingredients, recipeId) then
+				canBrewSomething = true
+				break
+			end
+		end
+	end
+	-- only when there's a real choice to make (the goal banner explains everything else)
+	local show = near and not modalOpen and not isBrewing(cauldron) and canBrewSomething
 	if show and cauldron then
 		local wants = {}
 		for _, c in myCustomers() do

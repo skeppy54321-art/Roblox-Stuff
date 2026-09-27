@@ -63,10 +63,7 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 		UpgradeService.ApplyAll(plot, data.Upgrades)
 	end
 	PlayerData.Push(player)
-	Net.Cue(player, "Upgrade", { Upgrade = id, Level = level + 1 })
-	local maxLevel = Config.GetMaxLevel(id)
-	local suffix = if maxLevel > 1 then ` (level {level + 1})` else ""
-	Net.Notify(player, `{upgrade.DisplayName}{suffix}!`, "good")
+	Net.Cue(player, "Upgrade", { Upgrade = id, Level = level + 1 }) -- the client celebrates
 end
 
 function UpgradeService.Init(plots: { Plot })

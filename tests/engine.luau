@@ -630,4 +630,54 @@ function Engine.dumpParts(root)
 	return parts, lights
 end
 
+
+------------------------------------------------------------------
+-- Dump a GUI tree (for the HTML UI preview)
+------------------------------------------------------------------
+local GUI_PROPS = {
+	"Size", "Position", "AnchorPoint", "Rotation", "BackgroundColor3", "BackgroundTransparency", "BorderSizePixel",
+	"Visible", "ZIndex", "LayoutOrder", "AutomaticSize", "Text", "TextColor3", "TextScaled", "TextSize",
+	"TextXAlignment", "TextYAlignment", "TextWrapped", "TextTransparency", "TextStrokeTransparency",
+	"TextStrokeColor3", "ClipsDescendants", "CanvasSize", "AutomaticCanvasSize", "ScrollingDirection",
+	"ScrollBarThickness", "Enabled",
+	-- modifiers
+	"CornerRadius", "Color", "Thickness", "Transparency", "ApplyStrokeMode", "PaddingLeft", "PaddingRight",
+	"PaddingTop", "PaddingBottom", "FillDirection", "Padding", "HorizontalAlignment", "VerticalAlignment",
+	"SortOrder", "CellSize", "CellPadding", "MinSize", "MaxSize", "MaxTextSize", "MinTextSize", "Scale",
+}
+local function plain(v)
+	local t = typeof(v)
+	if t == "UDim2" then
+		return { v.X.Scale, v.X.Offset, v.Y.Scale, v.Y.Offset }
+	elseif t == "UDim" then
+		return { v.Scale, v.Offset }
+	elseif t == "Vector2" then
+		return { v.X, v.Y }
+	elseif t == "Color3" then
+		return { v.R, v.G, v.B }
+	elseif t == "EnumItem" then
+		return v.Name
+	elseif t == "number" or t == "string" or t == "boolean" then
+		return v
+	end
+	return nil
+end
+function Engine.dumpGui(inst)
+	local node = { c = inst.ClassName, n = inst.Name, p = {}, k = {} }
+	for _, prop in GUI_PROPS do
+		local ok, value = pcall(function()
+			return inst[prop]
+		end)
+		if ok and value ~= nil then
+			node.p[prop] = plain(value)
+		end
+	end
+	for _, child in inst:GetChildren() do
+		if child:IsA("GuiBase2d") or child:IsA("UIBase") or child:IsA("UIComponent") then
+			table.insert(node.k, Engine.dumpGui(child))
+		end
+	end
+	return node
+end
+
 return Engine

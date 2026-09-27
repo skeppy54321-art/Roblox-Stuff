@@ -26,3 +26,5 @@ tests/preview/node_modules
 tests/preview/*.json
 !tests/preview/package.json
 tests/preview/shots
+tests/preview/ui_*.json
+tests/preview/bg-*.png
