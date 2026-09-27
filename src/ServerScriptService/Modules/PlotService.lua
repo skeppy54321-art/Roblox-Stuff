@@ -106,6 +106,7 @@ function PlotService.Release(player: Player)
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	setSign(plot, "Empty Shop")
 	PlotService.ApplyVisuals(plot, nil)
+	PlotService.ShowStock(plot, nil)
 end
 
 -- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop).
@@ -139,6 +140,32 @@ function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?)
 		local light = part:FindFirstChildOfClass("PointLight")
 		if light then
 			light.Color = fire
+		end
+	end
+end
+
+-- Fills the counter display with one bottle per potion in stock (nil = empty shop).
+function PlotService.ShowStock(plot: Plot, potions: { [string]: number }?)
+	local colors: { Color3 } = {}
+	if potions then
+		for _, recipeId in Config.RecipeOrder do
+			for _ = 1, potions[recipeId] or 0 do
+				table.insert(colors, Config.Recipes[recipeId].Color)
+			end
+		end
+	end
+	for i, slot in plot.DisplaySlots do
+		local color = colors[i]
+		for _, part in slot:GetChildren() do
+			if part:IsA("BasePart") then
+				local transparency = if not color then 1 elseif part.Name == "Neck" then 0.3 else 0
+				if part.Transparency ~= transparency then
+					part.Transparency = transparency
+				end
+				if color and part.Name ~= "Cork" and part.Color ~= color then
+					part.Color = color
+				end
+			end
 		end
 	end
 end

@@ -1,12 +1,13 @@
 --!nocheck
 -- client_test.luau: "play solo" in one process. Boots the server, joins one player, runs the real
 -- ClientMain LocalScript for them, then clicks through the UI and plays every potion effect.
--- Usage: lune run client_test.luau <place.rbxlx>
+-- Usage: lune run client_test.luau <place.rbxlx> [out_dir]
 
 local roblox = require("@lune/roblox")
 local fs = require("@lune/fs")
 local task = require("@lune/task")
 local process = require("@lune/process")
+local serde = require("@lune/serde")
 local Engine = require("./engine")
 
 local game = roblox.deserializePlace(fs.readFile(process.args[1]))
@@ -238,6 +239,7 @@ local done = waitFor(8, function()
 	return uiRoot.Celebration.Visible
 end)
 check("NEW RECIPE celebration", done)
+check("a bottle pops out of the cauldron", workspace:FindFirstChild("PopBottle") ~= nil)
 
 print("== sell + effect ==")
 local customer = waitFor(8, function()
@@ -328,7 +330,17 @@ for i, name in { "BigHead", "Rainbow", "Tiny", "Floaty", "Twirl", "Frosty", "Fro
 	Engine.syncPositions(model)
 	Effects.Play(name, model)
 end
-task.wait(4.5)
+task.wait(0.3)
+check("customer drinks first", models.BigHead:FindFirstChild("DrinkBottle") ~= nil)
+if process.args[2] then -- optional: dump the drinking pose for tests/preview (view "drink")
+	local parts, lights = Engine.dumpParts(workspace)
+	local views = { drink = { pos = { 9.2, 5.3, -4.6 }, look = { 8, 4.4, -10 }, fov = 42 } } -- in front of the Giant Head customer
+	fs.writeFile(process.args[2] .. "/parts_drink.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
+end
+check("arm raised to drink", models.BigHead.ArmR.CFrame.Position.Y > models.BigHead.Torso.CFrame.Position.Y)
+task.wait(5)
+check("bottle put away", models.BigHead:FindFirstChild("DrinkBottle") == nil)
+check("pop bottle cleaned up", workspace:FindFirstChild("PopBottle") == nil)
 check("no effect errors", #Engine.warnings == warningsBefore, table.concat(Engine.warnings, " | "))
 check("tiny shrank", models.Tiny.Torso.Size.X < 1.2, models.Tiny.Torso.Size.X)
 check("frog appeared", models.Froggy:FindFirstChild("Frog") ~= nil)

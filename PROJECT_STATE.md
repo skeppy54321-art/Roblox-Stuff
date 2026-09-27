@@ -64,8 +64,9 @@ StarterPlayer > StarterPlayerScripts
 **Loop**
 * Collect ingredients from your plants (charges regrow). 4 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal (unlock by buying their plots).
 * Brew at your cauldron. Standing at it opens the **cauldron menu**: every unlocked potion, what you're missing, which one a customer wants. Tap a card (or press 1-9), or press the cauldron to brew the suggested potion. Press again while brewing to stir (faster). The liquid turns the potion's color.
+* When a potion is done, a bottle of it pops out of the cauldron with a sparkle, and your potions stand on the counter as glowing bottles (everyone can see your stock).
 * First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price.
-* Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). Sell it: coins, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
+* Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
 
 **7 potions and their effects**
 
@@ -116,8 +117,8 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 1. **Play solo.** Output: `[Brew a Potion] Server started` and a ProfileStore line. You appear in your shop facing the counter; the sign shows your name.
 2. The goal banner and gold arrow point at the purple bush. Collect a Moonberry, then a Glowshroom: "+1" popups, counts go up in the basket, berries/caps disappear and regrow.
 3. Stand at the cauldron: the menu pops up at the bottom. Tap Giant Head (or press E). The liquid turns pink, the bar fills. Press E again to stir: the bar jumps, bubbles splash.
-4. "NEW RECIPE!" banner and +10 bonus coins. The first customer walks in from the plaza asking for a Giant Head Potion.
-5. Sell: +10 coins popup, their head inflates, they shout "My head!!", then walk away. A new customer walks in.
+4. "NEW RECIPE!" banner and +10 bonus coins. A pink bottle jumps out of the cauldron and sparkles away; a pink bottle now stands on your counter. The first customer walks in from the plaza asking for a Giant Head Potion.
+5. Sell: +10 coins popup, the bottle leaves your counter, the customer raises a pink bottle and drinks, their head inflates, they shout "My head!!", then walk away. A new customer walks in.
 6. Reach 25 coins: the UPGRADES badge appears. Buy Faster Brewing: the fire turns blue and the celebration banner shows.
 7. Buy the Starflower Bed from its "for sale" sign in your shop: the sign disappears and starflowers appear. Floaty and Twirly show up in the menu.
 8. **Timing:** first sale should come within 60–90 seconds.
@@ -144,7 +145,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 * **Sources:** potion sales (10–70 coins, VIPs x2), first-brew bonuses (one per recipe, 197 total).
 * **Sinks:** 7 upgrade tracks, 4,025 coins to max everything.
-* **Pace estimate:** customers are the bottleneck (about 6 sales a minute per counter spot). Early game about 50–70 coins/min, so the first upgrade comes after 2–3 sales and the Starflower Bed at about 2 minutes. After the Frost Grotto, about 200+ coins/min. Maxing everything takes roughly 25–35 minutes.
+* **Pace estimate:** customers are the bottleneck (about 5–6 sales a minute per counter spot: walk in, drink + effect 4.4s, walk out, 1.5s gap). Early game about 50–70 coins/min, so the first upgrade comes after 2–3 sales and the Starflower Bed at about 2 minutes. After the Frost Grotto, about 200+ coins/min. Maxing everything takes roughly 25–35 minutes.
 * **Watch for:** the content wall after ~30 minutes (needs new ingredients/recipes/decor), and whether Faster Brewing matters while customers are the bottleneck.
 
 ## Verified API notes (checked Sep 26–27, 2026)

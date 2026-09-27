@@ -24,9 +24,14 @@ BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
 
--- Keep the cauldron's suggested potion, the player list and the Market Stars board fresh.
+-- Keep the cauldron's suggested potion, the counter display, the player list and the
+-- Market Stars board fresh.
 PlayerData.OnChanged(function(player, data)
 	BrewService.Refresh(player)
+	local plot = PlotService.GetPlot(player)
+	if plot then
+		PlotService.ShowStock(plot, data.Potions)
+	end
 	SocialService.Update(player, data)
 end)
 CustomerService.OnChanged(function(plot)

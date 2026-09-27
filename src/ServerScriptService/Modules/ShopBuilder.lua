@@ -26,6 +26,7 @@ export type PlotParts = {
 	Cauldron: Model,
 	Sign: BasePart,
 	CheerStand: Model, -- visitors cheer for the owner here (Hitbox + CheerPrompt, Hearts, CountLabel)
+	DisplaySlots: { Model }, -- bottles on the counter showing the owner's potions (hidden when empty)
 	CounterFront: BasePart,
 	SpawnPoint: BasePart,
 	GoldParts: { BasePart }, -- cauldron parts that turn gold with Cozy Decor level 3
@@ -345,6 +346,36 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
+end
+
+------------------------------------------------------------------
+-- Potion display: one bottle per potion in stock, along the back of the counter
+------------------------------------------------------------------
+
+-- One slot for every potion the biggest shelves can hold.
+local function mostPotions(): number
+	local most = Config.Tuning.Storage.MaxPotions
+	for _, level in Config.Upgrades.Shelves.Levels do
+		most = math.max(most, level.MaxPotions or 0)
+	end
+	return most
+end
+ShopBuilder.DisplaySlotCount = mostPotions()
+
+local function buildDisplay(plot: Model, at: At): { Model }
+	local display = Kit.Model(plot, "Display")
+	local slots: { Model } = {}
+	local hidden = { Transparency = 1, CastShadow = false }
+	for i = 1, ShopBuilder.DisplaySlotCount do
+		local slot = Kit.Model(display, `Slot{i}`)
+		local x = i - (ShopBuilder.DisplaySlotCount + 1) / 2 -- centered, 1 stud apart
+		local base = at(x, 3.85, -7.3)
+		Kit.Cylinder(slot, "Body", 1, 0.7, base * CFrame.new(0, 0.5, 0), P.Liquid, NEON, hidden)
+		Kit.Cylinder(slot, "Neck", 0.35, 0.3, base * CFrame.new(0, 1.17, 0), P.Liquid, Enum.Material.Glass, hidden)
+		Kit.Cylinder(slot, "Cork", 0.2, 0.34, base * CFrame.new(0, 1.44, 0), P.LightWood, WOOD, hidden)
+		table.insert(slots, slot)
+	end
+	return slots
 end
 
 ------------------------------------------------------------------
@@ -794,6 +825,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	}
 
 	local cheerStand = buildCheerStand(plot, at)
+	local displaySlots = buildDisplay(plot, at)
 
 	-- Invisible markers
 	local counterFront = marker(plot, "CounterFront", at(0, 0, ShopBuilder.CounterFrontZ))
@@ -812,6 +844,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Cauldron = cauldron,
 		Sign = sign,
 		CheerStand = cheerStand,
+		DisplaySlots = displaySlots,
 		CounterFront = counterFront,
 		SpawnPoint = spawnPoint,
 		GoldParts = goldParts,

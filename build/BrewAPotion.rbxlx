@@ -638,7 +638,7 @@ Tuning.Customers = {
 	RespawnSeconds = 1.5, -- gap between one customer leaving and the next arriving
 	WalkSpeed = 8, -- studs per second walking to and from the counter
 	WalkDistance = 20, -- how far out on the plaza they start walking from
-	EffectSeconds = 3.6, -- how long the customer stays after drinking
+	EffectSeconds = 4.4, -- how long the customer stays after buying (drinking ~0.8s + the effect)
 	SellCooldown = 0.5,
 	StockBias = 0.6, -- chance a customer asks for a potion you already have on your shelf
 	VipChance = 0.12, -- chance a customer is a VIP (after VipMinSales sales)
@@ -868,11 +868,16 @@ return World
 -- Cosmetic customer effects. Runs ONLY on clients. Never touches coins or inventory.
 -- Each child module is one effect: `return function(customer: Model, fx: Effects.Helpers)`.
 -- Add a new potion effect by adding a child module named like Config.Recipes[...].Effect.
--- Effects should finish within Config.Tuning.Customers.EffectSeconds (the customer walks away after).
+-- Before every effect the customer drinks the potion (DRINK_SECONDS). Drinking plus the
+-- effect should finish within Config.Tuning.Customers.EffectSeconds (they walk away after).
 
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+
+local DRINK_SECONDS = 0.8
+local SHOULDER = Vector3.new(1.55, 3.9, 0) -- right shoulder, in the customer's own space (see CustomerBuilder)
 
 export type Helpers = {
 	-- Particles flying out of `part` once.
@@ -984,6 +989,66 @@ local function sound(name: string, part: BasePart?)
 	end
 end
 
+local function smooth(t: number): number
+	return t * t * (3 - 2 * t)
+end
+
+-- The customer lifts a bottle of the potion to their mouth and drinks it.
+local function drink(customer: Model, color: Color3)
+	local arm = customer:FindFirstChild("ArmR")
+	local hand = customer:FindFirstChild("HandR")
+	if not (arm and arm:IsA("BasePart") and hand and hand:IsA("BasePart")) then
+		return
+	end
+	local scale = customer:GetScale()
+	local shoulder = customer:GetPivot() * CFrame.new(SHOULDER * scale)
+	local armRest, handRest = arm.CFrame, hand.CFrame
+	local bottle = Instance.new("Part")
+	bottle.Name = "DrinkBottle"
+	bottle.Shape = Enum.PartType.Cylinder
+	bottle.Size = Vector3.new(1.1, 0.6, 0.6) * scale -- a cylinder's length runs along X
+	bottle.Material = Enum.Material.Neon
+	bottle.Color = color
+	bottle.Anchored = true
+	bottle.CanCollide = false
+	bottle.CanQuery = false
+	bottle.CanTouch = false
+	bottle.CastShadow = false
+	bottle.Parent = customer -- goes away with the customer, whatever happens
+	-- in front of the fist; upright while the arm hangs down, pointing at the mouth when raised
+	local inHand = CFrame.new(0, 0.2 * scale, -0.42 * scale)
+	local upright = CFrame.Angles(0, 0, math.rad(90))
+	animate(customer, DRINK_SECONDS, function(alpha)
+		-- lift (first 35%), sip with a tip of the bottle, lower (last 15%)
+		local lift = if alpha < 0.35
+			then smooth(alpha / 0.35)
+			elseif alpha < 0.85 then 1
+			else 1 - smooth((alpha - 0.85) / 0.15)
+		-- forward and in toward the mouth, turning around the shoulder
+		local turn = shoulder
+			* CFrame.Angles(0, math.rad(39) * lift, 0)
+			* CFrame.Angles(math.rad(110) * lift, 0, 0)
+			* shoulder:Inverse()
+		arm.CFrame = turn * armRest
+		hand.CFrame = turn * handRest
+		local sip = if alpha >= 0.35 and alpha < 0.85 then math.sin((alpha - 0.35) / 0.5 * math.pi) else 0
+		bottle.CFrame = hand.CFrame * inHand * CFrame.Angles(math.rad(35) * sip, 0, 0) * upright -- tip it up to sip
+	end)
+	arm.CFrame, hand.CFrame = armRest, handRest
+	bottle:Destroy()
+	sound("Plop", hand)
+end
+
+-- The color of the potion that causes this effect.
+local function potionColor(effectName: string): Color3
+	for _, recipe in Config.Recipes do
+		if recipe.Effect == effectName then
+			return recipe.Color
+		end
+	end
+	return Config.Palette.Liquid
+end
+
 local helpers: Helpers = {
 	Burst = burst,
 	Poof = poof,
@@ -1022,7 +1087,10 @@ function Effects.Play(effectName: unknown, model: unknown)
 	local fn = effect :: EffectFn
 	task.spawn(function()
 		local success, err = pcall(function(): any
-			fn(customer, helpers)
+			drink(customer, potionColor(effectName))
+			if customer.Parent then
+				fn(customer, helpers)
+			end
 			return nil
 		end)
 		if not success then
@@ -1459,9 +1527,14 @@ BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
 
--- Keep the cauldron's suggested potion, the player list and the Market Stars board fresh.
+-- Keep the cauldron's suggested potion, the counter display, the player list and the
+-- Market Stars board fresh.
 PlayerData.OnChanged(function(player, data)
 	BrewService.Refresh(player)
+	local plot = PlotService.GetPlot(player)
+	if plot then
+		PlotService.ShowStock(plot, data.Potions)
+	end
 	SocialService.Update(player, data)
 end)
 CustomerService.OnChanged(function(plot)
@@ -1925,11 +1998,15 @@ end
 local function buildHat(head: Model, at: At, rng: Random)
 	local color = pick(P.Bottles, rng)
 	local style = rng:NextInteger(1, 5)
-	if style == 1 then -- wizard hat
+	if style == 1 then -- wizard hat with a floppy tip
 		Kit.Cylinder(head, "HatBrim", 0.15, 2.4, at(0, 5.55, 0), color)
-		local tiers = { { 1.5, 5.9 }, { 1.1, 6.45 }, { 0.7, 7 }, { 0.35, 7.45 } }
-		for _, tier in tiers do
-			Kit.Cylinder(head, "HatTier", 0.6, tier[1], at(0, tier[2], 0), color)
+		local tiers = 7
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		for t = 1, tiers do
+			local f = (t - 1) / (tiers - 1) -- 0 at the base, 1 at the tip
+			local bend = 0.55 * f * f * side -- the tip flops to one side
+			local cf = at(bend, 5.8 + (t - 1) * 0.34, 0) * CFrame.Angles(0, 0, -0.55 * f * side)
+			Kit.Cylinder(head, "HatTier", 0.44, 1.55 - 1.3 * f, cf, color)
 		end
 		Kit.Ball(
 			head,
@@ -3977,6 +4054,7 @@ function PlotService.Release(player: Player)
 	plot.Model:SetAttribute("OwnerUserId", 0)
 	setSign(plot, "Empty Shop")
 	PlotService.ApplyVisuals(plot, nil)
+	PlotService.ShowStock(plot, nil)
 end
 
 -- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop).
@@ -4010,6 +4088,32 @@ function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?)
 		local light = part:FindFirstChildOfClass("PointLight")
 		if light then
 			light.Color = fire
+		end
+	end
+end
+
+-- Fills the counter display with one bottle per potion in stock (nil = empty shop).
+function PlotService.ShowStock(plot: Plot, potions: { [string]: number }?)
+	local colors: { Color3 } = {}
+	if potions then
+		for _, recipeId in Config.RecipeOrder do
+			for _ = 1, potions[recipeId] or 0 do
+				table.insert(colors, Config.Recipes[recipeId].Color)
+			end
+		end
+	end
+	for i, slot in plot.DisplaySlots do
+		local color = colors[i]
+		for _, part in slot:GetChildren() do
+			if part:IsA("BasePart") then
+				local transparency = if not color then 1 elseif part.Name == "Neck" then 0.3 else 0
+				if part.Transparency ~= transparency then
+					part.Transparency = transparency
+				end
+				if color and part.Name ~= "Cork" and part.Color ~= color then
+					part.Color = color
+				end
+			end
 		end
 	end
 end
@@ -6310,6 +6414,7 @@ export type PlotParts = {
 	Cauldron: Model,
 	Sign: BasePart,
 	CheerStand: Model, -- visitors cheer for the owner here (Hitbox + CheerPrompt, Hearts, CountLabel)
+	DisplaySlots: { Model }, -- bottles on the counter showing the owner's potions (hidden when empty)
 	CounterFront: BasePart,
 	SpawnPoint: BasePart,
 	GoldParts: { BasePart }, -- cauldron parts that turn gold with Cozy Decor level 3
@@ -6629,6 +6734,36 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
+end
+
+------------------------------------------------------------------
+-- Potion display: one bottle per potion in stock, along the back of the counter
+------------------------------------------------------------------
+
+-- One slot for every potion the biggest shelves can hold.
+local function mostPotions(): number
+	local most = Config.Tuning.Storage.MaxPotions
+	for _, level in Config.Upgrades.Shelves.Levels do
+		most = math.max(most, level.MaxPotions or 0)
+	end
+	return most
+end
+ShopBuilder.DisplaySlotCount = mostPotions()
+
+local function buildDisplay(plot: Model, at: At): { Model }
+	local display = Kit.Model(plot, "Display")
+	local slots: { Model } = {}
+	local hidden = { Transparency = 1, CastShadow = false }
+	for i = 1, ShopBuilder.DisplaySlotCount do
+		local slot = Kit.Model(display, `Slot{i}`)
+		local x = i - (ShopBuilder.DisplaySlotCount + 1) / 2 -- centered, 1 stud apart
+		local base = at(x, 3.85, -7.3)
+		Kit.Cylinder(slot, "Body", 1, 0.7, base * CFrame.new(0, 0.5, 0), P.Liquid, NEON, hidden)
+		Kit.Cylinder(slot, "Neck", 0.35, 0.3, base * CFrame.new(0, 1.17, 0), P.Liquid, Enum.Material.Glass, hidden)
+		Kit.Cylinder(slot, "Cork", 0.2, 0.34, base * CFrame.new(0, 1.44, 0), P.LightWood, WOOD, hidden)
+		table.insert(slots, slot)
+	end
+	return slots
 end
 
 ------------------------------------------------------------------
@@ -7078,6 +7213,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	}
 
 	local cheerStand = buildCheerStand(plot, at)
+	local displaySlots = buildDisplay(plot, at)
 
 	-- Invisible markers
 	local counterFront = marker(plot, "CounterFront", at(0, 0, ShopBuilder.CounterFrontZ))
@@ -7096,6 +7232,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Cauldron = cauldron,
 		Sign = sign,
 		CheerStand = cheerStand,
+		DisplaySlots = displaySlots,
 		CounterFront = counterFront,
 		SpawnPoint = spawnPoint,
 		GoldParts = goldParts,
@@ -8231,6 +8368,9 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "PotionReady" then
 		Sfx.Play("PotionReady")
 		local recipe = Config.Recipes[data.Recipe]
+		if recipe then
+			CauldronFx.Pop(recipe.Color)
+		end
 		local hitbox = hitboxOf(myCauldron())
 		if recipe and hitbox then
 			Popups.Show(hitbox.Position + Vector3.new(0, 4, 0), `{recipe.DisplayName}!`, recipe.Color)
@@ -8239,6 +8379,7 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		Sfx.Play("Discover")
 		local recipe = Config.Recipes[data.Recipe]
 		if recipe then
+			CauldronFx.Pop(recipe.Color)
 			Hud.Celebrate("NEW RECIPE!", `{recipe.DisplayName}  +{tonumber(data.Bonus) or 0} coins`, recipe.Color)
 		end
 	elseif cue == "Sale" then
@@ -8371,9 +8512,11 @@ return Ambience
             <string name="Source"><![CDATA[--!strict
 -- CauldronFx (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.CauldronFx
 -- Your own cauldron: a progress bar with the potion's name while it brews, a bubbling
--- sound, and a splash of bubbles every time you stir.
+-- sound, a splash of bubbles every time you stir, and a bottle that pops out when a
+-- potion is done.
 
 local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 local Ui = require(script.Parent:WaitForChild("Ui"))
@@ -8455,6 +8598,89 @@ function CauldronFx.Init(playerGui: PlayerGui)
 			else
 				Sfx.StopLoop("Cauldron")
 			end
+		end
+	end)
+end
+
+local POP_SECONDS = 1.25
+local BOTTLE_SIZE = Vector3.new(1.3, 0.85, 0.85) -- a cylinder's length runs along X
+local UPRIGHT = CFrame.Angles(0, 0, math.rad(90))
+
+local function easeOutBack(t: number): number
+	local c = 1.7
+	return 1 + (c + 1) * (t - 1) ^ 3 + c * (t - 1) ^ 2
+end
+
+local function sparkle(position: Vector3, color: Color3)
+	local holder = Instance.new("Part")
+	holder.Name = "PopSparkle"
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.Transparency = 1
+	holder.Size = Vector3.one
+	holder.CFrame = CFrame.new(position)
+	holder.Parent = workspace
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(color, P.Gold)
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.45),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Lifetime = NumberRange.new(0.5, 0.9)
+	emitter.Speed = NumberRange.new(6, 10)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Rate = 0
+	emitter.Parent = holder
+	emitter:Emit(26)
+	Debris:AddItem(holder, 2)
+end
+
+-- A bottle of the finished potion jumps out of your cauldron, spins, and sparkles away
+-- (the new bottle appears on your counter at the same time).
+function CauldronFx.Pop(color: Color3)
+	local cauldron = watched
+	local liquid = if cauldron then cauldron:FindFirstChild("Liquid") else nil
+	if not cauldron or not liquid or not liquid:IsA("BasePart") then
+		return
+	end
+	local bubbles = cauldron:FindFirstChild("Bubbles", true)
+	if bubbles and bubbles:IsA("ParticleEmitter") then
+		bubbles:Emit(20)
+	end
+	local bottle = Instance.new("Part")
+	bottle.Name = "PopBottle"
+	bottle.Shape = Enum.PartType.Cylinder
+	bottle.Size = BOTTLE_SIZE
+	bottle.Material = Enum.Material.Neon
+	bottle.Color = color
+	bottle.Anchored = true
+	bottle.CanCollide = false
+	bottle.CanQuery = false
+	bottle.CanTouch = false
+	bottle.CastShadow = false
+	local start = liquid.Position
+	bottle.CFrame = CFrame.new(start) * UPRIGHT
+	bottle.Parent = workspace
+	task.spawn(function()
+		local began = os.clock()
+		while bottle.Parent do
+			local t = os.clock() - began
+			if t >= POP_SECONDS then
+				break
+			end
+			local rise = 3.4 * easeOutBack(math.min(t / 0.45, 1))
+			local shrink = if t > 0.95 then math.max(0, 1 - (t - 0.95) / (POP_SECONDS - 0.95)) else 1
+			bottle.Size = BOTTLE_SIZE * math.max(shrink, 0.05)
+			bottle.CFrame = CFrame.new(start + Vector3.new(0, rise, 0)) * CFrame.Angles(0, t * 9, 0) * UPRIGHT
+			RunService.RenderStepped:Wait()
+		end
+		if bottle.Parent then
+			sparkle(bottle.Position, color)
+			bottle:Destroy()
 		end
 	end)
 end

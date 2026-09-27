@@ -96,11 +96,15 @@ end
 local function buildHat(head: Model, at: At, rng: Random)
 	local color = pick(P.Bottles, rng)
 	local style = rng:NextInteger(1, 5)
-	if style == 1 then -- wizard hat
+	if style == 1 then -- wizard hat with a floppy tip
 		Kit.Cylinder(head, "HatBrim", 0.15, 2.4, at(0, 5.55, 0), color)
-		local tiers = { { 1.5, 5.9 }, { 1.1, 6.45 }, { 0.7, 7 }, { 0.35, 7.45 } }
-		for _, tier in tiers do
-			Kit.Cylinder(head, "HatTier", 0.6, tier[1], at(0, tier[2], 0), color)
+		local tiers = 7
+		local side = if rng:NextNumber() < 0.5 then -1 else 1
+		for t = 1, tiers do
+			local f = (t - 1) / (tiers - 1) -- 0 at the base, 1 at the tip
+			local bend = 0.55 * f * f * side -- the tip flops to one side
+			local cf = at(bend, 5.8 + (t - 1) * 0.34, 0) * CFrame.Angles(0, 0, -0.55 * f * side)
+			Kit.Cylinder(head, "HatTier", 0.44, 1.55 - 1.3 * f, cf, color)
 		end
 		Kit.Ball(
 			head,

@@ -3,11 +3,16 @@
 -- Cosmetic customer effects. Runs ONLY on clients. Never touches coins or inventory.
 -- Each child module is one effect: `return function(customer: Model, fx: Effects.Helpers)`.
 -- Add a new potion effect by adding a child module named like Config.Recipes[...].Effect.
--- Effects should finish within Config.Tuning.Customers.EffectSeconds (the customer walks away after).
+-- Before every effect the customer drinks the potion (DRINK_SECONDS). Drinking plus the
+-- effect should finish within Config.Tuning.Customers.EffectSeconds (they walk away after).
 
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+
+local DRINK_SECONDS = 0.8
+local SHOULDER = Vector3.new(1.55, 3.9, 0) -- right shoulder, in the customer's own space (see CustomerBuilder)
 
 export type Helpers = {
 	-- Particles flying out of `part` once.
@@ -119,6 +124,66 @@ local function sound(name: string, part: BasePart?)
 	end
 end
 
+local function smooth(t: number): number
+	return t * t * (3 - 2 * t)
+end
+
+-- The customer lifts a bottle of the potion to their mouth and drinks it.
+local function drink(customer: Model, color: Color3)
+	local arm = customer:FindFirstChild("ArmR")
+	local hand = customer:FindFirstChild("HandR")
+	if not (arm and arm:IsA("BasePart") and hand and hand:IsA("BasePart")) then
+		return
+	end
+	local scale = customer:GetScale()
+	local shoulder = customer:GetPivot() * CFrame.new(SHOULDER * scale)
+	local armRest, handRest = arm.CFrame, hand.CFrame
+	local bottle = Instance.new("Part")
+	bottle.Name = "DrinkBottle"
+	bottle.Shape = Enum.PartType.Cylinder
+	bottle.Size = Vector3.new(1.1, 0.6, 0.6) * scale -- a cylinder's length runs along X
+	bottle.Material = Enum.Material.Neon
+	bottle.Color = color
+	bottle.Anchored = true
+	bottle.CanCollide = false
+	bottle.CanQuery = false
+	bottle.CanTouch = false
+	bottle.CastShadow = false
+	bottle.Parent = customer -- goes away with the customer, whatever happens
+	-- in front of the fist; upright while the arm hangs down, pointing at the mouth when raised
+	local inHand = CFrame.new(0, 0.2 * scale, -0.42 * scale)
+	local upright = CFrame.Angles(0, 0, math.rad(90))
+	animate(customer, DRINK_SECONDS, function(alpha)
+		-- lift (first 35%), sip with a tip of the bottle, lower (last 15%)
+		local lift = if alpha < 0.35
+			then smooth(alpha / 0.35)
+			elseif alpha < 0.85 then 1
+			else 1 - smooth((alpha - 0.85) / 0.15)
+		-- forward and in toward the mouth, turning around the shoulder
+		local turn = shoulder
+			* CFrame.Angles(0, math.rad(39) * lift, 0)
+			* CFrame.Angles(math.rad(110) * lift, 0, 0)
+			* shoulder:Inverse()
+		arm.CFrame = turn * armRest
+		hand.CFrame = turn * handRest
+		local sip = if alpha >= 0.35 and alpha < 0.85 then math.sin((alpha - 0.35) / 0.5 * math.pi) else 0
+		bottle.CFrame = hand.CFrame * inHand * CFrame.Angles(math.rad(35) * sip, 0, 0) * upright -- tip it up to sip
+	end)
+	arm.CFrame, hand.CFrame = armRest, handRest
+	bottle:Destroy()
+	sound("Plop", hand)
+end
+
+-- The color of the potion that causes this effect.
+local function potionColor(effectName: string): Color3
+	for _, recipe in Config.Recipes do
+		if recipe.Effect == effectName then
+			return recipe.Color
+		end
+	end
+	return Config.Palette.Liquid
+end
+
 local helpers: Helpers = {
 	Burst = burst,
 	Poof = poof,
@@ -157,7 +222,10 @@ function Effects.Play(effectName: unknown, model: unknown)
 	local fn = effect :: EffectFn
 	task.spawn(function()
 		local success, err = pcall(function(): any
-			fn(customer, helpers)
+			drink(customer, potionColor(effectName))
+			if customer.Parent then
+				fn(customer, helpers)
+			end
 			return nil
 		end)
 		if not success then

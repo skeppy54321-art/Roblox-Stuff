@@ -205,6 +205,10 @@ end)
 check("potion brewed", brewed)
 check("discovered + bonus", data.Discovered.GiantHead == true and data.Coins == 10, data.Coins)
 check("cauldron idle again", cauldron:GetAttribute("BrewRecipe") == "")
+task.wait(0.1)
+local slot1 = plot.Display.Slot1
+check("potion shows on the counter", slot1.Body.Transparency == 0 and slot1.Body.Color == roblox.Color3.fromRGB(255, 110, 200))
+check("only one bottle shows", plot.Display.Slot2.Body.Transparency == 1)
 
 print("== customer ==")
 local customer = waitFor(8, function()
@@ -222,6 +226,7 @@ if customer then
 	Engine.signal(sellPrompt, "Triggered"):Fire(player) -- double press
 	task.wait(0.4)
 	check("sold once for 10", data.Coins == 20 and data.Stats.PotionsSold == 1, `coins {data.Coins} sold {data.Stats.PotionsSold}`)
+	check("sold bottle leaves the counter", plot.Display.Slot1.Body.Transparency == 1)
 	check("effect fired to all", remoteCount("PlayEffect", "FireAllClients") == 1)
 	check("customer reacting", customer:GetAttribute("Phase") == "Reacting")
 	local left = waitFor(9, function()
@@ -289,7 +294,15 @@ end)
 check("second counter spot brings a 2nd customer", two)
 
 do
+	-- show a stocked counter in the preview, then put the stock back
+	local stock = table.clone(data.Potions)
+	data.Potions = { GiantHead = 2, Rainbow = 1, Tiny = 1, Floaty = 2, Twirly = 1, Frosty = 1, Froggy = 1 }
+	PlayerData.Push(player)
+	task.wait(0.1)
+	check("full counter display", plot.Display.Slot9.Body.Transparency == 0 and plot.Display.Slot10.Body.Transparency == 1)
 	local upgradedParts, upgradedLights = Engine.dumpParts(workspace)
+	data.Potions = stock
+	PlayerData.Push(player)
 	fs.writeFile(OUT .. "/parts_upgraded.json", serde.encode("json", { parts = upgradedParts, lights = upgradedLights, plot = plotName }))
 	print(`  upgraded world dumped ({#upgradedParts} parts), owner plot {plotName}`)
 end
@@ -425,6 +438,7 @@ check("plot released", plot:GetAttribute("OwnerUserId") == 0)
 check("customers removed", plot:FindFirstChild("Customer") == nil)
 check("plot visuals reset", plot.Sources:FindFirstChild("Starflower") == nil and plot:FindFirstChild("DecorGold") == nil)
 check("cauldron back to black", cauldron.Belly.Material == roblox.Enum.Material.Metal)
+check("counter display emptied", plot.Display.Slot1.Body.Transparency == 1)
 local savedCoins = data.Coins
 task.wait(1.5)
 

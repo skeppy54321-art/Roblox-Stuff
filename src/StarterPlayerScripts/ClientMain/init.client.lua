@@ -455,6 +455,9 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "PotionReady" then
 		Sfx.Play("PotionReady")
 		local recipe = Config.Recipes[data.Recipe]
+		if recipe then
+			CauldronFx.Pop(recipe.Color)
+		end
 		local hitbox = hitboxOf(myCauldron())
 		if recipe and hitbox then
 			Popups.Show(hitbox.Position + Vector3.new(0, 4, 0), `{recipe.DisplayName}!`, recipe.Color)
@@ -463,6 +466,7 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		Sfx.Play("Discover")
 		local recipe = Config.Recipes[data.Recipe]
 		if recipe then
+			CauldronFx.Pop(recipe.Color)
 			Hud.Celebrate("NEW RECIPE!", `{recipe.DisplayName}  +{tonumber(data.Bonus) or 0} coins`, recipe.Color)
 		end
 	elseif cue == "Sale" then
