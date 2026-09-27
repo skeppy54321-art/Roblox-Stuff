@@ -632,6 +632,30 @@ do
 	end))
 end
 
+print("== potion mastery ==")
+do
+	local Config = Engine.loaded(game:GetService("ReplicatedStorage").Config)
+	data.Discovered.GiantHead = true
+	data.Stats[Config.SoldStat("GiantHead")] = 30
+	PlayerData.Push(player)
+	local card = find(uiRoot, "RecipeBook.Body.List.GiantHead")
+	local shown = card and waitFor(3, function()
+		return card.Medal.Visible and card.Medal.Text == "+10%" and card.Tag.Text == "Sold 30/100"
+	end)
+	check("the recipe book shows the medal and the next goal", shown, card and card.Tag.Text)
+	check("...and the higher price", card and card.Info.Text:find("11 coins") ~= nil, card and card.Info.Text)
+	Engine.loaded(modulesFolder.Net).Cue(player, "Mastery", { Recipe = "GiantHead", Level = 1 })
+	local cheered = waitFor(4, function()
+		for _, d in uiRoot.Celebration:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text == "BRONZE MEDAL!" then
+				return uiRoot.Celebration.Visible
+			end
+		end
+		return false
+	end)
+	check("a new medal is celebrated", cheered)
+end
+
 print("== shop colors ==")
 do
 	local card = find(uiRoot, "UpgradesPanel.Body.List.ShopColors")

@@ -682,6 +682,19 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			`{tostring(data.Text)}  +{Config.FormatNumber(tonumber(data.Reward) or 0)} coins`,
 			Color3.fromRGB(240, 130, 60)
 		)
+	elseif cue == "Mastery" then
+		local recipe = Config.Recipes[data.Recipe]
+		local step = Config.Tuning.Mastery[tonumber(data.Level) or 0]
+		if recipe and step then
+			task.delay(1.2, function() -- after the sale
+				Sfx.Play("Upgrade")
+				Hud.Celebrate(
+					`{string.upper(step.Name)} MEDAL!`,
+					`{recipe.DisplayName}s sell for +{math.floor(step.Bonus * 100 + 0.5)}% now`,
+					P.Medals[4 - (tonumber(data.Level) or 1)]
+				)
+			end)
+		end
 	elseif cue == "NewQuests" then
 		Sfx.Play("News")
 		Hud.Toast("New daily quests! Tap QUESTS to see them.", "good")

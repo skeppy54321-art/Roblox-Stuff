@@ -98,6 +98,14 @@ Tuning.Quests = {
 	Speedy = { 3, 5, 6 },
 }
 
+-- Potion mastery: sell this many of one potion (all time, rebirths included) for a medal,
+-- and that potion sells for this much more from then on.
+Tuning.Mastery = {
+	{ Name = "Bronze", Sold = 25, Bonus = 0.1 },
+	{ Name = "Silver", Sold = 100, Bonus = 0.2 },
+	{ Name = "Gold", Sold = 250, Bonus = 0.3 },
+}
+
 Tuning.Daily = {
 	CooldownHours = 20, -- a new gift this long after the last one
 	StreakHours = 48, -- come back within this long to keep your streak going

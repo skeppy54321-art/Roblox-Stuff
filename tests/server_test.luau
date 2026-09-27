@@ -482,12 +482,13 @@ do
 		check("can't fill a big order short", big:GetAttribute("Phase") == "Waiting" and data.Potions[wants] == T.BigOrderSize - 1)
 		data.Potions = { [wants] = T.BigOrderSize }
 		local before = data.Coins
+		local each = Config.GetPotionPrice(data.Stats, wants)
 		task.wait(0.6)
 		Engine.signal(big.Torso.SellPrompt, "Triggered"):Fire(player)
 		task.wait(0.2)
 		local cue = lastRemote("Cue")
 		local tipBig = if cue and cue.args[1] == "Sale" then cue.args[2].Tip else 0
-		local expected = math.floor(Config.Recipes[wants].SellPrice * T.BigOrderSize * T.BigOrderBonus + 0.5)
+		local expected = math.floor(each * T.BigOrderSize * T.BigOrderBonus + 0.5)
 		check("big order sold: all three, 50% more", (data.Potions[wants] or 0) == 0 and data.Coins - before == expected + tipBig, `{data.Coins - before} vs {expected}+{tipBig}`)
 	end
 	T.BigOrderChance = chance
@@ -560,6 +561,46 @@ do
 	data.Stats.PotionsSold = soldBefore
 	PlayerData.Push(player)
 	QuestService.Now = realNow
+end
+
+print("== potion mastery ==")
+do
+	local level, sold, nextAt, bonus = Config.GetMastery({}, "Floaty")
+	check("no medal to start", level == 0 and sold == 0 and nextAt == 25 and bonus == 0)
+	local stat = Config.SoldStat("Rainbow")
+	check("medals at 25, 100 and 250 sold", Config.GetMastery({ [stat] = 25 }, "Rainbow") == 1 and Config.GetMastery({ [stat] = 100 }, "Rainbow") == 2 and select(3, Config.GetMastery({ [stat] = 300 }, "Rainbow")) == nil)
+	check("a bronze medal is +10%", math.abs(Config.GetPotionPrice({ [stat] = 30 }, "Rainbow") - Config.Recipes.Rainbow.SellPrice * 1.1) < 1e-9)
+	-- a real sale that earns a medal
+	local customer = waitFor(15, function()
+		return waitingCustomer()
+	end)
+	check("a customer to sell to", customer ~= nil)
+	if customer then
+		local wants = customer:GetAttribute("Wants")
+		local amount = customer:GetAttribute("Amount") or 1
+		data.Stats[Config.SoldStat(wants)] = 25 - amount
+		data.Potions = { [wants] = amount }
+		goTo(customer.Torso)
+		task.wait(0.6)
+		local medalCues = 0
+		for _, entry in Engine.log do
+			if entry.remote == "Cue" and entry.player == player and entry.args[1] == "Mastery" then
+				medalCues += 1
+			end
+		end
+		Engine.signal(customer.Torso.SellPrompt, "Triggered"):Fire(player)
+		task.wait(0.2)
+		local cue = lastRemote("Cue")
+		for _, entry in Engine.log do
+			if entry.remote == "Cue" and entry.player == player and entry.args[1] == "Mastery" then
+				medalCues -= 1
+				cue = entry
+			end
+		end
+		check("selling the 25th earns a bronze medal", medalCues == -1 and cue.args[2].Recipe == wants and cue.args[2].Level == 1, medalCues)
+		check("...counted per potion", data.Stats[Config.SoldStat(wants)] == 25)
+		check("...so it sells for more now", Config.GetPotionPrice(data.Stats, wants) > Config.Recipes[wants].SellPrice)
+	end
 end
 
 print("== social ==")
@@ -874,11 +915,11 @@ if data2 then
 		local wants = waitingB:GetAttribute("Wants")
 		data2.Potions = { [wants] = 1 }
 		local before = data2.Coins
+		local price = Config.GetPotionPrice(data2.Stats, wants)
 		Engine.setCFrame(root2, CFrame.new(waitingB.Torso.CFrame.Position + Vector3.new(0, 0, 3)))
 		task.wait(0.1)
 		Engine.signal(waitingB.Torso.SellPrompt, "Triggered"):Fire(player2)
 		task.wait(0.3)
-		local price = Config.Recipes[wants].SellPrice
 		local vip = waitingB:FindFirstChild("VipTag", true) ~= nil
 		local expected = math.floor(price * (if vip then 2 else 1) * 1.25 + 0.5)
 		local cue = lastRemote("Cue")

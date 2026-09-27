@@ -188,6 +188,9 @@ for _, id in { "GiantHead", "Rainbow", "Tiny", "Floaty", "Twirly", "Frosty", "Fr
 	data.Discovered[id] = true
 end
 data.Stats.PotionsSold = 240
+data.Stats.Sold_GiantHead = 260 -- gold, silver and bronze medals in the recipe book
+data.Stats.Sold_Rainbow = 120
+data.Stats.Sold_Tiny = 40
 UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades, data.Rebirths)
 PlayerData.Push(player)
 goTo(plot.Cauldron.Hitbox)

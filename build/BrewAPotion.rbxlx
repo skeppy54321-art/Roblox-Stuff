@@ -346,6 +346,37 @@ function Config.GetDailyGift(daily: DailyState?, now: number): (boolean, number,
 end
 
 ------------------------------------------------------------------
+-- Potion mastery
+------------------------------------------------------------------
+
+-- The stat that counts how many of a potion have been sold.
+function Config.SoldStat(recipeId: string): string
+	return "Sold_" .. recipeId
+end
+
+-- How far a potion's mastery is: the medal level (0 = none, 1 bronze, 2 silver, 3 gold),
+-- how many sold, the sales the next medal needs (nil at gold), and the price bonus now
+-- (0.1 = +10%).
+function Config.GetMastery(stats: { [string]: number }?, recipeId: string): (number, number, number?, number)
+	local sold = if stats then stats[Config.SoldStat(recipeId)] or 0 else 0
+	local level = 0
+	for i, step in Tuning.Mastery do
+		if sold >= step.Sold then
+			level = i
+		end
+	end
+	local nextStep = Tuning.Mastery[level + 1]
+	local bonus = if level > 0 then Tuning.Mastery[level].Bonus else 0
+	return level, sold, if nextStep then nextStep.Sold else nil, bonus
+end
+
+-- What one of this potion sells for right now (before VIP, big order and rebirth bonuses).
+function Config.GetPotionPrice(stats: { [string]: number }?, recipeId: string): number
+	local _, _, _, bonus = Config.GetMastery(stats, recipeId)
+	return Recipes[recipeId].SellPrice * (1 + bonus)
+end
+
+------------------------------------------------------------------
 -- Daily quests
 ------------------------------------------------------------------
 
@@ -1026,6 +1057,14 @@ Tuning.Quests = {
 	Brew = { 6, 10, 14 },
 	Collect = { 15, 25, 40 },
 	Speedy = { 3, 5, 6 },
+}
+
+-- Potion mastery: sell this many of one potion (all time, rebirths included) for a medal,
+-- and that potion sells for this much more from then on.
+Tuning.Mastery = {
+	{ Name = "Bronze", Sold = 25, Bonus = 0.1 },
+	{ Name = "Silver", Sold = 100, Bonus = 0.2 },
+	{ Name = "Gold", Sold = 250, Bonus = 0.3 },
 }
 
 Tuning.Daily = {
@@ -3863,12 +3902,16 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
 	local orderBonus = if amount > 1 then T.BigOrderBonus else 1
 	local coinBonus = Config.GetCoinMultiplier(data.Rebirths)
-	local price = math.floor(recipe.SellPrice * amount * orderBonus * vipBonus * coinBonus + 0.5)
+	local each = Config.GetPotionPrice(data.Stats, slot.Wants) -- with its mastery medal
+	local price = math.floor(each * amount * orderBonus * vipBonus * coinBonus + 0.5)
+	local medalBefore = Config.GetMastery(data.Stats, slot.Wants)
 	local quick = now() - slot.WaitingSince <= T.TipWindow
 	local tip = if quick then math.ceil(price * T.TipShare) else 0
 	data.Potions[slot.Wants] = have - amount
 	data.Coins += price + tip
 	PlayerData.AddStat(data, "PotionsSold", amount)
+	PlayerData.AddStat(data, Config.SoldStat(slot.Wants), amount)
+	local medal = Config.GetMastery(data.Stats, slot.Wants)
 	if amount > 1 then
 		PlayerData.AddStat(data, "BigOrders", 1)
 	end
@@ -3907,6 +3950,9 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 		"Sale",
 		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Big = amount > 1, Position = torso.Position }
 	)
+	if medal > medalBefore then
+		Net.Cue(player, "Mastery", { Recipe = slot.Wants, Level = medal })
+	end
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
 
@@ -11044,6 +11090,19 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			`{tostring(data.Text)}  +{Config.FormatNumber(tonumber(data.Reward) or 0)} coins`,
 			Color3.fromRGB(240, 130, 60)
 		)
+	elseif cue == "Mastery" then
+		local recipe = Config.Recipes[data.Recipe]
+		local step = Config.Tuning.Mastery[tonumber(data.Level) or 0]
+		if recipe and step then
+			task.delay(1.2, function() -- after the sale
+				Sfx.Play("Upgrade")
+				Hud.Celebrate(
+					`{string.upper(step.Name)} MEDAL!`,
+					`{recipe.DisplayName}s sell for +{math.floor(step.Bonus * 100 + 0.5)}% now`,
+					P.Medals[4 - (tonumber(data.Level) or 1)]
+				)
+			end)
+		end
 	elseif cue == "NewQuests" then
 		Sfx.Play("News")
 		Hud.Toast("New daily quests! Tap QUESTS to see them.", "good")
@@ -12952,7 +13011,7 @@ function Hud.Init(parent: Frame)
 	local column = Ui.new("Frame", {
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -22, 0.45, 0), -- (clear of the top bar and the jump button)
+		Position = UDim2.new(1, -22, 0.43, 0), -- (clear of the top bar and the phone jump button)
 		Size = UDim2.fromOffset(156, 312),
 		BackgroundTransparency = 1,
 		Parent = root,
@@ -13850,7 +13909,7 @@ end
 local function buildRow(quest: Config.Quest, order: number): Row
 	local frame = Ui.new("Frame", {
 		Name = `Quest{order}`,
-		Size = UDim2.new(1, 0, 0, 88),
+		Size = UDim2.new(1, 0, 0, 76), -- (three fit above the footer on a phone)
 		BackgroundColor3 = P.PanelCream,
 		LayoutOrder = order,
 		ZIndex = 10,
@@ -13858,13 +13917,13 @@ local function buildRow(quest: Config.Quest, order: number): Row
 	}, { Ui.corner(14), Ui.stroke(P.Stone, 2) })
 	local badge = icon(quest)
 	badge.AnchorPoint = Vector2.new(0.5, 0.5)
-	badge.Position = UDim2.fromOffset(40, 44)
+	badge.Position = UDim2.fromOffset(40, 38)
 	lift(badge, 11)
 	badge.Parent = frame
 	local title = Ui.label({
 		Name = "Title",
-		Position = UDim2.fromOffset(76, 10),
-		Size = UDim2.new(1, -220, 0, 30),
+		Position = UDim2.fromOffset(76, 8),
+		Size = UDim2.new(1, -220, 0, 28),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = P.TextDark,
 		Text = Config.DescribeQuest(quest),
@@ -13873,8 +13932,8 @@ local function buildRow(quest: Config.Quest, order: number): Row
 	}, 24)
 	local bar = Ui.new("Frame", {
 		Name = "Bar",
-		Position = UDim2.fromOffset(76, 50),
-		Size = UDim2.new(1, -220, 0, 20),
+		Position = UDim2.fromOffset(76, 44),
+		Size = UDim2.new(1, -220, 0, 18),
 		BackgroundColor3 = P.PanelMid,
 		ZIndex = 11,
 		Parent = frame,
@@ -13898,7 +13957,7 @@ local function buildRow(quest: Config.Quest, order: number): Row
 		Name = "Reward",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(118, 46),
+		Size = UDim2.fromOffset(118, 44),
 		BackgroundColor3 = P.PanelDark,
 		ZIndex = 11,
 		Parent = frame,
@@ -13922,7 +13981,7 @@ local function buildRow(quest: Config.Quest, order: number): Row
 		Name = "Done",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(118, 46),
+		Size = UDim2.fromOffset(118, 44),
 		BackgroundTransparency = 0,
 		BackgroundColor3 = P.ButtonDark,
 		Text = "DONE!",
@@ -13959,13 +14018,13 @@ function QuestsPanel.Init(root: Frame)
 		ZIndex = 10,
 		Parent = body,
 	}, {
-		Ui.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
+		Ui.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	footer = Ui.label({
 		Name = "Footer",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -40, 0, 30),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.new(1, -40, 0, 26),
 		TextColor3 = P.TextMuted,
 		Text = "",
 		ZIndex = 11,
@@ -14024,7 +14083,8 @@ return QuestsPanel
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
 -- RecipeBook (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.RecipeBook
--- Every potion: what it needs, what it does, what it sells for, and whether you've brewed it.
+-- Every potion: what it needs, what it does, what it sells for, whether you've brewed it,
+-- and its mastery medal (sell enough of one potion and it sells for more).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
@@ -14034,7 +14094,7 @@ local P = Config.Palette
 
 export type State = Config.State
 
-type Card = { Frame: Frame, Tag: TextLabel, Info: TextLabel, Shade: Frame }
+type Card = { Frame: Frame, Tag: TextLabel, Info: TextLabel, Shade: Frame, Medal: TextLabel }
 
 local RecipeBook = {}
 
@@ -14166,6 +14226,7 @@ function RecipeBook.Init(root: Frame)
 
 		-- right side: price, time, status tag
 		local info = Ui.label({
+			Name = "Info",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -12, 0, 10),
 			Size = UDim2.fromOffset(124, 50),
@@ -14175,6 +14236,7 @@ function RecipeBook.Init(root: Frame)
 			Parent = card,
 		}, 20)
 		local tag = Ui.label({
+			Name = "Tag",
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -12, 1, -12),
 			Size = UDim2.fromOffset(124, 32),
@@ -14193,15 +14255,36 @@ function RecipeBook.Init(root: Frame)
 			ZIndex = 13,
 			Parent = card,
 		}, { Ui.corner(14) })
-		cards[recipeId] = { Frame = card, Tag = tag, Info = info, Shade = shade }
+		local medal = Ui.label({ -- mastery: "+10%" on a bronze / silver / gold pill
+			Name = "Medal",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(46, 92),
+			Size = UDim2.fromOffset(56, 24),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = P.Gold,
+			TextColor3 = P.TextDark,
+			Text = "",
+			Visible = false,
+			ZIndex = 12,
+			Parent = card,
+		}, 16)
+		Ui.corner(12).Parent = medal
+		Ui.stroke(P.TextDark, 2).Parent = medal
+		cards[recipeId] = { Frame = card, Tag = tag, Info = info, Shade = shade, Medal = medal }
 	end
 end
 
 function RecipeBook.SetState(state: State)
 	for recipeId, card in cards do
-		local recipe = Config.Recipes[recipeId]
 		local seconds = Config.GetBrewSeconds(state.Upgrades, recipeId)
-		card.Info.Text = `{recipe.SellPrice} coins\n{seconds}s brew`
+		local price = math.floor(Config.GetPotionPrice(state.Stats, recipeId) + 0.5)
+		card.Info.Text = `{price} coins\n{seconds}s brew`
+		local level, sold, nextAt, bonus = Config.GetMastery(state.Stats, recipeId)
+		card.Medal.Visible = level > 0
+		if level > 0 then
+			card.Medal.Text = `+{math.floor(bonus * 100 + 0.5)}%`
+			card.Medal.BackgroundColor3 = P.Medals[4 - level] -- (Medals is gold, silver, bronze)
+		end
 		if not Config.IsRecipeUnlocked(state.Upgrades, recipeId) then
 			local unlockerId = Config.GetRecipeUnlocker(recipeId) or ""
 			local unlocker = Config.Upgrades[unlockerId]
@@ -14210,14 +14293,18 @@ function RecipeBook.SetState(state: State)
 				elseif unlocker then `Needs {unlocker.DisplayName}`
 				else "Locked"
 			card.Tag.BackgroundColor3 = P.ButtonOff
+			card.Tag.TextColor3 = P.TextLight
 			card.Shade.Visible = true
 		elseif state.Discovered[recipeId] then
-			card.Tag.Text = "Brewed!"
-			card.Tag.BackgroundColor3 = P.ButtonDark
+			-- how far to the next medal
+			card.Tag.Text = if nextAt then `Sold {Config.FormatNumber(sold)}/{Config.FormatNumber(nextAt)}` else "GOLD!"
+			card.Tag.BackgroundColor3 = if nextAt then P.ButtonDark else P.Medals[1]
+			card.Tag.TextColor3 = if nextAt then P.TextLight else P.TextDark
 			card.Shade.Visible = false
 		else
 			card.Tag.Text = "NEW! Try it"
 			card.Tag.BackgroundColor3 = P.Danger
+			card.Tag.TextColor3 = P.TextLight
 			card.Shade.Visible = false
 		end
 	end

@@ -289,7 +289,7 @@ function Hud.Init(parent: Frame)
 	local column = Ui.new("Frame", {
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -22, 0.45, 0), -- (clear of the top bar and the jump button)
+		Position = UDim2.new(1, -22, 0.43, 0), -- (clear of the top bar and the phone jump button)
 		Size = UDim2.fromOffset(156, 312),
 		BackgroundTransparency = 1,
 		Parent = root,

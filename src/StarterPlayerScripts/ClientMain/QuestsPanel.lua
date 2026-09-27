@@ -73,7 +73,7 @@ end
 local function buildRow(quest: Config.Quest, order: number): Row
 	local frame = Ui.new("Frame", {
 		Name = `Quest{order}`,
-		Size = UDim2.new(1, 0, 0, 88),
+		Size = UDim2.new(1, 0, 0, 76), -- (three fit above the footer on a phone)
 		BackgroundColor3 = P.PanelCream,
 		LayoutOrder = order,
 		ZIndex = 10,
@@ -81,13 +81,13 @@ local function buildRow(quest: Config.Quest, order: number): Row
 	}, { Ui.corner(14), Ui.stroke(P.Stone, 2) })
 	local badge = icon(quest)
 	badge.AnchorPoint = Vector2.new(0.5, 0.5)
-	badge.Position = UDim2.fromOffset(40, 44)
+	badge.Position = UDim2.fromOffset(40, 38)
 	lift(badge, 11)
 	badge.Parent = frame
 	local title = Ui.label({
 		Name = "Title",
-		Position = UDim2.fromOffset(76, 10),
-		Size = UDim2.new(1, -220, 0, 30),
+		Position = UDim2.fromOffset(76, 8),
+		Size = UDim2.new(1, -220, 0, 28),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = P.TextDark,
 		Text = Config.DescribeQuest(quest),
@@ -96,8 +96,8 @@ local function buildRow(quest: Config.Quest, order: number): Row
 	}, 24)
 	local bar = Ui.new("Frame", {
 		Name = "Bar",
-		Position = UDim2.fromOffset(76, 50),
-		Size = UDim2.new(1, -220, 0, 20),
+		Position = UDim2.fromOffset(76, 44),
+		Size = UDim2.new(1, -220, 0, 18),
 		BackgroundColor3 = P.PanelMid,
 		ZIndex = 11,
 		Parent = frame,
@@ -121,7 +121,7 @@ local function buildRow(quest: Config.Quest, order: number): Row
 		Name = "Reward",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(118, 46),
+		Size = UDim2.fromOffset(118, 44),
 		BackgroundColor3 = P.PanelDark,
 		ZIndex = 11,
 		Parent = frame,
@@ -145,7 +145,7 @@ local function buildRow(quest: Config.Quest, order: number): Row
 		Name = "Done",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -14, 0.5, 0),
-		Size = UDim2.fromOffset(118, 46),
+		Size = UDim2.fromOffset(118, 44),
 		BackgroundTransparency = 0,
 		BackgroundColor3 = P.ButtonDark,
 		Text = "DONE!",
@@ -182,13 +182,13 @@ function QuestsPanel.Init(root: Frame)
 		ZIndex = 10,
 		Parent = body,
 	}, {
-		Ui.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }),
+		Ui.new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	footer = Ui.label({
 		Name = "Footer",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		Size = UDim2.new(1, -40, 0, 30),
+		Position = UDim2.new(0.5, 0, 1, -8),
+		Size = UDim2.new(1, -40, 0, 26),
 		TextColor3 = P.TextMuted,
 		Text = "",
 		ZIndex = 11,

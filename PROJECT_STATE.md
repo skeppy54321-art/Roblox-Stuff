@@ -128,6 +128,9 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 **Rebirth**
 * Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The first rebirth also unlocks the **Star Well** (rebuilt each run like the other plots), whose Stardust brews the 13th potion, Starlight; before that its card says "Needs a Rebirth" and the recipe book shows the potion locked. The goal banner suggests it once there's nothing useful left to buy.
 
+**Potion mastery**
+* Every potion counts its sales (all time; rebirths don't reset it). 25 / 100 / 250 sold earns a bronze / silver / gold medal, and that potion sells for +10% / +20% / +30% from then on ("BRONZE MEDAL!" banner). The recipe book shows each medal on the bottle and "Sold 34/100" toward the next one.
+
 **Daily quests**
 * After your first 8 sales a QUESTS button appears (orange, right-hand column, badge = quests left; key Q). Three small goals a day, picked for your progress: sell N potions, sell 3 of one potion, brew N, collect N ingredients, get N speedy tips, serve VIPs, fill a big order, earn N coins from sales. Each pays its coins the moment it's done ("QUEST DONE!"). New quests every day at midnight UTC; the panel counts down to them. The server keeps score (`QuestService`).
 
@@ -162,6 +165,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 18. **Big order** (after 20 sales, or use the +10K button and sell a while): a customer with a blue BIG ORDER tag asks for 3 of one potion. Selling with 2 on the shelf does nothing; with 3 they all go at once for 1.5x the price.
 19. **Evening:** stay for a few minutes (or set `DayCycle.Seconds = 60` in `Config/World.lua`): the sky turns pink, then purple with stars, lanterns glow brighter, more fireflies. Check that shops and customers are still easy to see at dusk (if not, raise `OutdoorAmbient` in the `dusk` look).
 20. **Quests:** after 8 sales the QUESTS button appears with a "3" badge. Open it (or press Q): three quests with progress bars and coin rewards. Finish one: "QUEST DONE!", coins added, the badge drops to 2.
+21. **Medals:** sell 25 of one potion (the +10K button and a few minutes help): "BRONZE MEDAL!", and the recipe book shows "+10%" on that bottle, a higher price and "Sold 25/100".
 
 Send any red Output errors and what you did right before. Yellow `[Effects] ... errored` or `[ClientMain] custom prompts disabled` warnings are worth sending too.
 
@@ -179,7 +183,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 ## Economy (first pass, tune after playtesting)
 
-* **Sources:** potion sales (10–220 coins, VIPs x2, big orders 3 potions at x1.5 each, speedy tips +20%), first-brew bonuses (one per recipe, 987 total), the daily gift (30–300).
+* **Sources:** potion sales (10–220 coins, VIPs x2, big orders 3 potions at x1.5 each, speedy tips +20%, mastery medals up to +30% per potion), daily quests (25 coins up, sized to your best potion), first-brew bonuses (one per recipe, 987 total), the daily gift (30–300).
 * **Sinks:** 10 useful/decor upgrade tracks (8,025 coins, the Star Well only after a rebirth) plus the Magic Familiar (21,500), and rebirths (5,000, 10,000, ...).
 * **Measured pacing** (`tests/pacing_bot.luau`, a quick bot that follows the goal banner, Sep 27 with tips and big orders): first sale 0:13, Starflower Bed 1:09, Second Counter Spot 4:27, Frost Grotto 5:23, Ember Garden 9:18, Cloud Garden 11:23, Magic Familiar 13:50. About 75–175 coins/min for the first 4 minutes, 220–720 after the Frost Grotto, 760–1,490 after the Ember Garden, 1,300–2,700 at the end; 107 sales (9 big orders, 91 tipped) and 13,393 coins earned in 16 minutes, about twice the run before tips and big orders (6,498; Cloud Garden at 14:11). A quick player could rebirth at about 13 minutes. A real player is slower (walking around, reading, missing tips): expect roughly 1.5–2x these times.
 * **Watch for:** the content wall once the familiars are bought (coins then only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. Tips and big orders roughly doubled a quick player's income; if real players rebirth too soon, lower `TipShare` or `BigOrderBonus` in `Config/Tuning.lua` first. Re-run the bot after any price change.

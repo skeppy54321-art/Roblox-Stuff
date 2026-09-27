@@ -181,12 +181,16 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
 	local orderBonus = if amount > 1 then T.BigOrderBonus else 1
 	local coinBonus = Config.GetCoinMultiplier(data.Rebirths)
-	local price = math.floor(recipe.SellPrice * amount * orderBonus * vipBonus * coinBonus + 0.5)
+	local each = Config.GetPotionPrice(data.Stats, slot.Wants) -- with its mastery medal
+	local price = math.floor(each * amount * orderBonus * vipBonus * coinBonus + 0.5)
+	local medalBefore = Config.GetMastery(data.Stats, slot.Wants)
 	local quick = now() - slot.WaitingSince <= T.TipWindow
 	local tip = if quick then math.ceil(price * T.TipShare) else 0
 	data.Potions[slot.Wants] = have - amount
 	data.Coins += price + tip
 	PlayerData.AddStat(data, "PotionsSold", amount)
+	PlayerData.AddStat(data, Config.SoldStat(slot.Wants), amount)
+	local medal = Config.GetMastery(data.Stats, slot.Wants)
 	if amount > 1 then
 		PlayerData.AddStat(data, "BigOrders", 1)
 	end
@@ -225,6 +229,9 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 		"Sale",
 		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Big = amount > 1, Position = torso.Position }
 	)
+	if medal > medalBefore then
+		Net.Cue(player, "Mastery", { Recipe = slot.Wants, Level = medal })
+	end
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
 

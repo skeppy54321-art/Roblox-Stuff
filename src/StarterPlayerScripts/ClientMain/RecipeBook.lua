@@ -1,6 +1,7 @@
 --!strict
 -- RecipeBook (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.RecipeBook
--- Every potion: what it needs, what it does, what it sells for, and whether you've brewed it.
+-- Every potion: what it needs, what it does, what it sells for, whether you've brewed it,
+-- and its mastery medal (sell enough of one potion and it sells for more).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
@@ -10,7 +11,7 @@ local P = Config.Palette
 
 export type State = Config.State
 
-type Card = { Frame: Frame, Tag: TextLabel, Info: TextLabel, Shade: Frame }
+type Card = { Frame: Frame, Tag: TextLabel, Info: TextLabel, Shade: Frame, Medal: TextLabel }
 
 local RecipeBook = {}
 
@@ -142,6 +143,7 @@ function RecipeBook.Init(root: Frame)
 
 		-- right side: price, time, status tag
 		local info = Ui.label({
+			Name = "Info",
 			AnchorPoint = Vector2.new(1, 0),
 			Position = UDim2.new(1, -12, 0, 10),
 			Size = UDim2.fromOffset(124, 50),
@@ -151,6 +153,7 @@ function RecipeBook.Init(root: Frame)
 			Parent = card,
 		}, 20)
 		local tag = Ui.label({
+			Name = "Tag",
 			AnchorPoint = Vector2.new(1, 1),
 			Position = UDim2.new(1, -12, 1, -12),
 			Size = UDim2.fromOffset(124, 32),
@@ -169,15 +172,36 @@ function RecipeBook.Init(root: Frame)
 			ZIndex = 13,
 			Parent = card,
 		}, { Ui.corner(14) })
-		cards[recipeId] = { Frame = card, Tag = tag, Info = info, Shade = shade }
+		local medal = Ui.label({ -- mastery: "+10%" on a bronze / silver / gold pill
+			Name = "Medal",
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromOffset(46, 92),
+			Size = UDim2.fromOffset(56, 24),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = P.Gold,
+			TextColor3 = P.TextDark,
+			Text = "",
+			Visible = false,
+			ZIndex = 12,
+			Parent = card,
+		}, 16)
+		Ui.corner(12).Parent = medal
+		Ui.stroke(P.TextDark, 2).Parent = medal
+		cards[recipeId] = { Frame = card, Tag = tag, Info = info, Shade = shade, Medal = medal }
 	end
 end
 
 function RecipeBook.SetState(state: State)
 	for recipeId, card in cards do
-		local recipe = Config.Recipes[recipeId]
 		local seconds = Config.GetBrewSeconds(state.Upgrades, recipeId)
-		card.Info.Text = `{recipe.SellPrice} coins\n{seconds}s brew`
+		local price = math.floor(Config.GetPotionPrice(state.Stats, recipeId) + 0.5)
+		card.Info.Text = `{price} coins\n{seconds}s brew`
+		local level, sold, nextAt, bonus = Config.GetMastery(state.Stats, recipeId)
+		card.Medal.Visible = level > 0
+		if level > 0 then
+			card.Medal.Text = `+{math.floor(bonus * 100 + 0.5)}%`
+			card.Medal.BackgroundColor3 = P.Medals[4 - level] -- (Medals is gold, silver, bronze)
+		end
 		if not Config.IsRecipeUnlocked(state.Upgrades, recipeId) then
 			local unlockerId = Config.GetRecipeUnlocker(recipeId) or ""
 			local unlocker = Config.Upgrades[unlockerId]
@@ -186,14 +210,18 @@ function RecipeBook.SetState(state: State)
 				elseif unlocker then `Needs {unlocker.DisplayName}`
 				else "Locked"
 			card.Tag.BackgroundColor3 = P.ButtonOff
+			card.Tag.TextColor3 = P.TextLight
 			card.Shade.Visible = true
 		elseif state.Discovered[recipeId] then
-			card.Tag.Text = "Brewed!"
-			card.Tag.BackgroundColor3 = P.ButtonDark
+			-- how far to the next medal
+			card.Tag.Text = if nextAt then `Sold {Config.FormatNumber(sold)}/{Config.FormatNumber(nextAt)}` else "GOLD!"
+			card.Tag.BackgroundColor3 = if nextAt then P.ButtonDark else P.Medals[1]
+			card.Tag.TextColor3 = if nextAt then P.TextLight else P.TextDark
 			card.Shade.Visible = false
 		else
 			card.Tag.Text = "NEW! Try it"
 			card.Tag.BackgroundColor3 = P.Danger
+			card.Tag.TextColor3 = P.TextLight
 			card.Shade.Visible = false
 		end
 	end

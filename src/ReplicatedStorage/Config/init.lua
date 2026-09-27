@@ -332,6 +332,37 @@ function Config.GetDailyGift(daily: DailyState?, now: number): (boolean, number,
 end
 
 ------------------------------------------------------------------
+-- Potion mastery
+------------------------------------------------------------------
+
+-- The stat that counts how many of a potion have been sold.
+function Config.SoldStat(recipeId: string): string
+	return "Sold_" .. recipeId
+end
+
+-- How far a potion's mastery is: the medal level (0 = none, 1 bronze, 2 silver, 3 gold),
+-- how many sold, the sales the next medal needs (nil at gold), and the price bonus now
+-- (0.1 = +10%).
+function Config.GetMastery(stats: { [string]: number }?, recipeId: string): (number, number, number?, number)
+	local sold = if stats then stats[Config.SoldStat(recipeId)] or 0 else 0
+	local level = 0
+	for i, step in Tuning.Mastery do
+		if sold >= step.Sold then
+			level = i
+		end
+	end
+	local nextStep = Tuning.Mastery[level + 1]
+	local bonus = if level > 0 then Tuning.Mastery[level].Bonus else 0
+	return level, sold, if nextStep then nextStep.Sold else nil, bonus
+end
+
+-- What one of this potion sells for right now (before VIP, big order and rebirth bonuses).
+function Config.GetPotionPrice(stats: { [string]: number }?, recipeId: string): number
+	local _, _, _, bonus = Config.GetMastery(stats, recipeId)
+	return Recipes[recipeId].SellPrice * (1 + bonus)
+end
+
+------------------------------------------------------------------
 -- Daily quests
 ------------------------------------------------------------------
 
