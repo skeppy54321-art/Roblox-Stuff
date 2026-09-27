@@ -12,7 +12,7 @@ This file is the source of truth for the project (the old chats weren't reachabl
 | Milestone 2: recipes, cauldron menu, effects | Written. **Not yet played in Studio** |
 | Milestone 3: saving (ProfileStore) | Written. **Not yet played in Studio** |
 | Cozy magic market look | Written. **Not yet played in Studio** |
-| Sounds + music | 4 real audio ids from Roblox's tutorials, built-in fallbacks. **Not yet heard** |
+| Sounds + music | 5 real audio ids from Roblox's tutorials, built-in fallbacks. **Not yet heard** |
 | Social: leaderstats, market news, cheers, Market Stars board | Written. **Not yet played in Studio** |
 | Static checks | **Pass**: luau-lsp strict with Roblox API types, selene, StyLua, script-security scan against the API dump |
 | Place file | `build/BrewAPotion.rbxlx` (built by Rojo from `src/`) |
@@ -186,7 +186,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 * Particle textures that ship with every client (current manifest): `rbxasset://textures/particles/` `fire_main.dds`, `smoke_main.dds`, `sparkles_main.dds` (used by the new effects).
 * Ball parts are always round (Roblox keeps their size uniform), so the parachute canopy is a block with a `SpecialMesh` (`MeshType.Sphere`).
 * Client sounds that ship with every client (current manifest): `rbxasset://sounds/` `volume_slider.ogg`, `impact_water.mp3`, `action_jump.mp3`, `impact_explosion_03.mp3` (plus a few footstep sounds). The old ones (`button.wav`, `electronicpingshort.wav`, ...) are gone.
-* Audio ids from Roblox's tutorials (github.com/Roblox/creator-docs): `4110925712` "simple chime" (In-game sounds), `3422389728` "retro jingle" and `1841461968` "upbeat" looping music (Add 2D audio), `1846248593` "cheerful, celebratory" (Add 3D audio). Not listened to from here: swap any you don't like.
+* Audio ids from Roblox's tutorials (github.com/Roblox/creator-docs): `4110925712` "simple chime" and `6564308795` "waterfall ambience" (In-game sounds; played quietly at the fountain), `3422389728` "retro jingle" and `1841461968` "upbeat" looping music (Add 2D audio), `1846248593` "cheerful, celebratory" (Add 3D audio). Not listened to from here: swap any you don't like.
 * `ContentProvider:PreloadAsync(ids, callback(contentId, Enum.AssetFetchStatus))` accepts id strings; anything but `Success` means the asset didn't load.
 * **Prices:** `MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product / GamePass)`, read `PriceInRobux`. The old `GetProductInfo` is deprecated.
 * **Developer products:** grant only through `ProcessReceipt` (or `BindReceiptHandler`), key on `PurchaseId`, save the grant in the profile, return granted only after that. Never grant from `PromptProductPurchaseFinished`.
@@ -196,7 +196,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 ## Unresolved bugs / known gaps
 
 * **Never played in Studio.** Expect a first round of small fixes (sizes, positions, colors, UI spacing).
-* Only 4 real audio ids so far (chime, jingle, celebration, music), picked from Roblox's tutorials without hearing them. Effect sounds (ribbit, freeze, whoosh, inflate, shrink) and bubbling are still empty: pick audio in the Toolbox and paste the ids into `Config/Sounds.lua`.
+* Only 5 real audio ids so far (chime, jingle, celebration, music, fountain water), picked from Roblox's tutorials without hearing them. Effect sounds (ribbit, freeze, whoosh, inflate, shrink) and bubbling are still empty: pick audio in the Toolbox and paste the ids into `Config/Sounds.lua`.
 * Lighting and colors were chosen without seeing them rendered; tweak `Config/World.lua` and `Config/Palette.lua` to taste.
 * If Roblox ever changes a ball part's size when its shape is set, bushes and bottles may look slightly different (visual only).
 * More than 6 players in one server: extra players get "The market is full" (set server size to 6).
@@ -205,6 +205,6 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 1. **You:** open `build/BrewAPotion.rbxlx`, run the test checklist, send errors or "it works" (screenshots help a lot for the look).
 2. Fix what the playtest finds; tune lighting, colors and economy numbers (re-run `tests/pacing_bot.luau` after price changes).
-3. Listen to the 4 chosen sounds and the music; fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
+3. Listen to the 5 chosen sounds (including the music and the fountain); fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
 4. More content for rebirth runs: more decor themes, special orders, a rebirth-only potion or ingredient.
 5. Later: monetization (see the API notes above), trading between friends.

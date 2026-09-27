@@ -714,6 +714,7 @@ return Recipes
 --   JINGLE    "retro jingle" for a UI button (Audio > Add 2D audio tutorial)
 --   CELEBRATE "cheerful, celebratory" button sound (Audio > Add 3D audio tutorial)
 --   MUSIC     "upbeat" looping background track (Audio > Add 2D audio tutorial)
+--   WATER     "waterfall ambience" loop (Audio > In-game sounds tutorial), quiet at the fountain
 
 export type SoundDef = {
 	Id: string,
@@ -729,6 +730,7 @@ local CHIME = "rbxassetid://4110925712"
 local JINGLE = "rbxassetid://3422389728"
 local CELEBRATE = "rbxassetid://1846248593"
 local MUSIC = "rbxassetid://1841461968"
+local WATER = "rbxassetid://6564308795"
 
 local TICK = "rbxasset://sounds/volume_slider.ogg"
 local SPLASH = "rbxasset://sounds/impact_water.mp3"
@@ -779,6 +781,7 @@ local Sounds: { [string]: SoundDef } = {
 	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
 	Boo = sound("", 0.5, 1, "ghost boo"),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
+	Fountain = sound("", 0.3, 1, "fountain water loop", { Id = WATER }), -- 3D, at the plaza fountain
 }
 
 return Sounds
@@ -9840,6 +9843,14 @@ Effects.SetSoundPlayer(function(name, part)
 end)
 Sfx.Preload()
 Sfx.StartMusic()
+do -- the plaza fountain splashes quietly (you hear it more the closer you are)
+	local town = market:WaitForChild("Town", 10)
+	local fountain = town and town:FindFirstChild("Fountain")
+	local basin = fountain and fountain:FindFirstChild("Basin")
+	if basin and basin:IsA("BasePart") then
+		Sfx.StartLoop("Fountain", "Fountain", basin)
+	end
+end
 
 local function setPanel(which: string?)
 	UpgradesPanel.SetOpen(which == "Upgrades")

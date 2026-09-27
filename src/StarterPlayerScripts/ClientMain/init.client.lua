@@ -108,6 +108,14 @@ Effects.SetSoundPlayer(function(name, part)
 end)
 Sfx.Preload()
 Sfx.StartMusic()
+do -- the plaza fountain splashes quietly (you hear it more the closer you are)
+	local town = market:WaitForChild("Town", 10)
+	local fountain = town and town:FindFirstChild("Fountain")
+	local basin = fountain and fountain:FindFirstChild("Basin")
+	if basin and basin:IsA("BasePart") then
+		Sfx.StartLoop("Fountain", "Fountain", basin)
+	end
+end
 
 local function setPanel(which: string?)
 	UpgradesPanel.SetOpen(which == "Upgrades")

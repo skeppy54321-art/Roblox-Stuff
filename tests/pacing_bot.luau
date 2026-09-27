@@ -122,6 +122,9 @@ end
 local function unlocked(recipeId)
 	return Config.IsRecipeUnlocked(data.Upgrades, recipeId)
 end
+local function amountFor(c): number -- big orders want several
+	return c:GetAttribute("Amount") or 1
+end
 local function waitingCustomers()
 	local list = {}
 	for _, c in plot:GetChildren() do
@@ -136,7 +139,7 @@ end
 local function target(): string?
 	for _, c in waitingCustomers() do
 		local wants = c:GetAttribute("Wants")
-		if (data.Potions[wants] or 0) == 0 and unlocked(wants) then
+		if (data.Potions[wants] or 0) < amountFor(c) and unlocked(wants) then
 			return wants
 		end
 	end
@@ -150,6 +153,7 @@ local function target(): string?
 end
 
 local firstSale, sales, lastMinute, earnedAtMinute = nil, 0, 0, 0
+local bigOrders, tips = 0, 0
 local timeline = {}
 local function cauldronBusy()
 	return (plot.Cauldron:GetAttribute("BrewRecipe") or "") ~= ""
@@ -169,12 +173,20 @@ while os.clock() - started < MINUTES * 60 do
 	local sold = false
 	for _, c in waitingCustomers() do
 		local wants = c:GetAttribute("Wants")
-		if (data.Potions[wants] or 0) > 0 then
+		if (data.Potions[wants] or 0) >= amountFor(c) then
 			walkTo(toward(c.Torso, 6))
 			local before = data.Stats.PotionsSold or 0
+			local coinsBefore = data.Coins
 			press(c.Torso.SellPrompt)
 			if (data.Stats.PotionsSold or 0) > before then
 				sales += 1
+				if amountFor(c) > 1 then
+					bigOrders += 1
+				end
+				local price = Config.Recipes[wants].SellPrice * amountFor(c)
+				if data.Coins - coinsBefore > price * (if amountFor(c) > 1 then Config.Tuning.Customers.BigOrderBonus else 1) * (if c:GetAttribute("Vip") then Config.Tuning.Customers.VipPriceMultiplier else 1) + 0.5 then
+					tips += 1
+				end
 				if not firstSale then
 					firstSale = os.clock() - started
 					log(`FIRST SALE: {wants}`)
@@ -255,7 +267,7 @@ while os.clock() - started < MINUTES * 60 do
 end
 
 print("")
-print(`== after {MINUTES} minutes: {data.Coins} coins, {data.Stats.CoinsEarned or 0} earned, {sales} sales ==`)
+print(`== after {MINUTES} minutes: {data.Coins} coins, {data.Stats.CoinsEarned or 0} earned, {sales} sales ({bigOrders} big orders, {tips} tipped) ==`)
 print("timeline: " .. table.concat(timeline, ", "))
 local owned = {}
 for _, id in Config.UpgradeOrder do

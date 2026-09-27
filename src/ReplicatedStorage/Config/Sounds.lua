@@ -13,6 +13,7 @@
 --   JINGLE    "retro jingle" for a UI button (Audio > Add 2D audio tutorial)
 --   CELEBRATE "cheerful, celebratory" button sound (Audio > Add 3D audio tutorial)
 --   MUSIC     "upbeat" looping background track (Audio > Add 2D audio tutorial)
+--   WATER     "waterfall ambience" loop (Audio > In-game sounds tutorial), quiet at the fountain
 
 export type SoundDef = {
 	Id: string,
@@ -28,6 +29,7 @@ local CHIME = "rbxassetid://4110925712"
 local JINGLE = "rbxassetid://3422389728"
 local CELEBRATE = "rbxassetid://1846248593"
 local MUSIC = "rbxassetid://1841461968"
+local WATER = "rbxassetid://6564308795"
 
 local TICK = "rbxasset://sounds/volume_slider.ogg"
 local SPLASH = "rbxasset://sounds/impact_water.mp3"
@@ -78,6 +80,7 @@ local Sounds: { [string]: SoundDef } = {
 	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
 	Boo = sound("", 0.5, 1, "ghost boo"),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
+	Fountain = sound("", 0.3, 1, "fountain water loop", { Id = WATER }), -- 3D, at the plaza fountain
 }
 
 return Sounds
