@@ -3059,11 +3059,9 @@ end
 
 -- Which potion the next customer asks for.
 local function pickWants(data: PlayerData.Data, taken: { [string]: boolean }): string
-	if (data.Stats.PotionsSold or 0) == 0 and not taken.GiantHead then
-		return "GiantHead" -- the very first customer asks for the first recipe
-	end
 	if shelfFull(data) then
-		-- nothing more can be brewed: ask for something on the shelf, so the shop never gets stuck
+		-- nothing more can be brewed: ask for something on the shelf, so the shop never gets
+		-- stuck (this comes first, even before the very first customer's usual order)
 		local onShelf = {}
 		for _, id in Config.RecipeOrder do
 			if (data.Potions[id] or 0) > 0 and not taken[id] then
@@ -3080,6 +3078,9 @@ local function pickWants(data: PlayerData.Data, taken: { [string]: boolean }): s
 		if #onShelf > 0 then
 			return onShelf[rng:NextInteger(1, #onShelf)]
 		end
+	end
+	if (data.Stats.PotionsSold or 0) == 0 and not taken.GiantHead then
+		return "GiantHead" -- the very first customer asks for the first recipe
 	end
 	local unlocked, inStock = {}, {}
 	for _, id in Config.RecipeOrder do

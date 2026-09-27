@@ -412,7 +412,14 @@ local friendData = waitFor(10, function()
 	return PlayerData.Get(friend)
 end)
 check("second player loaded", friendData ~= nil)
+-- a brand-new player whose shelf is already full must still get a customer they can serve
+friendData.Potions = { Rainbow = Config.GetMaxPotions(friendData.Upgrades) }
 local friendPlot = market:FindFirstChild(friend:GetAttribute("PlotName") or "")
+local firstVisitor = waitFor(6, function()
+	return friendPlot and friendPlot:FindFirstChild("Customer")
+end)
+check("new player with a full shelf: first customer wants what's on it", firstVisitor and firstVisitor:GetAttribute("Wants") == "Rainbow", firstVisitor and firstVisitor:GetAttribute("Wants"))
+friendData.Potions = {}
 check("second player got another shop", friendPlot ~= nil and friendPlot ~= plot)
 local myStand = plot.CheerStand
 check("cheer stand names the owner", myStand.Hitbox.CheerPrompt.ObjectText == "Tester's shop", myStand.Hitbox.CheerPrompt.ObjectText)
