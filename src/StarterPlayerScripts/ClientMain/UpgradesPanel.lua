@@ -24,6 +24,7 @@ local UpgradesPanel = {}
 
 UpgradesPanel.OnBuy = nil :: ((upgradeId: string) -> ())?
 UpgradesPanel.OnRebirth = nil :: (() -> ())?
+UpgradesPanel.OnPaint = nil :: ((themeIndex: number) -> ())?
 UpgradesPanel.OnClose = nil :: (() -> ())?
 
 local panel: Frame
@@ -34,6 +35,7 @@ local rebirthCard: RebirthCard
 local rebirthReady = false
 local confirmUntil = 0
 local lastState: State? = nil
+local swatches: { UIStroke } = {}
 
 local function buildRebirthCard(list: Instance)
 	local R = Config.Tuning.Rebirth
@@ -124,6 +126,86 @@ local function buildRebirthCard(list: Instance)
 		end)
 	end)
 	rebirthCard = { Frame = card, Count = count, Summary = summary, Button = button, Face = face }
+end
+
+-- Shop Colors: six two-tone swatches; tap one to repaint your shop (free).
+local function buildColorsCard(list: Instance)
+	local card = Ui.new("Frame", {
+		Name = "ShopColors",
+		Size = UDim2.new(1, 0, 0, 118),
+		BackgroundColor3 = P.PanelCream,
+		LayoutOrder = 50, -- after the upgrades you can still buy, before the maxed ones
+		ZIndex = 10,
+		Parent = list,
+	}, { Ui.corner(14), Ui.stroke(P.Stone, 2) })
+	Ui.label({
+		Position = UDim2.fromOffset(16, 8),
+		Size = UDim2.new(1, -32, 0, 28),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.TextDark,
+		Text = "Shop Colors",
+		ZIndex = 11,
+		Parent = card,
+	}, 24)
+	Ui.label({
+		Position = UDim2.fromOffset(16, 36),
+		Size = UDim2.new(1, -32, 0, 20),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.TextMuted,
+		Text = "Paint your awning, banners and rug. Free!",
+		ZIndex = 11,
+		Parent = card,
+	}, 16)
+	local row = Ui.new("Frame", {
+		Position = UDim2.fromOffset(16, 62),
+		Size = UDim2.new(1, -32, 0, 46),
+		BackgroundTransparency = 1,
+		ZIndex = 11,
+		Parent = card,
+	}, {
+		Ui.new("UIListLayout", {
+			FillDirection = Enum.FillDirection.Horizontal,
+			Padding = UDim.new(0, 14),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+		}),
+	})
+	for i, theme in P.Awnings do
+		local swatch = Ui.new("TextButton", {
+			Name = P.ThemeNames[i] or `Theme{i}`,
+			Size = UDim2.fromOffset(44, 44),
+			BackgroundColor3 = theme[1],
+			AutoButtonColor = false,
+			Text = "",
+			LayoutOrder = i,
+			ZIndex = 12,
+			Parent = row,
+		}, { Ui.round() })
+		Ui.new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Size = UDim2.fromScale(0.45, 0.45),
+			BackgroundColor3 = theme[2],
+			ZIndex = 13,
+			Parent = swatch,
+		}, { Ui.round() })
+		local ring = Ui.stroke(P.Stone, 2) :: UIStroke
+		ring.Parent = swatch
+		table.insert(swatches, ring)
+		swatch.Activated:Connect(function()
+			if UpgradesPanel.OnPaint then
+				UpgradesPanel.OnPaint(i)
+			end
+		end)
+	end
+end
+
+-- Outlines the shop's current colors in gold.
+function UpgradesPanel.SetTheme(themeIndex: number)
+	for i, ring in swatches do
+		ring.Color = if i == themeIndex then P.Gold else P.Stone
+		ring.Thickness = if i == themeIndex then 4 else 2
+	end
 end
 
 function UpgradesPanel.Init(root: Frame)
@@ -254,6 +336,7 @@ function UpgradesPanel.Init(root: Frame)
 		}
 	end
 	buildRebirthCard(list)
+	buildColorsCard(list)
 end
 
 function UpgradesPanel.SetState(state: State)

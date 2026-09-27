@@ -41,6 +41,7 @@ local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
 local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
 local RequestRebirth = Remotes:WaitForChild("RequestRebirth") :: RemoteEvent
 local StudioCoins = Remotes:WaitForChild("StudioCoins") :: RemoteEvent
+local RequestPaint = Remotes:WaitForChild("RequestPaint") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -158,6 +159,10 @@ if RunService:IsStudio() then -- testing aid; the server ignores it outside Stud
 		Sfx.Play("Coins")
 		StudioCoins:FireServer()
 	end
+end
+UpgradesPanel.OnPaint = function(themeIndex)
+	Sfx.Play("Click")
+	RequestPaint:FireServer(themeIndex)
 end
 UpgradesPanel.OnRebirth = function()
 	Sfx.Play("Click")
@@ -571,6 +576,11 @@ local function applyState(newState: Config.State)
 	Hud.SetState(newState)
 	UpgradesPanel.SetState(newState)
 	RecipeBook.SetState(newState)
+	-- the swatch to outline: your pick, or your shop's own colors
+	local plot = myPlot()
+	local default = if plot then plot:GetAttribute("DefaultTheme") else nil
+	local theme = if (newState.Theme or 0) > 0 then newState.Theme else default
+	UpgradesPanel.SetTheme(if typeof(theme) == "number" then theme else 0)
 end
 
 StateUpdate.OnClientEvent:Connect(function(newState)
@@ -671,6 +681,14 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			do
 				Juice.Sparkle((center * CFrame.new(offset)).Position, P.Gold, 35)
 			end
+		end
+	elseif cue == "Paint" then
+		Sfx.Play("Open", 1.3)
+		local plot = myPlot()
+		local floor = if plot and plot:IsA("Model") then plot.PrimaryPart else nil
+		local theme = P.Awnings[tonumber(data.Theme) or 1]
+		if floor and theme then
+			Juice.Sparkle((floor.CFrame * CFrame.new(0, 10, -9)).Position, theme[1], 30)
 		end
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")

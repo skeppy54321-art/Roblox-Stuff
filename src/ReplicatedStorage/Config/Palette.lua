@@ -30,7 +30,8 @@ local Palette = {
 	-- Shop
 	AwningA = rgb(225, 80, 110),
 	AwningB = rgb(255, 236, 200),
-	-- Each shop in the ring gets its own awning stripes, so you can spot yours.
+	-- Each shop in the ring gets its own awning stripes, so you can spot yours
+	-- (owners can pick any of them with Shop Colors; ThemeNames go with them, in order).
 	Awnings = {
 		{ rgb(225, 80, 110), rgb(255, 236, 200) }, -- rose
 		{ rgb(60, 165, 185), rgb(232, 250, 245) }, -- teal
@@ -39,6 +40,7 @@ local Palette = {
 		{ rgb(80, 165, 90), rgb(240, 255, 232) }, -- green
 		{ rgb(75, 125, 220), rgb(235, 242, 255) }, -- blue
 	},
+	ThemeNames = { "Rose", "Teal", "Violet", "Orange", "Green", "Blue" },
 	Cauldron = rgb(45, 45, 58),
 	Liquid = rgb(140, 255, 120),
 	Fire = rgb(255, 140, 40),

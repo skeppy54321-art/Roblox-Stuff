@@ -30,6 +30,7 @@ export type State = {
 	Stats: { [string]: number },
 	Daily: DailyState,
 	Rebirths: number,
+	Theme: number, -- shop colors (index into Palette.Awnings); 0 = the shop's own colors
 }
 
 -- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.

@@ -123,8 +123,31 @@ function UpgradeService.Rebirth(player: Player)
 	SocialService.Announce(player, `{player.DisplayName} started their shop over for Rebirth {data.Rebirths}!`)
 end
 
+-- Shop Colors: pick one of the awning themes for your shop (free, saved).
+function UpgradeService.Paint(player: Player, themeIndex: unknown)
+	if typeof(themeIndex) ~= "number" or themeIndex ~= math.floor(themeIndex) then
+		return
+	end
+	if themeIndex < 1 or themeIndex > #Config.Palette.Awnings then
+		return
+	end
+	if not Guard.Cooldown(player, "Paint", 0.5) then
+		return
+	end
+	local data = PlayerData.Get(player)
+	local plot = PlotService.GetPlot(player)
+	if not data or not plot then
+		return
+	end
+	data.Theme = themeIndex
+	PlotService.ApplyTheme(plot, themeIndex)
+	PlayerData.Push(player)
+	Net.Cue(player, "Paint", { Theme = themeIndex })
+end
+
 function UpgradeService.Init(plots: { Plot })
 	Net.RequestUpgrade.OnServerEvent:Connect(UpgradeService.Purchase)
+	Net.RequestPaint.OnServerEvent:Connect(UpgradeService.Paint)
 	Net.RequestRebirth.OnServerEvent:Connect(UpgradeService.Rebirth)
 	-- "for sale" signs for locked plants
 	for _, plot in plots do

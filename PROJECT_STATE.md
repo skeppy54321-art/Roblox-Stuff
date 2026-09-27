@@ -119,6 +119,9 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 
 The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`): new potions early, boosts after, and it saves up for the next step instead of spending on whatever is cheapest. Cozy Decor and Magic Familiar are cosmetic, suggested only when nothing useful is left.
 
+**Shop Colors**
+* A card in the Upgrades panel with six two-tone swatches (Rose, Teal, Violet, Orange, Green, Blue): tap one to repaint your awning, pom-poms, banners and rug. Free, saved, and your shop goes back to its own colors when you leave.
+
 **Rebirth**
 * Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The goal banner suggests it once there's nothing useful left to buy.
 
@@ -127,7 +130,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 
 **Saving** (Milestone 3)
 * ProfileStore: session locking (no duping across servers), autosave, final save on leave and on shutdown.
-* Versioned data (`SchemaVersion`, now 3: v2 added the daily gift, v3 rebirths), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
+* Versioned data (`SchemaVersion`, now 4: v2 added the daily gift, v3 rebirths, v4 shop colors), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
 * Can't load → you're kicked with a friendly "please rejoin" (so nobody plays unsaved). Loaded on another server → kicked from the old one.
 * Leaving mid-brew keeps the potion (it finishes instantly) instead of losing the ingredients.
 

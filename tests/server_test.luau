@@ -338,6 +338,33 @@ do
 	print(`  upgraded world dumped ({#upgradedParts} parts), owner plot {plotName}`)
 end
 
+print("== shop colors ==")
+do
+	local C = Engine.loaded(game:GetService("ReplicatedStorage").Config)
+	local default = plot:GetAttribute("DefaultTheme")
+	local function stripeColor()
+		for _, d in plot:GetDescendants() do
+			if d.Name == "Awning" and d:GetAttribute("ThemeSlot") == 1 then
+				return d.Color
+			end
+		end
+		return nil
+	end
+	check("shops start in their own colors", default ~= nil and stripeColor() == C.Palette.Awnings[default][1])
+	local RequestPaint = game:GetService("ReplicatedStorage").Remotes.RequestPaint
+	for _, junk in { "Teal", 0, 99, 2.5, {} } do
+		Engine.signal(RequestPaint, "OnServerEvent"):Fire(player, junk)
+	end
+	task.wait(0.6)
+	check("junk paint requests ignored", (data.Theme or 0) == 0)
+	local pick = if default == 3 then 4 else 3
+	Engine.signal(RequestPaint, "OnServerEvent"):Fire(player, pick)
+	task.wait(0.2)
+	check("repainted", data.Theme == pick and stripeColor() == C.Palette.Awnings[pick][1])
+	check("banners repainted too", plot.DecorBanners.Banner.Color == C.Palette.Awnings[pick][1])
+
+end
+
 print("== customers give up ==")
 local Config = Engine.loaded(game:GetService("ReplicatedStorage").Config)
 local function waitingCustomer(except)
@@ -629,6 +656,7 @@ check("potion kept on leave", (data.Potions.Floaty or 0) == floatyBefore + 1, da
 check("plot released", plot:GetAttribute("OwnerUserId") == 0)
 check("customers removed", plot:FindFirstChild("Customer") == nil)
 check("plot visuals reset", plot.Sources:FindFirstChild("Starflower") == nil and plot:FindFirstChild("DecorGold") == nil)
+check("released shop gets its own colors back", plot:GetAttribute("Theme") == plot:GetAttribute("DefaultTheme"))
 check("cauldron back to black", cauldron.Belly.Material == roblox.Enum.Material.Metal)
 check("counter display emptied", plot.Display.Slot1.Body.Transparency == 1)
 check("hall of fame saved on leave", Engine.orderedStores.HallOfFame_CoinsEarned_v1["1001"] == data.Stats.CoinsEarned)
@@ -649,6 +677,15 @@ if data2 then
 	local plot2sign = market:FindFirstChild(player2:GetAttribute("PlotName")).Sign
 	local signText2 = plot2sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
 	check("Master Brewer title back on the sign after rejoining", signText2:find("Master Brewer") ~= nil, signText2)
+	local plot2model = market:FindFirstChild(player2:GetAttribute("PlotName"))
+	local picked = data2.Theme
+	local awning
+	for _, d in plot2model:GetDescendants() do
+		if d.Name == "Awning" and d:GetAttribute("ThemeSlot") == 1 then
+			awning = d
+		end
+	end
+	check("shop colors restored after rejoining", picked > 0 and awning and awning.Color == Config.Palette.Awnings[picked][1])
 	local plot2 = market:FindFirstChild(player2:GetAttribute("PlotName"))
 	task.wait(0.3)
 	check("upgrades shown again", plot2 and plot2:FindFirstChild("DecorGold") ~= nil)

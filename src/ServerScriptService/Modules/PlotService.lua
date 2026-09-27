@@ -124,6 +124,7 @@ function PlotService.Release(player: Player)
 	setSign(plot, "Empty Shop")
 	PlotService.ApplyVisuals(plot, nil)
 	PlotService.ShowStock(plot, nil)
+	PlotService.ApplyTheme(plot, nil)
 end
 
 -- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop).
@@ -159,6 +160,32 @@ function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?)
 			light.Color = fire
 		end
 	end
+end
+
+-- Paints the shop's awning, pom-poms, banners and rug in theme `themeIndex` (an index into
+-- Palette.Awnings; 0 or nil = the shop's own colors). Parts parked in the stash too.
+function PlotService.ApplyTheme(plot: Plot, themeIndex: number?)
+	local default = plot.Model:GetAttribute("DefaultTheme")
+	local index = if themeIndex
+			and themeIndex >= 1
+			and themeIndex <= #P.Awnings
+		then themeIndex
+		else (if typeof(default) == "number" then default else 1)
+	local theme = P.Awnings[index]
+	local function paint(root: Instance)
+		for _, d in root:GetDescendants() do
+			local slot = d:GetAttribute("ThemeSlot")
+			if typeof(slot) == "number" and d:IsA("BasePart") then
+				d.Color = theme[slot] or theme[1]
+			end
+		end
+	end
+	paint(plot.Model)
+	local stash = stashes[plot]
+	if stash then
+		paint(stash)
+	end
+	plot.Model:SetAttribute("Theme", index)
 end
 
 -- Fills the counter display with one bottle per potion in stock (nil = empty shop).

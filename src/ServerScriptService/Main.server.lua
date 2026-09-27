@@ -83,6 +83,9 @@ local function onPlayerAdded(player: Player)
 	SocialService.PlayerJoined(player, data, plot)
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
 	PlotService.RefreshSign(player, data)
+	if plot then
+		PlotService.ApplyTheme(plot, data.Theme)
+	end
 
 	-- new players face their first job (the Moonberry bush); everyone else faces the counter
 	local function facing(): Vector3?

@@ -22,7 +22,7 @@ export type Data = Config.State
 -- Changing STORE_NAME starts everyone from scratch. Change SCHEMA_VERSION (and add a
 -- step to `migrate`) when the shape of saved data changes instead.
 local STORE_NAME = "PlayerData"
-local SCHEMA_VERSION = 3
+local SCHEMA_VERSION = 4
 -- true = Studio play tests never touch real saves, even with API access on.
 local USE_MOCK_IN_STUDIO = false
 
@@ -36,6 +36,7 @@ local TEMPLATE: Data = {
 	Stats = {},
 	Daily = { Last = 0, Streak = 0 },
 	Rebirths = 0,
+	Theme = 0,
 }
 
 -- The parts of a ProfileStore profile this module uses.
@@ -97,6 +98,10 @@ local function migrate(data: Data)
 		-- 2 -> 3: rebirths. Reconcile already added Rebirths = 0.
 		version = 3
 	end
+	if version < 4 then
+		-- 3 -> 4: shop colors. Reconcile already added Theme = 0 (the shop's own colors).
+		version = 4
+	end
 	data.SchemaVersion = version
 end
 
@@ -133,6 +138,7 @@ local function sanitize(data: Data)
 		else 0
 	data.Daily = { Last = last, Streak = streak }
 	data.Rebirths = if isNumber(data.Rebirths) then math.clamp(math.floor(data.Rebirths), 0, 1000) else 0
+	data.Theme = if isNumber(data.Theme) then math.clamp(math.floor(data.Theme), 0, #Config.Palette.Awnings) else 0
 end
 
 ------------------------------------------------------------------

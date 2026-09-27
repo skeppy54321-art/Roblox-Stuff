@@ -517,6 +517,26 @@ local counting = waitFor(3, function()
 end)
 check("gift button counts down to the next one", counting, giftFace.Text)
 
+print("== shop colors ==")
+do
+	local card = find(uiRoot, "UpgradesPanel.Body.List.ShopColors")
+	check("shop colors card", card ~= nil)
+	local function outlined(name)
+		local swatch = card and card:FindFirstChild(name, true)
+		local ring = swatch and swatch:FindFirstChildOfClass("UIStroke")
+		return ring ~= nil and ring.Thickness == 4
+	end
+	local names = Engine.loaded(game:GetService("ReplicatedStorage").Config).Palette.ThemeNames
+	local default = plot:GetAttribute("DefaultTheme")
+	check("your shop's own colors are outlined", outlined(names[default]))
+	local pick = if default == 3 then 4 else 3
+	Engine.signal(card:FindFirstChild(names[pick], true), "Activated"):Fire()
+	local painted = waitFor(2, function()
+		return data.Theme == pick and outlined(names[pick])
+	end)
+	check("tapping a swatch repaints the shop", painted)
+end
+
 print("== studio coins ==")
 do
 	local studioFace = find(uiRoot, "StudioCoins.Face")

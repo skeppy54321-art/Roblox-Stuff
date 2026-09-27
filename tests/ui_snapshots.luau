@@ -142,6 +142,14 @@ task.wait(0.3)
 Engine.signal(ui.SideButtons.UpgradesButton.Face, "Activated"):Fire()
 snap("upgrades")
 
+do -- the Shop Colors card sits far down the list; lift it to the top for its own picture
+	local colors = ui.UpgradesPanel.Body.List.ShopColors
+	local order = colors.LayoutOrder
+	colors.LayoutOrder = -10
+	snap("colors")
+	colors.LayoutOrder = order
+end
+
 Engine.signal(ui.SideButtons.RecipesButton.Face, "Activated"):Fire()
 snap("recipes")
 

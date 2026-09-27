@@ -710,7 +710,9 @@ end
 local function buildDecorBanners(plot: Model, at: At, theme: { Color3 }): Model
 	local group = Kit.Model(plot, "DecorBanners")
 	for _, x in { -7.2, 7.2 } do
-		Kit.Decor(group, "Banner", Vector3.new(1.6, 4.2, 0.12), at(x, 6.6, -8.9), theme[1], Enum.Material.Fabric)
+		local banner =
+			Kit.Decor(group, "Banner", Vector3.new(1.6, 4.2, 0.12), at(x, 6.6, -8.9), theme[1], Enum.Material.Fabric)
+		banner:SetAttribute("ThemeSlot", 1)
 		Kit.Decor(group, "BannerTrim", Vector3.new(1.6, 0.3, 0.14), at(x, 4.6, -8.9), P.Gold, Enum.Material.Foil)
 		Kit.Ball(group, "Emblem", 0.7, at(x, 7.2, -9).Position, P.Gold, NEON, { CastShadow = false })
 	end
@@ -790,12 +792,14 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		return origin * CFrame.new(x, 1 + y, z)
 	end
 	local rng = Random.new(index * 7919)
-	local theme = P.Awnings[(index - 1) % #P.Awnings + 1]
+	local themeIndex = (index - 1) % #P.Awnings + 1
+	local theme = P.Awnings[themeIndex]
 
 	local plot = Kit.Model(nil, "Plot" .. index)
 	plot:SetAttribute("IsPlot", true)
 	plot:SetAttribute("OwnerUserId", 0)
 	plot:SetAttribute("PlotIndex", index)
+	plot:SetAttribute("DefaultTheme", themeIndex) -- its own colors, until an owner picks others
 
 	local decor = Kit.Model(plot, "Decor")
 
@@ -817,7 +821,9 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Enum.Material.WoodPlanks
 	)
 	Kit.Decor(decor, "Rug", Vector3.new(7.4, 0.06, 4.8), at(0, 0.03, 7), P.PanelLight, Enum.Material.Carpet)
-	Kit.Decor(decor, "RugInner", Vector3.new(6.4, 0.07, 3.8), at(0, 0.04, 7), theme[1], Enum.Material.Carpet)
+	local rug =
+		Kit.Decor(decor, "RugInner", Vector3.new(6.4, 0.07, 3.8), at(0, 0.04, 7), theme[1], Enum.Material.Carpet)
+	rug:SetAttribute("ThemeSlot", 1)
 
 	-- Counter (customers stand in front of it)
 	Kit.Part(decor, "Counter", Vector3.new(16, 3.5, 2.5), at(0, 1.75, -8), P.Wood, WOOD)
@@ -841,23 +847,20 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	local tilt = CFrame.Angles(math.rad(-14), 0, 0)
 	for i = 1, stripes do
 		local x = -width / 2 + stripeWidth * (i - 0.5)
-		local color = if i % 2 == 0 then theme[2] else theme[1]
-		Kit.Decor(
+		-- ThemeSlot says which of the shop's two theme colors a part wears (Shop Colors repaints them)
+		local slot = if i % 2 == 0 then 2 else 1
+		local stripe = Kit.Decor(
 			decor,
 			"Awning",
 			Vector3.new(stripeWidth, 0.25, 5.4),
 			at(x, 10.2, -8.6) * tilt,
-			color,
+			theme[slot],
 			Enum.Material.Fabric
 		)
-		Kit.Ball(
-			decor,
-			"Pompom",
-			0.6,
-			at(x, 9.35, -11.3).Position,
-			if i % 2 == 0 then theme[1] else theme[2],
-			Enum.Material.Fabric
-		)
+		stripe:SetAttribute("ThemeSlot", slot)
+		local pompom =
+			Kit.Ball(decor, "Pompom", 0.6, at(x, 9.35, -11.3).Position, theme[3 - slot], Enum.Material.Fabric)
+		pompom:SetAttribute("ThemeSlot", 3 - slot)
 	end
 
 	-- Shop sign (PlotService writes the owner's name on it)
