@@ -28,6 +28,17 @@ local frame: Frame
 local hint: TextLabel
 local cards: { [string]: Card } = {}
 local order: { string } = {} -- recipe ids of the cards currently shown, left to right
+
+-- Cards run from the most valuable potion to the cheapest, and never move around, so
+-- late in the game the best potions are first and number keys always mean the same card.
+local menuOrder = table.clone(Config.RecipeOrder)
+table.sort(menuOrder, function(a: string, b: string): boolean
+	local ra, rb = Config.Recipes[a], Config.Recipes[b]
+	if ra.SellPrice ~= rb.SellPrice then
+		return ra.SellPrice > rb.SellPrice
+	end
+	return ra.Order < rb.Order
+end)
 local wasVisible = false
 
 local function makeCard(parent: Instance, recipeId: string, layoutOrder: number): Card
@@ -63,7 +74,12 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 		Parent = holder,
 	}, 15)
 
-	-- ingredient dots with "have/need" counts
+	-- ingredient dots with "have/need" counts (tighter when there are three)
+	local kinds = 0
+	for _ in recipe.Ingredients do
+		kinds += 1
+	end
+	local tight = kinds >= 3
 	local row = Ui.new("Frame", {
 		Position = UDim2.fromOffset(3, 76),
 		Size = UDim2.new(1, -6, 0, 16),
@@ -74,21 +90,21 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, if tight then 2 else 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
 	local counts: { [string]: TextLabel } = {}
 	for i, ingredientId in Config.IngredientOrder do
 		if recipe.Ingredients[ingredientId] then
-			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, 12)
+			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, if tight then 10 else 12)
 			dot.LayoutOrder = i * 2
 			dot.Parent = row
 			local count = Ui.new("TextLabel", {
-				Size = UDim2.fromOffset(24, 16),
+				Size = UDim2.fromOffset(if tight then 18 else 24, 16),
 				BackgroundTransparency = 1,
 				Font = Ui.FONT,
-				TextSize = 13,
+				TextSize = if tight then 12 else 13,
 				TextColor3 = P.TextDark,
 				Text = "",
 				LayoutOrder = i * 2 + 1,
@@ -188,7 +204,7 @@ function CauldronMenu.Init(root: Frame)
 			{ PaddingLeft = UDim.new(0, 2), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 4) }
 		),
 	})
-	for i, recipeId in Config.RecipeOrder do
+	for i, recipeId in menuOrder do
 		cards[recipeId] = makeCard(list, recipeId, i)
 	end
 end
@@ -211,7 +227,7 @@ function CauldronMenu.Update(visible: boolean, state: State?, wants: { string },
 	hint.TextColor3 = if shelfFull then P.Danger else P.TextMuted
 
 	table.clear(order)
-	for _, recipeId in Config.RecipeOrder do
+	for _, recipeId in menuOrder do
 		local card = cards[recipeId]
 		local unlocked = Config.IsRecipeUnlocked(state.Upgrades, recipeId)
 		card.Holder.Visible = unlocked

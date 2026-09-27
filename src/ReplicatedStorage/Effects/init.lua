@@ -33,6 +33,13 @@ type EffectFn = (customer: Model, fx: Helpers) -> ()
 
 local Effects = {}
 
+-- Particle textures that ship with every Roblox client (content/textures/particles).
+Effects.Textures = {
+	Fire = "rbxasset://textures/particles/fire_main.dds",
+	Smoke = "rbxasset://textures/particles/smoke_main.dds",
+	Sparkles = "rbxasset://textures/particles/sparkles_main.dds",
+}
+
 local soundPlayer: ((name: string, part: BasePart?) -> ())? = nil
 
 local function burst(part: BasePart, color: Color3, count: number, speed: number?)

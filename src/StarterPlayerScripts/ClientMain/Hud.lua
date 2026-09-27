@@ -28,6 +28,11 @@ local goalText: TextLabel
 local saveChip: TextLabel
 local basket: Frame
 local ingredientRows: { [string]: { Row: Frame, Count: TextLabel } } = {}
+local ingredientGrid: Frame
+local ingredientChips: { [string]: { Chip: Frame, Count: TextLabel } } = {}
+-- With more ingredients than this, the basket switches to a compact two-column grid
+-- (dots and counts only) so it stays clear of the phone thumbstick.
+local FULL_ROWS_UP_TO = 4
 local potionTotal: TextLabel
 local potionChips: Frame
 local upgradesBadge: Frame
@@ -183,6 +188,41 @@ function Hud.Init(parent: Frame)
 		}, 18)
 		ingredientRows[id] = { Row = row, Count = count }
 	end
+	ingredientGrid = Ui.new("Frame", {
+		Name = "IngredientGrid",
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 40,
+		Visible = false,
+		Parent = basket,
+	}, {
+		Ui.new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(85, 26),
+			CellPadding = UDim2.fromOffset(6, 4),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	for i, id in Config.IngredientOrder do
+		local chip = Ui.new("Frame", {
+			Name = id,
+			LayoutOrder = i,
+			BackgroundColor3 = P.PanelMid,
+			Parent = ingredientGrid,
+		}, { Ui.corner(8) })
+		local dot = Ui.dot(Config.Ingredients[id].Color, 16)
+		dot.AnchorPoint = Vector2.new(0, 0.5)
+		dot.Position = UDim2.new(0, 6, 0.5, 0)
+		dot.Parent = chip
+		local count = Ui.label({
+			Position = UDim2.fromOffset(28, 3),
+			Size = UDim2.new(1, -34, 1, -6),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = "0",
+			Parent = chip,
+		}, 17)
+		ingredientChips[id] = { Chip = chip, Count = count }
+	end
 	local divider = rowFrame(50, 2)
 	divider.BackgroundTransparency = 0.6
 	divider.BackgroundColor3 = P.PanelLight
@@ -215,7 +255,7 @@ function Hud.Init(parent: Frame)
 		Parent = basket,
 	}, {
 		Ui.new("UIGridLayout", {
-			CellSize = UDim2.fromOffset(54, 30),
+			CellSize = UDim2.fromOffset(41, 28),
 			CellPadding = UDim2.fromOffset(4, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
@@ -352,10 +392,24 @@ function Hud.SetState(state: State)
 		end
 	end
 
+	local unlockedCount = 0
+	for _, id in Config.IngredientOrder do
+		if Config.IsIngredientUnlocked(state.Upgrades, id) then
+			unlockedCount += 1
+		end
+	end
+	local compact = unlockedCount > FULL_ROWS_UP_TO
+	local maxEach = Config.Tuning.Storage.MaxPerIngredient
+	ingredientGrid.Visible = compact
 	for id, row in ingredientRows do
 		local unlocked = Config.IsIngredientUnlocked(state.Upgrades, id)
-		row.Row.Visible = unlocked
-		row.Count.Text = `{state.Ingredients[id] or 0}/{Config.Tuning.Storage.MaxPerIngredient}`
+		local count = state.Ingredients[id] or 0
+		row.Row.Visible = unlocked and not compact
+		row.Count.Text = `{count}/{maxEach}`
+		local chip = ingredientChips[id]
+		chip.Chip.Visible = unlocked
+		chip.Count.Text = tostring(count)
+		chip.Count.TextColor3 = if count >= maxEach then P.Gold else P.TextLight -- gold = full
 	end
 
 	local total = Config.PotionTotal(state.Potions)
@@ -376,16 +430,16 @@ function Hud.SetState(state: State)
 				BackgroundColor3 = P.PanelMid,
 				Parent = potionChips,
 			}, { Ui.corner(8) })
-			local icon = Ui.bottle(Config.Recipes[id].Color, 14)
+			local icon = Ui.bottle(Config.Recipes[id].Color, 13)
 			icon.AnchorPoint = Vector2.new(0, 0.5)
-			icon.Position = UDim2.new(0, 5, 0.5, 0)
+			icon.Position = UDim2.new(0, 4, 0.5, 0)
 			icon.Parent = chip
 			Ui.label({
-				Position = UDim2.fromOffset(24, 4),
-				Size = UDim2.new(1, -28, 1, -8),
+				Position = UDim2.fromOffset(19, 4),
+				Size = UDim2.new(1, -21, 1, -8),
 				Text = `x{count}`,
 				Parent = chip,
-			}, 16)
+			}, 15)
 		end
 	end
 

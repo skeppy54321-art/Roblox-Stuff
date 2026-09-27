@@ -252,7 +252,7 @@ for _, junk in { 123, "Nope", {}, "BrewSpeed\0", string.rep("x", 500) } do
 end
 task.wait(0.6)
 check("junk remotes ignored", data.Coins == 20)
-data.Coins = 5000
+data.Coins = 8000
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "FrostGrotto")
 task.wait(0.5)
 check("frost grotto needs starflower first", (data.Upgrades.FrostGrotto or 0) == 0)
@@ -263,7 +263,10 @@ task.wait(0.2)
 check("bought starflower bed from the lot", data.Upgrades.StarflowerBed == 1)
 check("starflower planted", plot.Sources:FindFirstChild("Starflower") ~= nil)
 check("lot hidden", plot.Lots:FindFirstChild("StarflowerBedLot") == nil)
-for _, id in { "BrewSpeed", "BrewSpeed", "BrewSpeed", "Shelves", "Shelves", "GreenThumb", "GreenThumb", "CounterSpace", "FrostGrotto", "CozyDecor", "CozyDecor", "CozyDecor" } do
+Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "CloudGarden")
+task.wait(0.5)
+check("cloud garden needs the ember garden first", (data.Upgrades.CloudGarden or 0) == 0)
+for _, id in { "BrewSpeed", "BrewSpeed", "BrewSpeed", "Shelves", "Shelves", "GreenThumb", "GreenThumb", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden", "CozyDecor", "CozyDecor", "CozyDecor" } do
 	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, id)
 	task.wait(0.45)
 end
@@ -273,7 +276,10 @@ check("green thumb 2", data.Upgrades.GreenThumb == 2)
 check("counter space", data.Upgrades.CounterSpace == 1)
 check("frost grotto", data.Upgrades.FrostGrotto == 1)
 check("decor 3", data.Upgrades.CozyDecor == 3)
-check("coins spent exactly", data.Coins == 5000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 150 + 500 + 1500 + 60), data.Coins)
+check("ember + cloud gardens", data.Upgrades.EmberGarden == 1 and data.Upgrades.CloudGarden == 1)
+check("ember peppers planted", plot.Sources:FindFirstChild("EmberPepper") ~= nil and plot.Lots:FindFirstChild("EmberGardenLot") == nil)
+check("cloud puffs floating", plot.Sources:FindFirstChild("CloudPuff") ~= nil and plot.Lots:FindFirstChild("CloudGardenLot") == nil)
+check("coins spent exactly", data.Coins == 8000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 900 + 1600 + 150 + 500 + 1500 + 60), data.Coins)
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
 task.wait(0.5)
 check("maxed upgrade not charged", data.Upgrades.BrewSpeed == 3)
@@ -296,10 +302,10 @@ check("second counter spot brings a 2nd customer", two)
 do
 	-- show a stocked counter in the preview, then put the stock back
 	local stock = table.clone(data.Potions)
-	data.Potions = { GiantHead = 2, Rainbow = 1, Tiny = 1, Floaty = 2, Twirly = 1, Frosty = 1, Froggy = 1 }
+	data.Potions = { GiantHead = 2, Rainbow = 1, Tiny = 1, Floaty = 1, Twirly = 1, Frosty = 1, Froggy = 1, FireBreath = 1, Rocket = 1 }
 	PlayerData.Push(player)
 	task.wait(0.1)
-	check("full counter display", plot.Display.Slot9.Body.Transparency == 0 and plot.Display.Slot10.Body.Transparency == 1)
+	check("full counter display", plot.Display.Slot10.Body.Transparency == 0 and plot.Display.Slot11.Body.Transparency == 1)
 	local upgradedParts, upgradedLights = Engine.dumpParts(workspace)
 	data.Potions = stock
 	PlayerData.Push(player)
@@ -398,7 +404,7 @@ SocialService.RedrawBoard()
 local rowsFolder = town.MarketStars.StarsBoard.StarsGui.Page.Rows
 check("board row 1 is the top earner", rowsFolder.Row1.Visible and rowsFolder.Row1.PlayerName.Text == "Tester", rowsFolder.Row1.PlayerName.Text)
 check("board row 2 is the friend", rowsFolder.Row2.Visible and rowsFolder.Row2.PlayerName.Text == "Friend", rowsFolder.Row2.PlayerName.Text)
-check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == "1/7", rowsFolder.Row2.RecipesValue.Text)
+check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == "1/12", rowsFolder.Row2.RecipesValue.Text)
 check("board shows cheers", rowsFolder.Row1.CheersValue.Text == "1", rowsFolder.Row1.CheersValue.Text)
 check("unused rows hidden", not rowsFolder.Row3.Visible)
 check("empty note hidden", not rowsFolder.Empty.Visible)

@@ -154,5 +154,29 @@ Net.Cue(player, "Discover", { Recipe = "Floaty", Bonus = 24 })
 task.wait(0.1)
 snap("celebrate")
 
+-- late game: everything bought, all six ingredients, a full shelf of different potions
+task.wait(3) -- let the celebration banner finish
+for _, id in { "StarflowerBed", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden" } do
+	data.Upgrades[id] = 1
+end
+data.Upgrades.BrewSpeed = 3
+data.Upgrades.Shelves = 2
+data.Upgrades.GreenThumb = 2
+data.Upgrades.CozyDecor = 3
+data.Coins = 12480
+for _, id in { "Moonberry", "Glowshroom", "Starflower", "FrostCrystal", "EmberPepper", "CloudPuff" } do
+	data.Ingredients[id] = 4
+end
+data.Potions = { FireBreath = 2, Dance = 1, Bubble = 2, Ghost = 1, Rocket = 1, Froggy = 2, Frosty = 1 }
+for _, id in { "GiantHead", "Rainbow", "Tiny", "Floaty", "Twirly", "Frosty", "Froggy", "FireBreath", "Dance", "Bubble" } do
+	data.Discovered[id] = true
+end
+data.Stats.PotionsSold = 240
+UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades)
+PlayerData.Push(player)
+goTo(plot.Cauldron.Hitbox)
+task.wait(1.2)
+snap("late")
+
 print("done")
 process.exit(0)

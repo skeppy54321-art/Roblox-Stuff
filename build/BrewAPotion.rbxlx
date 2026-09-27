@@ -293,6 +293,22 @@ local Ingredients: { [string]: Ingredient } = {
 		UnlockedBy = "FrostGrotto",
 		Order = 4,
 	},
+	EmberPepper = {
+		Id = "EmberPepper",
+		DisplayName = "Ember Pepper",
+		Color = Color3.fromRGB(255, 95, 45),
+		Where = "the ember garden",
+		UnlockedBy = "EmberGarden",
+		Order = 5,
+	},
+	CloudPuff = {
+		Id = "CloudPuff",
+		DisplayName = "Cloud Puff",
+		Color = Color3.fromRGB(225, 240, 255),
+		Where = "the cloud garden",
+		UnlockedBy = "CloudGarden",
+		Order = 6,
+	},
 }
 
 return Ingredients
@@ -509,6 +525,66 @@ local Recipes: { [string]: Recipe } = {
 		Color = Color3.fromRGB(110, 220, 90),
 		Order = 7,
 	},
+	FireBreath = {
+		Id = "FireBreath",
+		DisplayName = "Fire Breath Potion",
+		Description = "They breathe fire like a dragon!",
+		Reaction = "HOT HOT HOT!",
+		Ingredients = { EmberPepper = 1, Glowshroom = 1 },
+		SellPrice = 90,
+		BrewMultiplier = 1.6,
+		Effect = "FireBreath",
+		Color = Color3.fromRGB(255, 110, 40),
+		Order = 8,
+	},
+	Dance = {
+		Id = "Dance",
+		DisplayName = "Dance Potion",
+		Description = "A disco ball appears and they can't stop dancing!",
+		Reaction = "Let's dance!",
+		Ingredients = { EmberPepper = 1, Starflower = 1, Moonberry = 1 },
+		SellPrice = 110,
+		BrewMultiplier = 1.8,
+		Effect = "Dance",
+		Color = Color3.fromRGB(255, 80, 210),
+		Order = 9,
+	},
+	Bubble = {
+		Id = "Bubble",
+		DisplayName = "Bubble Potion",
+		Description = "They float away inside a giant bubble. Pop!",
+		Reaction = "I'm in a bubble!",
+		Ingredients = { CloudPuff = 1, Moonberry = 1 },
+		SellPrice = 120,
+		BrewMultiplier = 1.8,
+		Effect = "Bubble",
+		Color = Color3.fromRGB(140, 225, 255),
+		Order = 10,
+	},
+	Ghost = {
+		Id = "Ghost",
+		DisplayName = "Ghost Potion",
+		Description = "They turn into a see-through ghost. Boo!",
+		Reaction = "Boooo!",
+		Ingredients = { CloudPuff = 1, FrostCrystal = 1 },
+		SellPrice = 150,
+		BrewMultiplier = 2,
+		Effect = "Ghost",
+		Color = Color3.fromRGB(205, 215, 255),
+		Order = 11,
+	},
+	Rocket = {
+		Id = "Rocket",
+		DisplayName = "Rocket Potion",
+		Description = "They blast off into the sky and float back down!",
+		Reaction = "To the moon!",
+		Ingredients = { EmberPepper = 1, CloudPuff = 1, Starflower = 1 },
+		SellPrice = 220,
+		BrewMultiplier = 2.4,
+		Effect = "Rocket",
+		Color = Color3.fromRGB(255, 175, 60),
+		Order = 12,
+	},
 }
 
 return Recipes
@@ -590,6 +666,11 @@ local Sounds: { [string]: SoundDef } = {
 	Whoosh = sound("", 0.4, 1, "magic whoosh"),
 	Inflate = sound("", 0.5, 1, "balloon inflate"),
 	Shrink = sound("", 0.5, 1, "cartoon shrink"),
+	Fire = sound(BOOM, 0.16, 0.55, "dragon fire breath"),
+	Pop = sound(TICK, 0.55, 2.3, "bubble pop"),
+	Rocket = sound(BOOM, 0.22, 0.8, "rocket launch"),
+	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
+	Boo = sound("", 0.5, 1, "ghost boo"),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
 }
 
@@ -770,6 +851,34 @@ local Upgrades: { [string]: Upgrade } = {
 		Announce = "found a Frost Grotto",
 		Order = 6,
 	},
+	EmberGarden = {
+		Id = "EmberGarden",
+		DisplayName = "Ember Garden",
+		Description = "Grow fiery Ember Peppers. Unlocks Fire Breath and Dance potions!",
+		BaseSummary = "Not planted",
+		Color = Color3.fromRGB(255, 110, 50),
+		Levels = {
+			{ Cost = 900, Summary = "Ember Peppers growing" },
+		},
+		Unlocks = "EmberPepper",
+		Requires = "FrostGrotto",
+		Announce = "planted an Ember Garden",
+		Order = 7,
+	},
+	CloudGarden = {
+		Id = "CloudGarden",
+		DisplayName = "Cloud Garden",
+		Description = "Catch fluffy Cloud Puffs. Unlocks Bubble, Ghost and Rocket potions!",
+		BaseSummary = "Not built",
+		Color = Color3.fromRGB(150, 190, 255),
+		Levels = {
+			{ Cost = 1600, Summary = "Cloud Puffs floating" },
+		},
+		Unlocks = "CloudPuff",
+		Requires = "EmberGarden",
+		Announce = "grew a Cloud Garden",
+		Order = 8,
+	},
 	CozyDecor = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
@@ -781,7 +890,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 500, Summary = "Banners + magic sign" },
 			{ Cost = 1500, Summary = "Golden cauldron!" },
 		},
-		Order = 7,
+		Order = 9,
 	},
 }
 
@@ -897,6 +1006,13 @@ export type Helpers = {
 type EffectFn = (customer: Model, fx: Helpers) -> ()
 
 local Effects = {}
+
+-- Particle textures that ship with every Roblox client (content/textures/particles).
+Effects.Textures = {
+	Fire = "rbxasset://textures/particles/fire_main.dds",
+	Smoke = "rbxasset://textures/particles/smoke_main.dds",
+	Sparkles = "rbxasset://textures/particles/sparkles_main.dds",
+}
 
 local soundPlayer: ((name: string, part: BasePart?) -> ())? = nil
 
@@ -1142,6 +1258,356 @@ end
       </Item>
       <Item class="ModuleScript" referent="12">
         <Properties>
+          <string name="Name">Bubble</string>
+          <string name="Source"><![CDATA[--!strict
+-- Bubble (ModuleScript) — ReplicatedStorage.Effects.Bubble
+-- Bubble Potion: a giant soap bubble grows around the customer and floats them up,
+-- bobbing gently... until it pops and they drop back down.
+
+local Effects = require(script.Parent)
+
+local BUBBLE = Color3.fromRGB(190, 230, 255)
+
+return function(customer: Model, fx: Effects.Helpers)
+	local pivot = customer:GetPivot()
+	local scale = customer:GetScale()
+	local center = CFrame.new(0, 3.1 * scale, 0)
+	local size = 7.2 * scale
+
+	local bubble = Instance.new("Part")
+	bubble.Name = "SoapBubble"
+	bubble.Shape = Enum.PartType.Ball
+	bubble.Anchored = true
+	bubble.CanCollide = false
+	bubble.CanQuery = false
+	bubble.CanTouch = false
+	bubble.CastShadow = false
+	bubble.Material = Enum.Material.Glass
+	bubble.Color = BUBBLE
+	bubble.Transparency = 0.6
+	bubble.Reflectance = 0.25
+	bubble.Size = Vector3.one * 0.1
+	bubble.CFrame = pivot * center
+	bubble.Parent = workspace -- not inside the customer: they walk away with every part they have
+	local shine = Instance.new("ParticleEmitter")
+	shine.Texture = Effects.Textures.Sparkles
+	shine.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 190, 240))
+	shine.LightEmission = 1
+	shine.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3 * scale),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	shine.Lifetime = NumberRange.new(0.6, 1)
+	shine.Speed = NumberRange.new(0.2, 0.6)
+	shine.SpreadAngle = Vector2.new(180, 180)
+	shine.Rate = 10
+	shine.Parent = bubble
+	fx.Sound("Whoosh", customer.PrimaryPart)
+
+	-- the bubble grows around them
+	fx.Animate(customer, 0.4, function(alpha)
+		local grow = 1 - (1 - alpha) ^ 3
+		bubble.Size = Vector3.one * math.max(size * grow, 0.1)
+	end)
+
+	-- up they go, bobbing and swaying
+	local height = 0
+	fx.Animate(customer, 2, function(alpha)
+		height = math.min(alpha / 0.55, 1)
+		height = (1 - (1 - height) ^ 2) * 5 * scale + math.sin(alpha * math.pi * 3) * 0.3 * scale
+		local sway = math.sin(alpha * math.pi * 2.5) * 0.12
+		local at = pivot * CFrame.new(0, height, 0) * CFrame.Angles(0, 0, sway)
+		customer:PivotTo(at)
+		bubble.CFrame = at * center
+	end)
+
+	-- pop!
+	local popAt = bubble.Position
+	bubble:Destroy()
+	if not customer.Parent then
+		return
+	end
+	fx.Sound("Pop", customer.PrimaryPart)
+	fx.Poof(popAt, BUBBLE, 2.5 * scale)
+
+	-- and they drop back down
+	local from = height
+	fx.Animate(customer, 0.35, function(alpha)
+		customer:PivotTo(pivot * CFrame.new(0, from * (1 - alpha * alpha), 0))
+	end)
+	if customer.Parent then
+		customer:PivotTo(pivot)
+	end
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="13">
+        <Properties>
+          <string name="Name">Dance</string>
+          <string name="Source"><![CDATA[--!strict
+-- Dance (ModuleScript) — ReplicatedStorage.Effects.Dance
+-- Dance Potion: a disco ball drops in above the customer, colored lights swirl, and
+-- they bounce, twist and point at the sky, one arm then the other.
+
+local Effects = require(script.Parent)
+
+local SECONDS = 3
+local SHOULDERS: { [string]: Vector3 } = { L = Vector3.new(-1.55, 3.9, 0), R = Vector3.new(1.55, 3.9, 0) } -- see CustomerBuilder
+
+type Arm = { Parts: { BasePart }, Rest: { CFrame }, Shoulder: Vector3, Side: number }
+
+local function part(name: string, size: Vector3, color: Color3, material: Enum.Material): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	return p
+end
+
+return function(customer: Model, fx: Effects.Helpers)
+	local pivot = customer:GetPivot()
+	local scale = customer:GetScale()
+
+	-- arms, relative to the customer's pivot, so they can be posed every frame
+	local arms: { Arm } = {}
+	for side, shoulder in SHOULDERS do
+		local list, rest = {}, {}
+		for _, name in { "Arm" .. side, "Hand" .. side } do
+			local p = customer:FindFirstChild(name)
+			if p and p:IsA("BasePart") then
+				table.insert(list, p)
+				table.insert(rest, pivot:ToObjectSpace(p.CFrame))
+			end
+		end
+		table.insert(
+			arms,
+			{ Parts = list, Rest = rest, Shoulder = shoulder * scale, Side = if side == "L" then -1 else 1 }
+		)
+	end
+
+	-- the disco ball on a string
+	local top = pivot * CFrame.new(0, 7.8 * scale, 0)
+	local ball = part("DiscoBall", Vector3.one * 1.5 * scale, Color3.fromRGB(215, 220, 235), Enum.Material.Foil)
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.one * 1.5 * scale
+	ball.Reflectance = 0.4
+	ball.CFrame = top * CFrame.new(0, 4 * scale, 0)
+	ball.Parent = customer
+	local cord =
+		part("Cord", Vector3.new(0.08, 3, 0.08) * scale, Color3.fromRGB(60, 60, 70), Enum.Material.SmoothPlastic)
+	cord.Parent = customer
+	local light = Instance.new("PointLight")
+	light.Range = 14
+	light.Brightness = 3
+	light.Parent = ball
+	local glitter = Instance.new("ParticleEmitter")
+	glitter.Texture = Effects.Textures.Sparkles
+	glitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 200)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 200, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 230, 90)),
+	})
+	glitter.LightEmission = 1
+	glitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.35 * scale),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	glitter.Lifetime = NumberRange.new(0.8, 1.3)
+	glitter.Speed = NumberRange.new(4, 7)
+	glitter.SpreadAngle = Vector2.new(180, 180)
+	glitter.Acceleration = Vector3.new(0, -6, 0)
+	glitter.Rate = 40
+	glitter.Parent = ball
+	fx.Sound("Disco", customer.PrimaryPart)
+
+	fx.Animate(customer, SECONDS, function(alpha)
+		local t = alpha * SECONDS
+		-- the ball drops in, spins, and the light cycles through the rainbow
+		local drop = math.min(t / 0.35, 1)
+		local ballAt = top * CFrame.new(0, 4 * scale * (1 - drop) ^ 2, 0)
+		ball.CFrame = ballAt * CFrame.Angles(0, t * 4, 0)
+		cord.CFrame = ballAt * CFrame.new(0, 2.2 * scale, 0)
+		light.Color = Color3.fromHSV((t * 0.9) % 1, 0.7, 1)
+
+		-- bounce to the beat and twist side to side
+		local beat = t * math.pi * 2 * 2.2
+		local bounce = math.abs(math.sin(beat)) * 0.45 * scale
+		local twist = math.sin(beat / 2) * math.rad(28)
+		local now = pivot * CFrame.new(0, bounce, 0) * CFrame.Angles(0, twist, 0)
+		customer:PivotTo(now)
+
+		-- point at the sky: the arms take turns
+		local turn = math.floor(t / 0.55) % 2
+		local ease = math.min(alpha / 0.1, 1) * math.min((1 - alpha) / 0.1, 1) -- start and end at rest
+		for _, arm in arms do
+			local up = if (arm.Side == 1) == (turn == 0) then 1 else 0.25
+			local shoulder = now * CFrame.new(arm.Shoulder)
+			local swing = shoulder * CFrame.Angles(0, 0, arm.Side * math.rad(160) * up * ease) * shoulder:Inverse()
+			for i, p in arm.Parts do
+				p.CFrame = swing * now * arm.Rest[i]
+			end
+		end
+	end)
+
+	-- tidy up: back to the spot, arms down, the ball pops away
+	if customer.Parent then
+		customer:PivotTo(pivot)
+		for _, arm in arms do
+			for i, p in arm.Parts do
+				p.CFrame = pivot * arm.Rest[i]
+			end
+		end
+	end
+	-- (nothing extra may stay inside the customer: they walk away with every part they have)
+	fx.Poof(ball.Position, Color3.fromRGB(255, 200, 255), 2)
+	ball:Destroy()
+	cord:Destroy()
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="14">
+        <Properties>
+          <string name="Name">FireBreath</string>
+          <string name="Source"><![CDATA[--!strict
+-- FireBreath (ModuleScript) — ReplicatedStorage.Effects.FireBreath
+-- Fire Breath Potion: their face turns red, steam puffs out of their ears, then they
+-- breathe a long jet of fire like a dragon and cool back down.
+
+local Debris = game:GetService("Debris")
+local Effects = require(script.Parent)
+
+local HOT = Color3.fromRGB(255, 70, 50)
+
+local function emitter(parent: Attachment, props: { [string]: any }): ParticleEmitter
+	local e = Instance.new("ParticleEmitter")
+	e.EmissionDirection = Enum.NormalId.Top
+	for key, value in props do
+		(e :: any)[key] = value
+	end
+	e.Parent = parent
+	return e
+end
+
+return function(customer: Model, fx: Effects.Helpers)
+	local headGroup = customer:FindFirstChild("HeadGroup")
+	local head = if headGroup then headGroup:FindFirstChild("Head") else nil
+	if not head or not head:IsA("BasePart") then
+		return
+	end
+	local scale = customer:GetScale()
+	local pivot = customer:GetPivot()
+	local skin = head.Color
+
+	-- face goes red
+	fx.Animate(customer, 0.45, function(alpha)
+		head.Color = skin:Lerp(HOT, alpha)
+	end)
+
+	-- steam out of both ears
+	local ears: { Attachment } = {}
+	for _, side in { -1, 1 } do
+		local ear = Instance.new("Attachment")
+		ear.Name = "Ear"
+		ear.CFrame = CFrame.new(0.78 * scale * side, 0.1 * scale, 0) * CFrame.Angles(0, 0, -side * math.rad(70))
+		ear.Parent = head
+		emitter(ear, {
+			Texture = Effects.Textures.Smoke,
+			Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)),
+			Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.2),
+				NumberSequenceKeypoint.new(1, 1),
+			}),
+			Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.3 * scale),
+				NumberSequenceKeypoint.new(1, 1.2 * scale),
+			}),
+			Lifetime = NumberRange.new(0.5, 0.8),
+			Speed = NumberRange.new(3, 5),
+			SpreadAngle = Vector2.new(15, 15),
+			Rate = 35,
+		})
+		table.insert(ears, ear)
+	end
+	fx.Sound("Fire", head)
+
+	-- the fire jet comes out of the mouth, pointing forward (the face is the head's -Z side)
+	local mouth = Instance.new("Attachment")
+	mouth.Name = "Mouth"
+	mouth.CFrame = CFrame.new(0, -0.3 * scale, -0.8 * scale) * CFrame.Angles(-math.pi / 2, 0, 0)
+	mouth.Parent = head
+	local fire = emitter(mouth, {
+		Texture = Effects.Textures.Fire,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 240, 150)),
+			ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 140, 40)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 40, 30)),
+		}),
+		LightEmission = 1,
+		LightInfluence = 0,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.1),
+			NumberSequenceKeypoint.new(0.7, 0.4),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5 * scale),
+			NumberSequenceKeypoint.new(1, 2.6 * scale),
+		}),
+		Lifetime = NumberRange.new(0.4, 0.65),
+		Speed = NumberRange.new(16 * scale, 22 * scale),
+		SpreadAngle = Vector2.new(9, 9),
+		RotSpeed = NumberRange.new(-120, 120),
+		Rotation = NumberRange.new(0, 360),
+		Acceleration = Vector3.new(0, 4, 0),
+		Drag = 1.5,
+		Rate = 140,
+	})
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 140, 60)
+	light.Range = 14
+	light.Brightness = 3
+	light.Parent = mouth
+
+	-- breathe, shaking with the effort
+	fx.Animate(customer, 1.6, function(alpha)
+		local shake = math.sin(alpha * 70) * 0.06 * scale
+		customer:PivotTo(pivot * CFrame.new(shake, 0, 0))
+	end)
+	fire.Enabled = false
+	light:Destroy()
+	for _, ear in ears do
+		for _, child in ear:GetChildren() do
+			if child:IsA("ParticleEmitter") then
+				child.Enabled = false
+			end
+		end
+		Debris:AddItem(ear, 1.2)
+	end
+	Debris:AddItem(mouth, 1)
+	if not customer.Parent then
+		return
+	end
+	customer:PivotTo(pivot)
+
+	-- cool back down
+	fx.Animate(customer, 0.6, function(alpha)
+		head.Color = HOT:Lerp(skin, alpha)
+	end)
+	head.Color = skin
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
           <string name="Name">Floaty</string>
           <string name="Source"><![CDATA[--!strict
 -- Floaty (ModuleScript) — ReplicatedStorage.Effects.Floaty
@@ -1188,7 +1654,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Froggy</string>
           <string name="Source"><![CDATA[--!strict
@@ -1269,7 +1735,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">Frosty</string>
           <string name="Source"><![CDATA[--!strict
@@ -1362,7 +1828,96 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">Ghost</string>
+          <string name="Source"><![CDATA[--!strict
+-- Ghost (ModuleScript) — ReplicatedStorage.Effects.Ghost
+-- Ghost Potion: the customer turns pale and see-through, floats up and drifts about
+-- with wisps trailing behind, then fades back to normal.
+
+local Debris = game:GetService("Debris")
+local Effects = require(script.Parent)
+
+local GHOST = Color3.fromRGB(225, 235, 255)
+
+type Saved = { Color: Color3, Transparency: number }
+
+return function(customer: Model, fx: Effects.Helpers)
+	local pivot = customer:GetPivot()
+	local scale = customer:GetScale()
+	local torso = customer.PrimaryPart
+
+	local saved: { [BasePart]: Saved } = {}
+	for _, part in fx.BodyParts(customer) do
+		if part.Transparency < 1 then
+			saved[part] = { Color = part.Color, Transparency = part.Transparency }
+		end
+	end
+	local function blend(amount: number)
+		for part, s in saved do
+			part.Color = s.Color:Lerp(GHOST, amount * 0.75)
+			part.Transparency = s.Transparency + (math.max(s.Transparency, 0.55) - s.Transparency) * amount
+		end
+	end
+
+	local wisps: ParticleEmitter? = nil
+	if torso then
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = Effects.Textures.Smoke
+		e.Color = ColorSequence.new(GHOST)
+		e.LightEmission = 0.6
+		e.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.5),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		e.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1.2 * scale),
+			NumberSequenceKeypoint.new(1, 2.4 * scale),
+		})
+		e.Lifetime = NumberRange.new(0.8, 1.3)
+		e.Speed = NumberRange.new(0.5, 1.5)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Rate = 18
+		e.Parent = torso
+		wisps = e
+	end
+	fx.Sound("Boo", torso)
+
+	-- fade out
+	fx.Animate(customer, 0.5, blend)
+
+	-- float and drift
+	fx.Animate(customer, 1.9, function(alpha)
+		local rise = math.sin(math.min(alpha / 0.3, 1) * math.pi / 2) * 1.8 * scale
+		local bob = math.sin(alpha * math.pi * 4) * 0.25 * scale
+		local drift = math.sin(alpha * math.pi * 2) * 0.8 * scale
+		local lean = math.sin(alpha * math.pi * 2) * 0.15
+		customer:PivotTo(pivot * CFrame.new(drift, rise + bob, 0) * CFrame.Angles(0, 0, -lean))
+	end)
+
+	-- back down and solid again
+	local from = customer:GetPivot()
+	fx.Animate(customer, 0.5, function(alpha)
+		customer:PivotTo(from:Lerp(pivot, alpha))
+		blend(1 - alpha)
+	end)
+	if wisps then
+		wisps.Enabled = false
+		Debris:AddItem(wisps, 1.5)
+	end
+	if customer.Parent then
+		customer:PivotTo(pivot)
+	end
+	for part, s in saved do
+		part.Color = s.Color
+		part.Transparency = s.Transparency
+	end
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">Rainbow</string>
           <string name="Source"><![CDATA[--!strict
@@ -1424,7 +1979,183 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="20">
+        <Properties>
+          <string name="Name">Rocket</string>
+          <string name="Source"><![CDATA[--!strict
+-- Rocket (ModuleScript) — ReplicatedStorage.Effects.Rocket
+-- Rocket Potion: the customer rumbles, blasts off on a jet of fire, bursts into
+-- fireworks at the top, and floats back down under a little parachute.
+
+local Debris = game:GetService("Debris")
+local Effects = require(script.Parent)
+
+local HEIGHT = 24
+local CHUTE_COLORS = { Color3.fromRGB(255, 90, 110), Color3.fromRGB(255, 240, 220) }
+
+local function part(parent: Instance, name: string, size: Vector3, color: Color3, material: Enum.Material): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Parent = parent
+	return p
+end
+
+local function fireworks(position: Vector3, scale: number)
+	local holder = part(workspace, "Fireworks", Vector3.one, Color3.new(1, 1, 1), Enum.Material.SmoothPlastic)
+	holder.Transparency = 1
+	holder.CFrame = CFrame.new(position)
+	for _, color in { Color3.fromRGB(255, 90, 200), Color3.fromRGB(90, 220, 255), Color3.fromRGB(255, 225, 80) } do
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = Effects.Textures.Sparkles
+		e.Color = ColorSequence.new(color)
+		e.LightEmission = 1
+		e.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.6 * scale),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		e.Lifetime = NumberRange.new(0.7, 1.1)
+		e.Speed = NumberRange.new(14, 20)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Drag = 3
+		e.Acceleration = Vector3.new(0, -8, 0)
+		e.Rate = 0
+		e.Parent = holder
+		e:Emit(22)
+	end
+	Debris:AddItem(holder, 2)
+end
+
+return function(customer: Model, fx: Effects.Helpers)
+	local pivot = customer:GetPivot()
+	local scale = customer:GetScale()
+	local torso = customer.PrimaryPart
+	if not torso then
+		return
+	end
+
+	-- a jet of fire and smoke out of their feet (the attachment's +Y points down)
+	local nozzle = Instance.new("Attachment")
+	nozzle.Name = "Nozzle"
+	nozzle.CFrame = CFrame.new(0, -2.9 * scale, 0) * CFrame.Angles(math.pi, 0, 0)
+	nozzle.Parent = torso
+	local flame = Instance.new("ParticleEmitter")
+	flame.Texture = Effects.Textures.Fire
+	flame.EmissionDirection = Enum.NormalId.Top
+	flame.Color = ColorSequence.new(Color3.fromRGB(255, 230, 120), Color3.fromRGB(255, 90, 30))
+	flame.LightEmission = 1
+	flame.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.4 * scale),
+		NumberSequenceKeypoint.new(1, 0.2),
+	})
+	flame.Lifetime = NumberRange.new(0.25, 0.4)
+	flame.Speed = NumberRange.new(14, 18)
+	flame.SpreadAngle = Vector2.new(8, 8)
+	flame.Rate = 0
+	flame.Parent = nozzle
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Texture = Effects.Textures.Smoke
+	smoke.EmissionDirection = Enum.NormalId.Top
+	smoke.Color = ColorSequence.new(Color3.fromRGB(235, 230, 225))
+	smoke.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	smoke.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1 * scale),
+		NumberSequenceKeypoint.new(1, 3.5 * scale),
+	})
+	smoke.Lifetime = NumberRange.new(0.9, 1.5)
+	smoke.Speed = NumberRange.new(2, 4)
+	smoke.SpreadAngle = Vector2.new(40, 40)
+	smoke.Rate = 25
+	smoke.Parent = nozzle
+
+	-- rumble...
+	fx.Sound("Rocket", torso)
+	fx.Animate(customer, 0.45, function(alpha)
+		local shake = math.sin(alpha * 90) * 0.08 * scale
+		customer:PivotTo(pivot * CFrame.new(shake, 0, 0))
+	end)
+
+	-- ...blast off!
+	flame.Rate = 90
+	smoke.Rate = 45
+	fx.Animate(customer, 0.8, function(alpha)
+		customer:PivotTo(pivot * CFrame.new(0, HEIGHT * scale * alpha * alpha, 0))
+	end)
+	flame.Enabled = false
+	smoke.Enabled = false
+	Debris:AddItem(nozzle, 1.6)
+	if not customer.Parent then
+		return
+	end
+	fireworks(torso.Position + Vector3.new(0, 3 * scale, 0), scale)
+	fx.Sound("Poof", torso)
+
+	-- a parachute pops open and they drift down, swaying
+	local chute = Instance.new("Model")
+	chute.Name = "Parachute"
+	chute.Parent = workspace -- not inside the customer: they walk away with every part they have
+	-- a squashed dome: ball parts are always round, so this is a block with a sphere mesh
+	local canopy = part(chute, "Canopy", Vector3.new(5, 1.6, 5) * scale, CHUTE_COLORS[1], Enum.Material.Fabric)
+	local dome = Instance.new("SpecialMesh")
+	dome.MeshType = Enum.MeshType.Sphere
+	dome.Parent = canopy
+	local band = part(chute, "Band", Vector3.new(5.1, 0.4, 5.1) * scale, CHUTE_COLORS[2], Enum.Material.Fabric)
+	band.Shape = Enum.PartType.Cylinder
+	band.Size = Vector3.new(0.4, 5.1, 5.1) * scale
+	local lines: { Part } = {}
+	for _ = 1, 4 do
+		local line = part(
+			chute,
+			"Line",
+			Vector3.new(0.06, 3, 0.06) * scale,
+			Color3.fromRGB(80, 80, 90),
+			Enum.Material.SmoothPlastic
+		)
+		table.insert(lines, line)
+	end
+	local top = HEIGHT * scale
+	fx.Animate(customer, 1.7, function(alpha)
+		local down = 1 - (1 - alpha) ^ 2
+		local sway = math.sin(alpha * math.pi * 3) * 0.18 * (1 - alpha)
+		local at = pivot * CFrame.new(0, top * (1 - down), 0) * CFrame.Angles(0, 0, sway)
+		customer:PivotTo(at)
+		local open = math.min(alpha / 0.15, 1)
+		local chuteAt = at * CFrame.new(0, 9.2 * scale, 0)
+		canopy.CFrame = chuteAt
+		canopy.Size = Vector3.new(5 * open + 0.2, 1.6, 5 * open + 0.2) * scale
+		band.CFrame = chuteAt * CFrame.new(0, -0.2 * scale, 0) * CFrame.Angles(0, 0, math.pi / 2)
+		band.Size = Vector3.new(0.4, 5.1 * open + 0.2, 5.1 * open + 0.2) * scale
+		-- lines from the rim of the canopy down to the nearer shoulder
+		for i, line in lines do
+			local angle = (i - 0.5) * math.pi / 2
+			local rim = Vector3.new(math.cos(angle), 0, math.sin(angle)) * 2.3 * scale * open
+			local shoulder = Vector3.new(if rim.X < 0 then -1.55 else 1.55, 3.9, 0) * scale
+			local a = (at * CFrame.new(rim + Vector3.new(0, 8.9 * scale, 0))).Position
+			local b = (at * CFrame.new(shoulder)).Position
+			line.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(math.pi / 2, 0, 0)
+			line.Size = Vector3.new(0.06 * scale, (b - a).Magnitude, 0.06 * scale)
+		end
+	end)
+	fx.Poof(canopy.Position, CHUTE_COLORS[1], 2)
+	chute:Destroy()
+	if customer.Parent then
+		customer:PivotTo(pivot)
+	end
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">Tiny</string>
           <string name="Source"><![CDATA[--!strict
@@ -1459,7 +2190,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="22">
         <Properties>
           <string name="Name">Twirl</string>
           <string name="Source"><![CDATA[--!strict
@@ -1493,11 +2224,11 @@ end
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="18">
+  <Item class="ServerScriptService" referent="23">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="19">
+    <Item class="Script" referent="24">
       <Properties>
         <string name="Name">Main</string>
         <token name="RunContext">0</token>
@@ -1601,11 +2332,11 @@ print("[Brew a Potion] Server started")
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Folder" referent="20">
+    <Item class="Folder" referent="25">
       <Properties>
         <string name="Name">Modules</string>
       </Properties>
-      <Item class="ModuleScript" referent="21">
+      <Item class="ModuleScript" referent="26">
         <Properties>
           <string name="Name">BrewService</string>
           <string name="Source"><![CDATA[--!strict
@@ -1897,7 +2628,7 @@ return BrewService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">CustomerBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -2216,7 +2947,7 @@ return CustomerBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">CustomerService</string>
           <string name="Source"><![CDATA[--!strict
@@ -2534,7 +3265,7 @@ return CustomerService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="24">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">Guard</string>
           <string name="Source"><![CDATA[--!strict
@@ -2595,7 +3326,7 @@ return Guard
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="25">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">IngredientService</string>
           <string name="Source"><![CDATA[--!strict
@@ -2754,7 +3485,7 @@ return IngredientService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">Kit</string>
           <string name="Source"><![CDATA[--!strict
@@ -3042,7 +3773,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">MarketBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -3664,7 +4395,7 @@ return MarketBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">Net</string>
           <string name="Source"><![CDATA[--!strict
@@ -3733,7 +4464,7 @@ return Net
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--!strict
@@ -3943,7 +4674,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">PlotService</string>
           <string name="Source"><![CDATA[--!strict
@@ -4135,7 +4866,7 @@ return PlotService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">ProfileStore</string>
           <string name="Source">--[[
@@ -6383,7 +7114,7 @@ end)
 return ProfileStore</string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">ShopBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -6431,6 +7162,8 @@ ShopBuilder.SourceSpots = {
 	Glowshroom = Vector3.new(10.5, 0, 5),
 	Starflower = Vector3.new(-10.5, 0, -3),
 	FrostCrystal = Vector3.new(10.5, 0, -3),
+	EmberPepper = Vector3.new(-10.5, 0, 10.5),
+	CloudPuff = Vector3.new(10.5, 0, 10.5),
 } :: { [string]: Vector3 }
 
 -- Customers line up in front of the counter, this far out (plot space z).
@@ -6699,6 +7432,123 @@ local function buildFrostCrystal(parent: Instance, at: At): Model
 	Kit.Light(bigRock, color, 10, 0.8)
 	collectPrompt(grotto, Vector3.new(5, 4.5, 5), at(c.X, 2.2, c.Z), "FrostCrystal")
 	return grotto
+end
+
+-- Ember garden: a stone planter on glowing coals, chili plants; the peppers = charges.
+local function buildEmberPepper(parent: Instance, at: At): Model
+	local garden = sourceModel(parent, "EmberPepper")
+	local c = ShopBuilder.SourceSpots.EmberPepper
+	local planter =
+		Kit.Part(garden, "Planter", Vector3.new(5, 1, 3.8), at(c.X, 0.5, c.Z), P.DarkStone, Enum.Material.Brick)
+	Kit.Decor(
+		garden,
+		"Coals",
+		Vector3.new(4.5, 0.1, 3.3),
+		at(c.X, 1.02, c.Z),
+		Color3.fromRGB(255, 90, 30),
+		NEON,
+		{ CastShadow = false }
+	)
+	for _, bushAt in { Vector3.new(-1.2, 0, 0.3), Vector3.new(1.1, 0, -0.2) } do
+		Kit.Cylinder(garden, "Stem", 1.2, 0.25, at(c.X + bushAt.X, 1.6, c.Z + bushAt.Z), P.LeafDark)
+		Kit.Ball(garden, "Leaves", 1.9, at(c.X + bushAt.X, 2.5, c.Z + bushAt.Z).Position, P.Leaf, Enum.Material.Grass)
+	end
+	-- peppers hang just outside the two plants' leaves, tips pointing down
+	local peppers = {
+		{ -2.3, 2, 0.6, 0.4 },
+		{ -1, 1.95, -0.75, -0.3 },
+		{ -0.6, 2, 1.2, 0.25 },
+		{ 2.2, 2, 0, -0.35 },
+		{ 1, 1.95, -1.25, 0.3 },
+	}
+	local color = Config.Ingredients.EmberPepper.Color
+	for i = 1, CHARGE_SLOTS do
+		local d = peppers[i]
+		local cf = at(c.X + d[1], d[2], c.Z + d[3]) * CFrame.Angles(0, 0, d[4])
+		local pepper = Kit.Model(garden, "Charge" .. i)
+		Kit.Decor(pepper, "Pepper", Vector3.new(0.55, 1.2, 0.55), cf, color, NEON, { CastShadow = false })
+		Kit.Decor(
+			pepper,
+			"Tip",
+			Vector3.new(0.3, 0.3, 0.3),
+			cf * CFrame.new(0, -0.62, 0),
+			color,
+			NEON,
+			{ CastShadow = false }
+		)
+		Kit.Decor(
+			pepper,
+			"Cap",
+			Vector3.new(0.55, 0.2, 0.55),
+			cf * CFrame.new(0, 0.62, 0),
+			P.LeafDark,
+			Enum.Material.Grass
+		)
+	end
+	Kit.Light(planter, Color3.fromRGB(255, 120, 50), 10, 0.9)
+	Kit.Sparkles(planter, Color3.fromRGB(255, 150, 60), 3, "Embers")
+	collectPrompt(garden, Vector3.new(5.5, 4, 4.5), at(c.X, 2, c.Z), "EmberPepper")
+	return garden
+end
+
+-- Cloud garden: a stone basin with fluffy clouds floating above it; the clouds = charges.
+local function buildCloudPuff(parent: Instance, at: At): Model
+	local garden = sourceModel(parent, "CloudPuff")
+	local c = ShopBuilder.SourceSpots.CloudPuff
+	local basin = Kit.Cylinder(garden, "Basin", 1.2, 4.4, at(c.X, 0.6, c.Z), P.Stone, Enum.Material.Marble, {
+		CanCollide = true,
+		CanQuery = true,
+	})
+	Kit.Cylinder(
+		garden,
+		"Sky",
+		0.1,
+		3.9,
+		at(c.X, 1.22, c.Z),
+		Color3.fromRGB(120, 190, 255),
+		NEON,
+		{ CastShadow = false }
+	)
+	local clouds = {
+		{ -1.2, 2.4, -0.6 },
+		{ 0.3, 3.1, -1 },
+		{ 1.3, 2.3, 0.2 },
+		{ -0.6, 3.3, 0.9 },
+		{ 0.8, 2.6, 1.3 },
+	}
+	local color = Config.Ingredients.CloudPuff.Color
+	for i = 1, CHARGE_SLOTS do
+		local d = clouds[i]
+		local center = at(c.X + d[1], d[2], c.Z + d[3])
+		local puff = Kit.Model(garden, "Charge" .. i)
+		Kit.Ball(puff, "Puff", 1, center.Position, color, Enum.Material.SmoothPlastic, { CastShadow = false })
+		Kit.Ball(
+			puff,
+			"Puff",
+			0.75,
+			(center * CFrame.new(-0.55, -0.12, 0.1)).Position,
+			color,
+			Enum.Material.SmoothPlastic,
+			{
+				CastShadow = false,
+			}
+		)
+		Kit.Ball(
+			puff,
+			"Puff",
+			0.7,
+			(center * CFrame.new(0.55, -0.15, -0.05)).Position,
+			color,
+			Enum.Material.SmoothPlastic,
+			{
+				CastShadow = false,
+			}
+		)
+	end
+	Kit.Light(basin, Color3.fromRGB(170, 210, 255), 9, 0.7)
+	Kit.Sparkles(basin, Color3.fromRGB(200, 230, 255), 3)
+	collectPrompt(garden, Vector3.new(5, 4.5, 5), at(c.X, 2.2, c.Z), "CloudPuff")
+	return garden
 end
 
 -- "For sale" lot shown where a locked source will be planted.
@@ -7160,13 +8010,14 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Kit.Decor(decor, "WallCap", Vector3.new(1.3, 0.3, 22.3), at(x, 2.35, 2), P.DarkWood, WOOD)
 	end
 
-	-- Barrels and crates in the back corners
-	barrel(decor, at(-12.3, 1.3, 11))
+	-- A barrel and crates in the front corners, beside the counter (the back corners grow
+	-- the Ember and Cloud gardens)
+	barrel(decor, at(-12.4, 1.3, -6.6))
 	Kit.Part(
 		decor,
 		"Crate",
 		Vector3.new(2, 2, 2),
-		at(12.2, 1, 11) * CFrame.Angles(0, 0.3, 0),
+		at(12.3, 1, -6.6) * CFrame.Angles(0, 0.3, 0),
 		P.LightWood,
 		Enum.Material.WoodPlanks
 	)
@@ -7174,7 +8025,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		decor,
 		"Crate",
 		Vector3.new(1.3, 1.3, 1.3),
-		at(12.1, 2.65, 11.2) * CFrame.Angles(0, -0.4, 0),
+		at(12.2, 2.65, -6.4) * CFrame.Angles(0, -0.4, 0),
 		P.LightWood,
 		Enum.Material.WoodPlanks
 	)
@@ -7186,6 +8037,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Glowshroom = buildGlowshroom(sourcesFolder, at),
 		Starflower = buildStarflower(sourcesFolder, at),
 		FrostCrystal = buildFrostCrystal(sourcesFolder, at),
+		EmberPepper = buildEmberPepper(sourcesFolder, at),
+		CloudPuff = buildCloudPuff(sourcesFolder, at),
 	}
 
 	-- "For sale" lots for the sources that start locked
@@ -7244,7 +8097,7 @@ return ShopBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">SocialService</string>
           <string name="Source"><![CDATA[--!strict
@@ -7703,7 +8556,7 @@ return SocialService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">UpgradeService</string>
           <string name="Source"><![CDATA[--!strict
@@ -7800,7 +8653,7 @@ return UpgradeService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">WorldService</string>
           <string name="Source"><![CDATA[--!strict
@@ -7900,15 +8753,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="36">
+  <Item class="StarterPlayer" referent="41">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="37">
+    <Item class="StarterPlayerScripts" referent="42">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="38">
+      <Item class="LocalScript" referent="43">
         <Properties>
           <string name="Name">ClientMain</string>
           <string name="Source"><![CDATA[--!strict
@@ -8431,7 +9284,7 @@ task.spawn(function()
 end)
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Ambience</string>
             <string name="Source"><![CDATA[--!strict
@@ -8506,7 +9359,7 @@ return Ambience
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">CauldronFx</string>
             <string name="Source"><![CDATA[--!strict
@@ -8720,7 +9573,7 @@ return CauldronFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">CauldronMenu</string>
             <string name="Source"><![CDATA[--!strict
@@ -8753,6 +9606,17 @@ local frame: Frame
 local hint: TextLabel
 local cards: { [string]: Card } = {}
 local order: { string } = {} -- recipe ids of the cards currently shown, left to right
+
+-- Cards run from the most valuable potion to the cheapest, and never move around, so
+-- late in the game the best potions are first and number keys always mean the same card.
+local menuOrder = table.clone(Config.RecipeOrder)
+table.sort(menuOrder, function(a: string, b: string): boolean
+	local ra, rb = Config.Recipes[a], Config.Recipes[b]
+	if ra.SellPrice ~= rb.SellPrice then
+		return ra.SellPrice > rb.SellPrice
+	end
+	return ra.Order < rb.Order
+end)
 local wasVisible = false
 
 local function makeCard(parent: Instance, recipeId: string, layoutOrder: number): Card
@@ -8788,7 +9652,12 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 		Parent = holder,
 	}, 15)
 
-	-- ingredient dots with "have/need" counts
+	-- ingredient dots with "have/need" counts (tighter when there are three)
+	local kinds = 0
+	for _ in recipe.Ingredients do
+		kinds += 1
+	end
+	local tight = kinds >= 3
 	local row = Ui.new("Frame", {
 		Position = UDim2.fromOffset(3, 76),
 		Size = UDim2.new(1, -6, 0, 16),
@@ -8799,21 +9668,21 @@ local function makeCard(parent: Instance, recipeId: string, layoutOrder: number)
 			FillDirection = Enum.FillDirection.Horizontal,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
-			Padding = UDim.new(0, 4),
+			Padding = UDim.new(0, if tight then 2 else 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
 	local counts: { [string]: TextLabel } = {}
 	for i, ingredientId in Config.IngredientOrder do
 		if recipe.Ingredients[ingredientId] then
-			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, 12)
+			local dot = Ui.dot(Config.Ingredients[ingredientId].Color, if tight then 10 else 12)
 			dot.LayoutOrder = i * 2
 			dot.Parent = row
 			local count = Ui.new("TextLabel", {
-				Size = UDim2.fromOffset(24, 16),
+				Size = UDim2.fromOffset(if tight then 18 else 24, 16),
 				BackgroundTransparency = 1,
 				Font = Ui.FONT,
-				TextSize = 13,
+				TextSize = if tight then 12 else 13,
 				TextColor3 = P.TextDark,
 				Text = "",
 				LayoutOrder = i * 2 + 1,
@@ -8913,7 +9782,7 @@ function CauldronMenu.Init(root: Frame)
 			{ PaddingLeft = UDim.new(0, 2), PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 4) }
 		),
 	})
-	for i, recipeId in Config.RecipeOrder do
+	for i, recipeId in menuOrder do
 		cards[recipeId] = makeCard(list, recipeId, i)
 	end
 end
@@ -8936,7 +9805,7 @@ function CauldronMenu.Update(visible: boolean, state: State?, wants: { string },
 	hint.TextColor3 = if shelfFull then P.Danger else P.TextMuted
 
 	table.clear(order)
-	for _, recipeId in Config.RecipeOrder do
+	for _, recipeId in menuOrder do
 		local card = cards[recipeId]
 		local unlocked = Config.IsRecipeUnlocked(state.Upgrades, recipeId)
 		card.Holder.Visible = unlocked
@@ -8980,7 +9849,7 @@ return CauldronMenu
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">CustomerAnimator</string>
             <string name="Source"><![CDATA[--!strict
@@ -9171,7 +10040,7 @@ return CustomerAnimator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -9256,7 +10125,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -9289,6 +10158,11 @@ local goalText: TextLabel
 local saveChip: TextLabel
 local basket: Frame
 local ingredientRows: { [string]: { Row: Frame, Count: TextLabel } } = {}
+local ingredientGrid: Frame
+local ingredientChips: { [string]: { Chip: Frame, Count: TextLabel } } = {}
+-- With more ingredients than this, the basket switches to a compact two-column grid
+-- (dots and counts only) so it stays clear of the phone thumbstick.
+local FULL_ROWS_UP_TO = 4
 local potionTotal: TextLabel
 local potionChips: Frame
 local upgradesBadge: Frame
@@ -9444,6 +10318,41 @@ function Hud.Init(parent: Frame)
 		}, 18)
 		ingredientRows[id] = { Row = row, Count = count }
 	end
+	ingredientGrid = Ui.new("Frame", {
+		Name = "IngredientGrid",
+		Size = UDim2.fromScale(1, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 40,
+		Visible = false,
+		Parent = basket,
+	}, {
+		Ui.new("UIGridLayout", {
+			CellSize = UDim2.fromOffset(85, 26),
+			CellPadding = UDim2.fromOffset(6, 4),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
+	})
+	for i, id in Config.IngredientOrder do
+		local chip = Ui.new("Frame", {
+			Name = id,
+			LayoutOrder = i,
+			BackgroundColor3 = P.PanelMid,
+			Parent = ingredientGrid,
+		}, { Ui.corner(8) })
+		local dot = Ui.dot(Config.Ingredients[id].Color, 16)
+		dot.AnchorPoint = Vector2.new(0, 0.5)
+		dot.Position = UDim2.new(0, 6, 0.5, 0)
+		dot.Parent = chip
+		local count = Ui.label({
+			Position = UDim2.fromOffset(28, 3),
+			Size = UDim2.new(1, -34, 1, -6),
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Text = "0",
+			Parent = chip,
+		}, 17)
+		ingredientChips[id] = { Chip = chip, Count = count }
+	end
 	local divider = rowFrame(50, 2)
 	divider.BackgroundTransparency = 0.6
 	divider.BackgroundColor3 = P.PanelLight
@@ -9476,7 +10385,7 @@ function Hud.Init(parent: Frame)
 		Parent = basket,
 	}, {
 		Ui.new("UIGridLayout", {
-			CellSize = UDim2.fromOffset(54, 30),
+			CellSize = UDim2.fromOffset(41, 28),
 			CellPadding = UDim2.fromOffset(4, 4),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
@@ -9613,10 +10522,24 @@ function Hud.SetState(state: State)
 		end
 	end
 
+	local unlockedCount = 0
+	for _, id in Config.IngredientOrder do
+		if Config.IsIngredientUnlocked(state.Upgrades, id) then
+			unlockedCount += 1
+		end
+	end
+	local compact = unlockedCount > FULL_ROWS_UP_TO
+	local maxEach = Config.Tuning.Storage.MaxPerIngredient
+	ingredientGrid.Visible = compact
 	for id, row in ingredientRows do
 		local unlocked = Config.IsIngredientUnlocked(state.Upgrades, id)
-		row.Row.Visible = unlocked
-		row.Count.Text = `{state.Ingredients[id] or 0}/{Config.Tuning.Storage.MaxPerIngredient}`
+		local count = state.Ingredients[id] or 0
+		row.Row.Visible = unlocked and not compact
+		row.Count.Text = `{count}/{maxEach}`
+		local chip = ingredientChips[id]
+		chip.Chip.Visible = unlocked
+		chip.Count.Text = tostring(count)
+		chip.Count.TextColor3 = if count >= maxEach then P.Gold else P.TextLight -- gold = full
 	end
 
 	local total = Config.PotionTotal(state.Potions)
@@ -9637,16 +10560,16 @@ function Hud.SetState(state: State)
 				BackgroundColor3 = P.PanelMid,
 				Parent = potionChips,
 			}, { Ui.corner(8) })
-			local icon = Ui.bottle(Config.Recipes[id].Color, 14)
+			local icon = Ui.bottle(Config.Recipes[id].Color, 13)
 			icon.AnchorPoint = Vector2.new(0, 0.5)
-			icon.Position = UDim2.new(0, 5, 0.5, 0)
+			icon.Position = UDim2.new(0, 4, 0.5, 0)
 			icon.Parent = chip
 			Ui.label({
-				Position = UDim2.fromOffset(24, 4),
-				Size = UDim2.new(1, -28, 1, -8),
+				Position = UDim2.fromOffset(19, 4),
+				Size = UDim2.new(1, -21, 1, -8),
 				Text = `x{count}`,
 				Parent = chip,
-			}, 16)
+			}, 15)
 		end
 	end
 
@@ -9764,7 +10687,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -9824,7 +10747,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -10068,7 +10991,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -10283,7 +11206,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -10508,7 +11431,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -10846,7 +11769,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -11055,7 +11978,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="51">
+  <Item class="Workspace" referent="56">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -62,13 +62,13 @@ StarterPlayer > StarterPlayerScripts
 * Golden-hour lighting: low warm sun, haze, sunset clouds, bloom on neon, gentle color grading. Fires and lanterns flicker.
 
 **Loop**
-* Collect ingredients from your plants (charges regrow). 4 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal (unlock by buying their plots).
+* Collect ingredients from your plants (charges regrow). 6 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal, Ember Pepper, Cloud Puff (unlock by buying their plots).
 * Brew at your cauldron. Standing at it opens the **cauldron menu**: every unlocked potion, what you're missing, which one a customer wants. Tap a card (or press 1-9), or press the cauldron to brew the suggested potion. Press again while brewing to stir (faster). The liquid turns the potion's color.
 * When a potion is done, a bottle of it pops out of the cauldron with a sparkle, and your potions stand on the counter as glowing bottles (everyone can see your stock).
 * First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price.
 * Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
 
-**7 potions and their effects**
+**12 potions and their effects** (every customer drinks the potion first)
 
 | Potion | Ingredients | Coins | Brew | Effect |
 |---|---|---|---|---|
@@ -79,6 +79,11 @@ StarterPlayer > StarterPlayerScripts
 | Twirly | Starflower + Moonberry | 24 | 7.2s | Spins like a top |
 | Frosty | Frost Crystal + Glowshroom | 45 | 9s | Frozen in an ice block that cracks |
 | Froggy | Frost Crystal + Moonberry + Starflower | 70 | 10.8s | Turns into a frog and hops away |
+| Fire Breath | Ember Pepper + Glowshroom | 90 | 9.6s | Face goes red, steam from the ears, breathes a jet of fire |
+| Dance | Ember Pepper + Starflower + Moonberry | 110 | 10.8s | A disco ball drops in; they bounce, twist and point at the sky |
+| Bubble | Cloud Puff + Moonberry | 120 | 10.8s | Floats up inside a giant soap bubble until it pops |
+| Ghost | Cloud Puff + Frost Crystal | 150 | 12s | Turns see-through, floats and drifts with wisps, then solid again |
+| Rocket | Ember Pepper + Cloud Puff + Starflower | 220 | 14.4s | Rumbles, blasts off on a jet of fire, fireworks, parachutes down |
 
 Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 
@@ -92,6 +97,8 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 | Green Thumb | 120 / 350 | 3 → 4 → 5 per plant, regrow 3s → 2.4s → 1.8s |
 | Second Counter Spot | 200 | Two customers at once |
 | Frost Grotto | 400 (needs Starflower Bed) | Grows Frost Crystals; unlocks Frosty + Froggy |
+| Ember Garden | 900 (needs Frost Grotto) | Grows Ember Peppers (back left corner); unlocks Fire Breath + Dance |
+| Cloud Garden | 1600 (needs Ember Garden) | Grows Cloud Puffs (back right corner); unlocks Bubble, Ghost + Rocket |
 | Cozy Decor | 150 / 500 / 1500 | String lights + flower boxes → banners + glowing sign → golden cauldron, star and sparkles |
 
 **UI** (scales for phones; see `design/`)
@@ -143,16 +150,18 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 ## Economy (first pass, tune after playtesting)
 
-* **Sources:** potion sales (10–70 coins, VIPs x2), first-brew bonuses (one per recipe, 197 total).
-* **Sinks:** 7 upgrade tracks, 4,025 coins to max everything.
-* **Pace estimate:** customers are the bottleneck (about 5–6 sales a minute per counter spot: walk in, drink + effect 4.4s, walk out, 1.5s gap). Early game about 50–70 coins/min, so the first upgrade comes after 2–3 sales and the Starflower Bed at about 2 minutes. After the Frost Grotto, about 200+ coins/min. Maxing everything takes roughly 25–35 minutes.
-* **Watch for:** the content wall after ~30 minutes (needs new ingredients/recipes/decor), and whether Faster Brewing matters while customers are the bottleneck.
+* **Sources:** potion sales (10–220 coins, VIPs x2), first-brew bonuses (one per recipe, 887 total).
+* **Sinks:** 9 upgrade tracks, 6,525 coins to max everything.
+* **Pace estimate:** customers are the bottleneck (about 5–6 sales a minute per counter spot: walk in, drink + effect 4.4s, walk out, 1.5s gap). Early game about 50–70 coins/min, so the first upgrade comes after 2–3 sales and the Starflower Bed at about 2 minutes. After the Frost Grotto, about 200+ coins/min, so the Ember Garden (900) takes ~5 minutes; with Fire Breath and Dance, several hundred coins/min. Maxing everything takes roughly 35–45 minutes.
+* **Watch for:** the content wall after ~40 minutes (nothing left to buy; coins only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. The new tier's prices (90–220) may make the last upgrades come too fast: tune `SellPrice` in `Config/Recipes.lua` after playtesting.
 
 ## Verified API notes (checked Sep 26–27, 2026)
 
 * **ProfileStore** (github.com/MadStudioRoblox/ProfileStore, Apache-2.0, vendored unmodified): `ProfileStore.New(name, template)`, `:StartSessionAsync(key, {Cancel = fn})`, `profile.Data`, `:Reconcile()`, `:AddUserId()`, `:EndSession()`, `OnSessionEnd`, `IsClosing`, `DataStoreState`, `.Mock`. In Studio it test-writes a key; on "403" or "must publish" it switches to mock mode by itself. It handles `BindToClose` itself.
 * **Lighting.Technology** is RobloxScriptSecurity and **Workspace.StreamingEnabled** is PluginSecurity for writing: scripts can't set them, so the place file does.
 * Custom prompts: `ProximityPrompt.Style = Custom` + `ProximityPromptService.PromptShown/PromptHidden`; touch/click calls `prompt:InputHoldBegin()` / `InputHoldEnd()`.
+* Particle textures that ship with every client (current manifest): `rbxasset://textures/particles/` `fire_main.dds`, `smoke_main.dds`, `sparkles_main.dds` (used by the new effects).
+* Ball parts are always round (Roblox keeps their size uniform), so the parachute canopy is a block with a `SpecialMesh` (`MeshType.Sphere`).
 * Client sounds that ship with every client (current manifest): `rbxasset://sounds/` `volume_slider.ogg`, `impact_water.mp3`, `action_jump.mp3`, `impact_explosion_03.mp3` (plus a few footstep sounds). The old ones (`button.wav`, `electronicpingshort.wav`, ...) are gone.
 * Audio ids from Roblox's tutorials (github.com/Roblox/creator-docs): `4110925712` "simple chime" (In-game sounds), `3422389728` "retro jingle" and `1841461968` "upbeat" looping music (Add 2D audio), `1846248593` "cheerful, celebratory" (Add 3D audio). Not listened to from here: swap any you don't like.
 * `ContentProvider:PreloadAsync(ids, callback(contentId, Enum.AssetFetchStatus))` accepts id strings; anything but `Success` means the asset didn't load.

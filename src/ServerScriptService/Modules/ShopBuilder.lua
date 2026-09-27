@@ -43,6 +43,8 @@ ShopBuilder.SourceSpots = {
 	Glowshroom = Vector3.new(10.5, 0, 5),
 	Starflower = Vector3.new(-10.5, 0, -3),
 	FrostCrystal = Vector3.new(10.5, 0, -3),
+	EmberPepper = Vector3.new(-10.5, 0, 10.5),
+	CloudPuff = Vector3.new(10.5, 0, 10.5),
 } :: { [string]: Vector3 }
 
 -- Customers line up in front of the counter, this far out (plot space z).
@@ -311,6 +313,123 @@ local function buildFrostCrystal(parent: Instance, at: At): Model
 	Kit.Light(bigRock, color, 10, 0.8)
 	collectPrompt(grotto, Vector3.new(5, 4.5, 5), at(c.X, 2.2, c.Z), "FrostCrystal")
 	return grotto
+end
+
+-- Ember garden: a stone planter on glowing coals, chili plants; the peppers = charges.
+local function buildEmberPepper(parent: Instance, at: At): Model
+	local garden = sourceModel(parent, "EmberPepper")
+	local c = ShopBuilder.SourceSpots.EmberPepper
+	local planter =
+		Kit.Part(garden, "Planter", Vector3.new(5, 1, 3.8), at(c.X, 0.5, c.Z), P.DarkStone, Enum.Material.Brick)
+	Kit.Decor(
+		garden,
+		"Coals",
+		Vector3.new(4.5, 0.1, 3.3),
+		at(c.X, 1.02, c.Z),
+		Color3.fromRGB(255, 90, 30),
+		NEON,
+		{ CastShadow = false }
+	)
+	for _, bushAt in { Vector3.new(-1.2, 0, 0.3), Vector3.new(1.1, 0, -0.2) } do
+		Kit.Cylinder(garden, "Stem", 1.2, 0.25, at(c.X + bushAt.X, 1.6, c.Z + bushAt.Z), P.LeafDark)
+		Kit.Ball(garden, "Leaves", 1.9, at(c.X + bushAt.X, 2.5, c.Z + bushAt.Z).Position, P.Leaf, Enum.Material.Grass)
+	end
+	-- peppers hang just outside the two plants' leaves, tips pointing down
+	local peppers = {
+		{ -2.3, 2, 0.6, 0.4 },
+		{ -1, 1.95, -0.75, -0.3 },
+		{ -0.6, 2, 1.2, 0.25 },
+		{ 2.2, 2, 0, -0.35 },
+		{ 1, 1.95, -1.25, 0.3 },
+	}
+	local color = Config.Ingredients.EmberPepper.Color
+	for i = 1, CHARGE_SLOTS do
+		local d = peppers[i]
+		local cf = at(c.X + d[1], d[2], c.Z + d[3]) * CFrame.Angles(0, 0, d[4])
+		local pepper = Kit.Model(garden, "Charge" .. i)
+		Kit.Decor(pepper, "Pepper", Vector3.new(0.55, 1.2, 0.55), cf, color, NEON, { CastShadow = false })
+		Kit.Decor(
+			pepper,
+			"Tip",
+			Vector3.new(0.3, 0.3, 0.3),
+			cf * CFrame.new(0, -0.62, 0),
+			color,
+			NEON,
+			{ CastShadow = false }
+		)
+		Kit.Decor(
+			pepper,
+			"Cap",
+			Vector3.new(0.55, 0.2, 0.55),
+			cf * CFrame.new(0, 0.62, 0),
+			P.LeafDark,
+			Enum.Material.Grass
+		)
+	end
+	Kit.Light(planter, Color3.fromRGB(255, 120, 50), 10, 0.9)
+	Kit.Sparkles(planter, Color3.fromRGB(255, 150, 60), 3, "Embers")
+	collectPrompt(garden, Vector3.new(5.5, 4, 4.5), at(c.X, 2, c.Z), "EmberPepper")
+	return garden
+end
+
+-- Cloud garden: a stone basin with fluffy clouds floating above it; the clouds = charges.
+local function buildCloudPuff(parent: Instance, at: At): Model
+	local garden = sourceModel(parent, "CloudPuff")
+	local c = ShopBuilder.SourceSpots.CloudPuff
+	local basin = Kit.Cylinder(garden, "Basin", 1.2, 4.4, at(c.X, 0.6, c.Z), P.Stone, Enum.Material.Marble, {
+		CanCollide = true,
+		CanQuery = true,
+	})
+	Kit.Cylinder(
+		garden,
+		"Sky",
+		0.1,
+		3.9,
+		at(c.X, 1.22, c.Z),
+		Color3.fromRGB(120, 190, 255),
+		NEON,
+		{ CastShadow = false }
+	)
+	local clouds = {
+		{ -1.2, 2.4, -0.6 },
+		{ 0.3, 3.1, -1 },
+		{ 1.3, 2.3, 0.2 },
+		{ -0.6, 3.3, 0.9 },
+		{ 0.8, 2.6, 1.3 },
+	}
+	local color = Config.Ingredients.CloudPuff.Color
+	for i = 1, CHARGE_SLOTS do
+		local d = clouds[i]
+		local center = at(c.X + d[1], d[2], c.Z + d[3])
+		local puff = Kit.Model(garden, "Charge" .. i)
+		Kit.Ball(puff, "Puff", 1, center.Position, color, Enum.Material.SmoothPlastic, { CastShadow = false })
+		Kit.Ball(
+			puff,
+			"Puff",
+			0.75,
+			(center * CFrame.new(-0.55, -0.12, 0.1)).Position,
+			color,
+			Enum.Material.SmoothPlastic,
+			{
+				CastShadow = false,
+			}
+		)
+		Kit.Ball(
+			puff,
+			"Puff",
+			0.7,
+			(center * CFrame.new(0.55, -0.15, -0.05)).Position,
+			color,
+			Enum.Material.SmoothPlastic,
+			{
+				CastShadow = false,
+			}
+		)
+	end
+	Kit.Light(basin, Color3.fromRGB(170, 210, 255), 9, 0.7)
+	Kit.Sparkles(basin, Color3.fromRGB(200, 230, 255), 3)
+	collectPrompt(garden, Vector3.new(5, 4.5, 5), at(c.X, 2.2, c.Z), "CloudPuff")
+	return garden
 end
 
 -- "For sale" lot shown where a locked source will be planted.
@@ -772,13 +891,14 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Kit.Decor(decor, "WallCap", Vector3.new(1.3, 0.3, 22.3), at(x, 2.35, 2), P.DarkWood, WOOD)
 	end
 
-	-- Barrels and crates in the back corners
-	barrel(decor, at(-12.3, 1.3, 11))
+	-- A barrel and crates in the front corners, beside the counter (the back corners grow
+	-- the Ember and Cloud gardens)
+	barrel(decor, at(-12.4, 1.3, -6.6))
 	Kit.Part(
 		decor,
 		"Crate",
 		Vector3.new(2, 2, 2),
-		at(12.2, 1, 11) * CFrame.Angles(0, 0.3, 0),
+		at(12.3, 1, -6.6) * CFrame.Angles(0, 0.3, 0),
 		P.LightWood,
 		Enum.Material.WoodPlanks
 	)
@@ -786,7 +906,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		decor,
 		"Crate",
 		Vector3.new(1.3, 1.3, 1.3),
-		at(12.1, 2.65, 11.2) * CFrame.Angles(0, -0.4, 0),
+		at(12.2, 2.65, -6.4) * CFrame.Angles(0, -0.4, 0),
 		P.LightWood,
 		Enum.Material.WoodPlanks
 	)
@@ -798,6 +918,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Glowshroom = buildGlowshroom(sourcesFolder, at),
 		Starflower = buildStarflower(sourcesFolder, at),
 		FrostCrystal = buildFrostCrystal(sourcesFolder, at),
+		EmberPepper = buildEmberPepper(sourcesFolder, at),
+		CloudPuff = buildCloudPuff(sourcesFolder, at),
 	}
 
 	-- "For sale" lots for the sources that start locked

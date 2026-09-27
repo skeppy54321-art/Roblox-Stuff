@@ -323,7 +323,7 @@ local CustomerBuilder = Engine.loaded(game:GetService("ServerScriptService").Mod
 local Effects = Engine.require(game:GetService("ReplicatedStorage"):FindFirstChild("Effects"))
 local warningsBefore = #Engine.warnings
 local models = {}
-for i, name in { "BigHead", "Rainbow", "Tiny", "Floaty", "Twirl", "Frosty", "Froggy" } do
+for i, name in { "BigHead", "Rainbow", "Tiny", "Floaty", "Twirl", "Frosty", "Froggy", "FireBreath", "Dance", "Bubble", "Ghost", "Rocket" } do
 	local model = CustomerBuilder.Build(CFrame.new(i * 8, 0.3, -10), { Vip = i % 2 == 0, WantsText = "test", WantsColor = roblox.Color3.new(1, 0, 0) })
 	model.Parent = workspace
 	models[name] = model
@@ -337,8 +337,25 @@ if process.args[2] then -- optional: dump the drinking pose for tests/preview (v
 	local views = { drink = { pos = { 9.2, 5.3, -4.6 }, look = { 8, 4.4, -10 }, fov = 42 } } -- in front of the Giant Head customer
 	fs.writeFile(process.args[2] .. "/parts_drink.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
 end
-check("arm raised to drink", models.BigHead.ArmR.CFrame.Position.Y > models.BigHead.Torso.CFrame.Position.Y)
-task.wait(5)
+check("arm raised to drink", models.BigHead.ArmR.CFrame.Position.Y > models.BigHead.Torso.CFrame.Position.Y + 0.6)
+task.wait(1.7)
+if process.args[2] then -- mid-effect poses for tests/preview (views fire, dance, bubble, ghost; then rocket)
+	local parts, lights = Engine.dumpParts(workspace)
+	local views = {
+		fire = { pos = { 65.6, 5.6, -4.4 }, look = { 64, 4.6, -10 }, fov = 50 },
+		dance = { pos = { 73.5, 7.5, -0.5 }, look = { 72, 6, -10 }, fov = 55 },
+		bubble = { pos = { 81.5, 8.5, -0.5 }, look = { 80, 7.5, -10 }, fov = 55 },
+		ghost = { pos = { 89.5, 6.8, -2.5 }, look = { 88, 5.6, -10 }, fov = 50 },
+	}
+	fs.writeFile(process.args[2] .. "/parts_effects.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
+end
+task.wait(0.9)
+if process.args[2] then
+	local parts, lights = Engine.dumpParts(workspace)
+	local views = { rocket = { pos = { 101, 11, 8 }, look = { 96, 11, -10 }, fov = 60 } }
+	fs.writeFile(process.args[2] .. "/parts_rocket.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
+end
+task.wait(2.4)
 check("bottle put away", models.BigHead:FindFirstChild("DrinkBottle") == nil)
 check("pop bottle cleaned up", workspace:FindFirstChild("PopBottle") == nil)
 check("no effect errors", #Engine.warnings == warningsBefore, table.concat(Engine.warnings, " | "))
@@ -348,6 +365,20 @@ check("customer hidden under the frog", models.Froggy.Torso.Transparency == 1)
 check("ice block cleaned up", models.Frosty:FindFirstChild("IceBlock") == nil)
 check("frosty colors restored", models.Frosty.Torso.Material ~= Enum.Material.Ice)
 check("floaty landed", math.abs(models.Floaty:GetPivot().Position.Y - 0.3) < 0.05, models.Floaty:GetPivot().Position.Y)
+local function landed(name) -- back on the spot the test built them on (y 0.3, z -10)
+	local at = models[name]:GetPivot().Position
+	return math.abs(at.Y - 0.3) < 0.05 and math.abs(at.Z + 10) < 0.05
+end
+-- an arm's center sits 0.15 above the torso's at rest; raised, it's more than a stud above
+local function armUp(model)
+	return model.ArmR.CFrame.Position.Y > model.Torso.CFrame.Position.Y + 0.6
+end
+check("fire breath: face back to normal", models.FireBreath.HeadGroup.Head.Color ~= roblox.Color3.fromRGB(255, 70, 50))
+check("dance: disco ball gone, back on the spot", models.Dance:FindFirstChild("DiscoBall") == nil and landed("Dance"))
+check("dance: arms back down", not armUp(models.Dance))
+check("bubble popped and landed", workspace:FindFirstChild("SoapBubble") == nil and landed("Bubble"))
+check("ghost solid again", models.Ghost.Torso.Transparency == 0 and landed("Ghost"))
+check("rocket came back down", workspace:FindFirstChild("Parachute") == nil and landed("Rocket"))
 
 print("")
 print(`== RESULT: {passed} passed, {failed} failed, {#Engine.problems} problems, {#Engine.warnings} warnings ==`)

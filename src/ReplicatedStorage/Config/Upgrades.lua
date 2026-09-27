@@ -106,6 +106,34 @@ local Upgrades: { [string]: Upgrade } = {
 		Announce = "found a Frost Grotto",
 		Order = 6,
 	},
+	EmberGarden = {
+		Id = "EmberGarden",
+		DisplayName = "Ember Garden",
+		Description = "Grow fiery Ember Peppers. Unlocks Fire Breath and Dance potions!",
+		BaseSummary = "Not planted",
+		Color = Color3.fromRGB(255, 110, 50),
+		Levels = {
+			{ Cost = 900, Summary = "Ember Peppers growing" },
+		},
+		Unlocks = "EmberPepper",
+		Requires = "FrostGrotto",
+		Announce = "planted an Ember Garden",
+		Order = 7,
+	},
+	CloudGarden = {
+		Id = "CloudGarden",
+		DisplayName = "Cloud Garden",
+		Description = "Catch fluffy Cloud Puffs. Unlocks Bubble, Ghost and Rocket potions!",
+		BaseSummary = "Not built",
+		Color = Color3.fromRGB(150, 190, 255),
+		Levels = {
+			{ Cost = 1600, Summary = "Cloud Puffs floating" },
+		},
+		Unlocks = "CloudPuff",
+		Requires = "EmberGarden",
+		Announce = "grew a Cloud Garden",
+		Order = 8,
+	},
 	CozyDecor = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
@@ -117,7 +145,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 500, Summary = "Banners + magic sign" },
 			{ Cost = 1500, Summary = "Golden cauldron!" },
 		},
-		Order = 7,
+		Order = 9,
 	},
 }
 

@@ -43,6 +43,22 @@ local Ingredients: { [string]: Ingredient } = {
 		UnlockedBy = "FrostGrotto",
 		Order = 4,
 	},
+	EmberPepper = {
+		Id = "EmberPepper",
+		DisplayName = "Ember Pepper",
+		Color = Color3.fromRGB(255, 95, 45),
+		Where = "the ember garden",
+		UnlockedBy = "EmberGarden",
+		Order = 5,
+	},
+	CloudPuff = {
+		Id = "CloudPuff",
+		DisplayName = "Cloud Puff",
+		Color = Color3.fromRGB(225, 240, 255),
+		Where = "the cloud garden",
+		UnlockedBy = "CloudGarden",
+		Order = 6,
+	},
 }
 
 return Ingredients

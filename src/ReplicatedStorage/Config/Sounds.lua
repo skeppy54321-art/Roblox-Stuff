@@ -70,6 +70,11 @@ local Sounds: { [string]: SoundDef } = {
 	Whoosh = sound("", 0.4, 1, "magic whoosh"),
 	Inflate = sound("", 0.5, 1, "balloon inflate"),
 	Shrink = sound("", 0.5, 1, "cartoon shrink"),
+	Fire = sound(BOOM, 0.16, 0.55, "dragon fire breath"),
+	Pop = sound(TICK, 0.55, 2.3, "bubble pop"),
+	Rocket = sound(BOOM, 0.22, 0.8, "rocket launch"),
+	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
+	Boo = sound("", 0.5, 1, "ghost boo"),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
 }
 
