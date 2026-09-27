@@ -52,6 +52,7 @@ local store = ProfileStore.New(STORE_NAME, TEMPLATE)
 local sessions = if USE_MOCK_IN_STUDIO and RunService:IsStudio() then store.Mock else store
 
 local profiles: { [Player]: Profile } = {}
+local sessionEndConnections: { [Player]: any } = {}
 local listeners: { Listener } = {}
 
 ------------------------------------------------------------------
@@ -141,8 +142,10 @@ function PlayerData.Load(player: Player): Data?
 	migrate(profile.Data)
 	sanitize(profile.Data)
 
-	profile.OnSessionEnd:Connect(function()
+	-- Only fires on its own if another server takes the session (Release disconnects it first).
+	sessionEndConnections[player] = profile.OnSessionEnd:Connect(function()
 		profiles[player] = nil
+		sessionEndConnections[player] = nil
 		if player.Parent == Players and not ProfileStore.IsClosing then
 			player:Kick("Your shop was opened on another server. Please rejoin!")
 		end
@@ -162,6 +165,11 @@ end
 function PlayerData.Release(player: Player)
 	local profile = profiles[player]
 	profiles[player] = nil
+	local connection = sessionEndConnections[player]
+	sessionEndConnections[player] = nil
+	if connection then
+		connection:Disconnect() -- a normal leave is not "opened on another server"
+	end
 	if profile then
 		profile:EndSession()
 	end

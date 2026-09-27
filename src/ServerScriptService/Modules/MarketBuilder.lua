@@ -14,6 +14,13 @@ local NEON = Enum.Material.Neon
 
 local MarketBuilder = {}
 
+local PLANTER_FLOWERS = {
+	Color3.fromRGB(255, 130, 180),
+	Color3.fromRGB(255, 240, 250),
+	Color3.fromRGB(255, 215, 90),
+	Color3.fromRGB(190, 140, 255),
+}
+
 export type MarketParts = {
 	Model: Model,
 	Spawn: SpawnLocation,
@@ -91,8 +98,8 @@ local function buildPlaza(market: Model)
 	local plaza = Kit.Model(market, "Plaza")
 	local r = W.PlazaRadius
 	flat(plaza, "Plaza", r * 2, 0.3, 0.3, P.Cobble, Enum.Material.Cobblestone)
-	flat(plaza, "PlazaBand", 36, 0.31, 0.31, P.DarkStone, Enum.Material.Cobblestone)
-	flat(plaza, "PlazaInner", 33, 0.32, 0.32, P.Stone, Enum.Material.Pavement)
+	flat(plaza, "PlazaBand", 34, 0.31, 0.31, P.DarkStone, Enum.Material.Cobblestone)
+	flat(plaza, "PlazaInner", 31, 0.32, 0.32, P.Stone, Enum.Material.Pavement)
 	-- a path from the plaza to every shop's counter
 	for i = 1, W.PlotCount do
 		local angle = plotAngle(i)
@@ -109,6 +116,37 @@ local function buildPlaza(market: Model)
 				P.DarkStone,
 				Enum.Material.Cobblestone
 			)
+			-- flower planters where the path meets the plaza
+			local planter = CFrame.lookAt(polar(angle, r + 1.5, 0), Vector3.zero) * CFrame.new(side * 8.2, 0, 0)
+			Kit.Part(
+				plaza,
+				"Planter",
+				Vector3.new(3.2, 1.2, 3.2),
+				planter * CFrame.new(0, 0.6, 0),
+				P.Wood,
+				Enum.Material.WoodPlanks
+			)
+			Kit.Decor(
+				plaza,
+				"PlanterSoil",
+				Vector3.new(2.8, 0.1, 2.8),
+				planter * CFrame.new(0, 1.22, 0),
+				P.Dirt,
+				Enum.Material.Ground
+			)
+			Kit.Ball(
+				plaza,
+				"PlanterBush",
+				2.4,
+				(planter * CFrame.new(0, 1.9, 0)).Position,
+				P.LeafLight,
+				Enum.Material.Grass
+			)
+			for k, color in PLANTER_FLOWERS do
+				local a = k * math.pi / 2 + angle
+				local position = (planter * CFrame.new(math.cos(a) * 0.9, 2.6, math.sin(a) * 0.9)).Position
+				Kit.Ball(plaza, "Flower", 0.55, position, color, Enum.Material.SmoothPlastic)
+			end
 		end
 	end
 	return plaza

@@ -10,10 +10,10 @@ local World = {}
 -- Set the experience's Max Players to PlotCount (Game Settings > Places) so everyone gets a shop.
 World.PlotCount = 6
 World.PlotSize = 30 -- square shop floor, in studs
-World.PlotRingRadius = 66 -- plaza center to each shop's center
+World.PlotRingRadius = 60 -- plaza center to each shop's center
 World.PlotAngleOffset = 0 -- turns the whole ring (radians)
 
-World.PlazaRadius = 36
+World.PlazaRadius = 30
 World.GroundSize = 560
 World.GroundHeight = 0 -- top of the ground
 

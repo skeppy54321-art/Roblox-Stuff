@@ -762,10 +762,10 @@ local World = {}
 -- Set the experience's Max Players to PlotCount (Game Settings > Places) so everyone gets a shop.
 World.PlotCount = 6
 World.PlotSize = 30 -- square shop floor, in studs
-World.PlotRingRadius = 66 -- plaza center to each shop's center
+World.PlotRingRadius = 60 -- plaza center to each shop's center
 World.PlotAngleOffset = 0 -- turns the whole ring (radians)
 
-World.PlazaRadius = 36
+World.PlazaRadius = 30
 World.GroundSize = 560
 World.GroundHeight = 0 -- top of the ground
 
@@ -2935,6 +2935,13 @@ local NEON = Enum.Material.Neon
 
 local MarketBuilder = {}
 
+local PLANTER_FLOWERS = {
+	Color3.fromRGB(255, 130, 180),
+	Color3.fromRGB(255, 240, 250),
+	Color3.fromRGB(255, 215, 90),
+	Color3.fromRGB(190, 140, 255),
+}
+
 export type MarketParts = {
 	Model: Model,
 	Spawn: SpawnLocation,
@@ -3012,8 +3019,8 @@ local function buildPlaza(market: Model)
 	local plaza = Kit.Model(market, "Plaza")
 	local r = W.PlazaRadius
 	flat(plaza, "Plaza", r * 2, 0.3, 0.3, P.Cobble, Enum.Material.Cobblestone)
-	flat(plaza, "PlazaBand", 36, 0.31, 0.31, P.DarkStone, Enum.Material.Cobblestone)
-	flat(plaza, "PlazaInner", 33, 0.32, 0.32, P.Stone, Enum.Material.Pavement)
+	flat(plaza, "PlazaBand", 34, 0.31, 0.31, P.DarkStone, Enum.Material.Cobblestone)
+	flat(plaza, "PlazaInner", 31, 0.32, 0.32, P.Stone, Enum.Material.Pavement)
 	-- a path from the plaza to every shop's counter
 	for i = 1, W.PlotCount do
 		local angle = plotAngle(i)
@@ -3030,6 +3037,37 @@ local function buildPlaza(market: Model)
 				P.DarkStone,
 				Enum.Material.Cobblestone
 			)
+			-- flower planters where the path meets the plaza
+			local planter = CFrame.lookAt(polar(angle, r + 1.5, 0), Vector3.zero) * CFrame.new(side * 8.2, 0, 0)
+			Kit.Part(
+				plaza,
+				"Planter",
+				Vector3.new(3.2, 1.2, 3.2),
+				planter * CFrame.new(0, 0.6, 0),
+				P.Wood,
+				Enum.Material.WoodPlanks
+			)
+			Kit.Decor(
+				plaza,
+				"PlanterSoil",
+				Vector3.new(2.8, 0.1, 2.8),
+				planter * CFrame.new(0, 1.22, 0),
+				P.Dirt,
+				Enum.Material.Ground
+			)
+			Kit.Ball(
+				plaza,
+				"PlanterBush",
+				2.4,
+				(planter * CFrame.new(0, 1.9, 0)).Position,
+				P.LeafLight,
+				Enum.Material.Grass
+			)
+			for k, color in PLANTER_FLOWERS do
+				local a = k * math.pi / 2 + angle
+				local position = (planter * CFrame.new(math.cos(a) * 0.9, 2.6, math.sin(a) * 0.9)).Position
+				Kit.Ball(plaza, "Flower", 0.55, position, color, Enum.Material.SmoothPlastic)
+			end
 		end
 	end
 	return plaza
@@ -3579,6 +3617,7 @@ local store = ProfileStore.New(STORE_NAME, TEMPLATE)
 local sessions = if USE_MOCK_IN_STUDIO and RunService:IsStudio() then store.Mock else store
 
 local profiles: { [Player]: Profile } = {}
+local sessionEndConnections: { [Player]: any } = {}
 local listeners: { Listener } = {}
 
 ------------------------------------------------------------------
@@ -3668,8 +3707,10 @@ function PlayerData.Load(player: Player): Data?
 	migrate(profile.Data)
 	sanitize(profile.Data)
 
-	profile.OnSessionEnd:Connect(function()
+	-- Only fires on its own if another server takes the session (Release disconnects it first).
+	sessionEndConnections[player] = profile.OnSessionEnd:Connect(function()
 		profiles[player] = nil
+		sessionEndConnections[player] = nil
 		if player.Parent == Players and not ProfileStore.IsClosing then
 			player:Kick("Your shop was opened on another server. Please rejoin!")
 		end
@@ -3689,6 +3730,11 @@ end
 function PlayerData.Release(player: Player)
 	local profile = profiles[player]
 	profiles[player] = nil
+	local connection = sessionEndConnections[player]
+	sessionEndConnections[player] = nil
+	if connection then
+		connection:Disconnect() -- a normal leave is not "opened on another server"
+	end
 	if profile then
 		profile:EndSession()
 	end
