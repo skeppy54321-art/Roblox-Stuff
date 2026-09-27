@@ -390,6 +390,24 @@ end)
 check("customers stop waiting after a while", left)
 check("...with a friendly goodbye", tired and tired:FindFirstChild("Text", true).Text == "Maybe next time!")
 Config.Tuning.Customers.Patience = patience
+-- some customers are kids (smaller, feet still on the ground)
+local kidChance = Config.Tuning.Customers.KidChance
+Config.Tuning.Customers.KidChance = 1
+local seen = {}
+for _, c in plot:GetChildren() do
+	seen[c] = true
+end
+local kid = waitFor(15, function()
+	for _, c in plot:GetChildren() do
+		if c.Name == "Customer" and not seen[c] then
+			return c
+		end
+	end
+	return nil
+end)
+check("kid customers are smaller", kid and kid:GetAttribute("Kid") == true and math.abs(kid:GetScale() - Config.Tuning.Customers.KidScale) < 0.01, kid and kid:GetScale())
+check("...and stand on the ground", kid and math.abs(kid:GetPivot().Position.Y - plot.CounterFront.CFrame.Position.Y) < 0.05)
+Config.Tuning.Customers.KidChance = kidChance
 
 print("== social ==")
 local SocialService = Engine.loaded(modules.SocialService)

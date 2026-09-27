@@ -222,6 +222,10 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 		WantsText = `I want a {recipe.DisplayName}!`,
 		WantsColor = recipe.Color,
 	})
+	if rng:NextNumber() < T.KidChance then
+		model:ScaleTo(T.KidScale) -- around the feet, so they still stand on the ground
+		model:SetAttribute("Kid", true)
+	end
 	local start = (spot * CFrame.new(rng:NextNumber(-3, 3), 0, -T.WalkDistance)).Position
 	model:SetAttribute("WalkFrom", Vector3.new(start.X, Config.World.GroundHeight + 0.3, start.Z))
 	model:SetAttribute("Wants", wants)

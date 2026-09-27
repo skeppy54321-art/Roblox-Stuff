@@ -364,6 +364,10 @@ if customer then
 		return nextCustomer.Torso:FindFirstChild("Bell") ~= nil
 	end)
 	check("a bell rings when a customer reaches the counter", rang)
+	local bar = nextCustomer and waitFor(1, function()
+		return nextCustomer:FindFirstChild("Patience", true)
+	end)
+	check("waiting customers show a patience bar", bar ~= nil and bar.Fill.Size.X.Scale > 0.8, bar and bar.Fill.Size.X.Scale)
 end
 
 print("== panels + keys ==")

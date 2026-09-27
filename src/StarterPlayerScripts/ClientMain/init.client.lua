@@ -366,6 +366,44 @@ local function ringForNewCustomers()
 	end
 end
 
+-- A thin bar along the bottom of each waiting customer's bubble shows the patience they
+-- have left (they give up at zero): green, then yellow, then red.
+local function updatePatienceBars()
+	local now = workspace:GetServerTimeNow()
+	local patience = Config.Tuning.Customers.Patience
+	for _, c in myCustomers() do
+		local card = c.Model:FindFirstChild("Card", true)
+		if c.Phase == "Waiting" and card and card:IsA("Frame") then
+			local bar = card:FindFirstChild("Patience")
+			if not bar then
+				bar = Ui.new("Frame", {
+					Name = "Patience",
+					AnchorPoint = Vector2.new(0.5, 1),
+					Position = UDim2.new(0.5, 0, 1, -2),
+					Size = UDim2.new(1, -24, 0, 5),
+					BackgroundColor3 = P.PanelMid,
+					BackgroundTransparency = 0.4,
+					Parent = card,
+				}, {
+					Ui.round(),
+					Ui.new(
+						"Frame",
+						{ Name = "Fill", Size = UDim2.fromScale(1, 1), BackgroundColor3 = P.Good },
+						{ Ui.round() }
+					),
+				})
+			end
+			local start = c.Model:GetAttribute("PhaseStart")
+			local left = if typeof(start) == "number" then math.clamp(1 - (now - start) / patience, 0, 1) else 1
+			local fill = bar and bar:FindFirstChild("Fill")
+			if fill and fill:IsA("Frame") then
+				fill.Size = UDim2.fromScale(left, 1)
+				fill.BackgroundColor3 = if left > 0.5 then P.Good elseif left > 0.2 then P.Gold else P.Danger
+			end
+		end
+	end
+end
+
 -- Returns the goal text, and optionally a part to point the arrow at with a short label.
 local function nextGoal(): (string, BasePart?, string?)
 	local s = state
@@ -431,6 +469,7 @@ task.spawn(function()
 		-- one bad frame must never freeze the goal banner for the rest of the session
 		local ok, err = pcall(function()
 			ringForNewCustomers()
+			updatePatienceBars()
 			local text, part, label = nextGoal()
 			Hud.SetGoal(text)
 			local s = state

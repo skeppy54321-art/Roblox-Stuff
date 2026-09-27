@@ -15,9 +15,10 @@ return function(customer: Model, fx: Effects.Helpers)
 		fx.Sound("Inflate", headPart)
 	end
 
+	local base = head:GetScale() -- relative, so it works on kids too
 	local function setScale(value: number)
 		if head.Parent then
-			head:ScaleTo(math.max(value, 0.1))
+			head:ScaleTo(math.max(base * value, 0.1))
 		end
 	end
 

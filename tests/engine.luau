@@ -340,11 +340,27 @@ function Engine.install(game, options)
 		local old = scales[model] or 1
 		local factor = newScale / old
 		local pivot = getPivot(model)
+		local function scaled(cf)
+			local rel = pivot:ToObjectSpace(cf)
+			return pivot * (rel - rel.Position + rel.Position * factor)
+		end
 		for _, d in model:GetDescendants() do
 			if d:IsA("BasePart") then
-				local rel = pivot:ToObjectSpace(d.CFrame)
 				d.Size = d.Size * factor
-				Engine.setCFrame(d, pivot * (rel - rel.Position + rel.Position * factor))
+				Engine.setCFrame(d, scaled(d.CFrame))
+			elseif d:IsA("Model") and pivots[d] then
+				pivots[d] = scaled(pivots[d]) -- nested models' pivots move with their parts
+			end
+		end
+		-- like Roblox, the pivot offset from the PrimaryPart scales too (the pivot itself stays put)
+		local offset = modelOffsets[model]
+		if offset then
+			modelOffsets[model] = offset - offset.Position + offset.Position * factor
+		end
+		for _, d in model:GetDescendants() do
+			local nested = if d:IsA("Model") then modelOffsets[d] else nil
+			if nested then
+				modelOffsets[d] = nested - nested.Position + nested.Position * factor
 			end
 		end
 		scales[model] = newScale

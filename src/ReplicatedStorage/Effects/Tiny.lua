@@ -10,9 +10,10 @@ return function(customer: Model, fx: Effects.Helpers)
 	fx.Poof(pivot.Position + Vector3.new(0, 2.5, 0), Color3.fromRGB(150, 210, 255), 4)
 	fx.Sound("Shrink", torso)
 
+	local base = customer:GetScale() -- kids start smaller
 	fx.TweenNumber(1, 0.35, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In), function(value)
 		if customer.Parent then
-			customer:ScaleTo(value)
+			customer:ScaleTo(base * value)
 		end
 	end)
 
