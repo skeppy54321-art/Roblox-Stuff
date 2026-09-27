@@ -29,6 +29,7 @@ export type State = {
 	Discovered: { [string]: boolean },
 	Stats: { [string]: number },
 	Daily: DailyState,
+	Rebirths: number,
 }
 
 -- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.
@@ -257,6 +258,28 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 		end
 	end
 	return if usefulLeft then nil else cosmetic
+end
+
+-- Rebirth: what the next one costs, the coin multiplier you have, and whether you can
+-- rebirth now (with the reason if not).
+function Config.GetRebirthCost(rebirths: number): number
+	return Tuning.Rebirth.BaseCost + Tuning.Rebirth.CostStep * rebirths
+end
+
+function Config.GetCoinMultiplier(rebirths: number?): number
+	return 1 + Tuning.Rebirth.CoinBonus * (rebirths or 0)
+end
+
+function Config.CanRebirth(state: State): (boolean, string?)
+	local R = Tuning.Rebirth
+	if Config.GetLevel(state.Upgrades, R.Requires) < 1 then
+		return false, `Grow the {Upgrades[R.Requires].DisplayName} first`
+	end
+	local cost = Config.GetRebirthCost(state.Rebirths or 0)
+	if state.Coins < cost then
+		return false, `{Config.FormatNumber(cost)} coins`
+	end
+	return true, nil
 end
 
 -- Has this player brewed every potion at least once? (the Master Brewer title)

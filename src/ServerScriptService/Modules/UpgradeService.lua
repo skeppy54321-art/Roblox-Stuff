@@ -12,6 +12,7 @@ local PlotService = require(Modules:WaitForChild("PlotService"))
 local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
+local BrewService = require(Modules:WaitForChild("BrewService"))
 
 type Plot = PlotService.Plot
 
@@ -76,8 +77,55 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	end
 end
 
+-- Rebirth: start the shop over (coins, ingredients, potions, useful upgrades) for a
+-- permanent coin bonus. Cosmetics (Tuning.Rebirth.Keep), recipes and stats are kept.
+function UpgradeService.Rebirth(player: Player)
+	if not Guard.Cooldown(player, "Rebirth", 2) then
+		return
+	end
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+	local ok, reason = Config.CanRebirth(data)
+	if not ok then
+		Net.Notify(player, `Not yet: {reason or "keep going"}.`, "bad")
+		return
+	end
+	if BrewService.IsBrewing(player) then
+		Net.Notify(player, "Finish your brew first!", "bad")
+		return
+	end
+
+	-- All checks passed (no yields since reading the data).
+	local kept: { [string]: number } = {}
+	for _, id in Config.Tuning.Rebirth.Keep do
+		local level = data.Upgrades[id]
+		if level then
+			kept[id] = level
+		end
+	end
+	data.Coins = 0
+	data.Ingredients = {}
+	data.Potions = {}
+	data.Upgrades = kept
+	data.Rebirths += 1
+	local plot = PlotService.GetPlot(player)
+	if plot then
+		UpgradeService.ApplyAll(plot, data.Upgrades)
+		IngredientService.ApplyOwner(plot, data.Upgrades, true)
+		CustomerService.StartPlot(plot, player) -- one counter spot again, fresh customers
+	end
+	UpgradeService.ApplyPlayer(player, data.Upgrades)
+	PlotService.RefreshSign(player, data)
+	PlayerData.Push(player)
+	Net.Cue(player, "Rebirth", { Rebirths = data.Rebirths, Multiplier = Config.GetCoinMultiplier(data.Rebirths) })
+	SocialService.Announce(player, `{player.DisplayName} started their shop over for Rebirth {data.Rebirths}!`)
+end
+
 function UpgradeService.Init(plots: { Plot })
 	Net.RequestUpgrade.OnServerEvent:Connect(UpgradeService.Purchase)
+	Net.RequestRebirth.OnServerEvent:Connect(UpgradeService.Rebirth)
 	-- "for sale" signs for locked plants
 	for _, plot in plots do
 		for upgradeId, lot in plot.Lots do

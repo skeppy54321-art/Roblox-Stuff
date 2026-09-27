@@ -169,7 +169,8 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 
 	-- All checks passed: change state immediately so a double-press can't sell twice.
 	slot.Phase = "Reacting"
-	local price = recipe.SellPrice * (if slot.Vip then T.VipPriceMultiplier else 1)
+	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
+	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
 	data.Potions[slot.Wants] = have - 1
 	data.Coins += price
 	PlayerData.AddStat(data, "PotionsSold", 1)

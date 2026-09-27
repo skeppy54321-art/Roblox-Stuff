@@ -513,6 +513,29 @@ local counting = waitFor(3, function()
 end)
 check("gift button counts down to the next one", counting, giftFace.Text)
 
+print("== rebirth ==")
+do
+	local rebirthFace = find(uiRoot, "UpgradesPanel.Body.List.Rebirth.Buy.Face")
+	check("rebirth card waits for the Cloud Garden", rebirthFace and rebirthFace.Text:find("Cloud Garden") ~= nil, rebirthFace and rebirthFace.Text)
+	data.Upgrades.CloudGarden = 1
+	data.Coins = 6000
+	PlayerData.Push(player)
+	task.wait(0.3)
+	check("rebirth card ready and on top", rebirthFace.Text == "REBIRTH" and find(uiRoot, "UpgradesPanel.Body.List.Rebirth").LayoutOrder == 0, rebirthFace.Text)
+	Engine.signal(rebirthFace, "Activated"):Fire()
+	task.wait(0.1)
+	check("first tap asks to confirm", rebirthFace.Text == "Tap again!" and (data.Rebirths or 0) == 0)
+	Engine.signal(rebirthFace, "Activated"):Fire()
+	local reborn = waitFor(3, function()
+		local title = uiRoot.Celebration:FindFirstChild("Title")
+		return (data.Rebirths or 0) == 1 and title and title.Text == "REBIRTH!" and uiRoot.Celebration.Visible
+	end)
+	check("second tap rebirths, with a celebration", reborn)
+	task.wait(0.3)
+	local chip = find(uiRoot, "Coins.Multiplier")
+	check("coin multiplier shows x1.25", chip and chip.Visible and chip.Text == "x1.25", chip and chip.Text)
+end
+
 print("")
 print(`== RESULT: {passed} passed, {failed} failed, {#Engine.problems} problems, {#Engine.warnings} warnings ==`)
 for _, p in Engine.problems do

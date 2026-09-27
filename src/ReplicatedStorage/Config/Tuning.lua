@@ -68,6 +68,14 @@ Tuning.UpgradePath = {
 	"CloudGarden",
 }
 
+Tuning.Rebirth = {
+	Requires = "CloudGarden", -- you can rebirth once you've bought this
+	BaseCost = 5000, -- coins for the first rebirth
+	CostStep = 5000, -- each rebirth after that costs this much more
+	CoinBonus = 0.25, -- +25% coins from every sale, per rebirth
+	Keep = { "CozyDecor", "Familiar" }, -- upgrades you keep (everything else starts over)
+}
+
 Tuning.Daily = {
 	CooldownHours = 20, -- a new gift this long after the last one
 	StreakHours = 48, -- come back within this long to keep your streak going

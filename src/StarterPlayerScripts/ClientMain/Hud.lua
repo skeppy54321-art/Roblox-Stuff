@@ -23,6 +23,7 @@ Hud.OnGiftPressed = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
+local multiplierChip: TextLabel
 local coinText: TextLabel
 local goalFrame: Frame
 local goalText: TextLabel
@@ -105,6 +106,21 @@ function Hud.Init(parent: Frame)
 		Text = "0",
 		Parent = coinsPill,
 	}, 32)
+	-- "x1.25" under the coins after a rebirth (every sale pays that much more)
+	multiplierChip = Ui.label({
+		Name = "Multiplier",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -6, 1, -4),
+		Size = UDim2.fromOffset(62, 24),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = P.Gold,
+		TextColor3 = P.TextDark,
+		Text = "x1",
+		Visible = false,
+		ZIndex = 3,
+		Parent = coinsPill,
+	}, 17)
+	Ui.corner(10).Parent = multiplierChip
 	coinValue = Instance.new("NumberValue")
 	coinValue.Changed:Connect(function(value)
 		coinText.Text = Config.FormatNumber(value)
@@ -413,6 +429,10 @@ function Hud.SetState(state: State)
 			Ui.pop(coinsPill, 0.18)
 		end
 	end
+
+	local multiplier = Config.GetCoinMultiplier(state.Rebirths)
+	multiplierChip.Visible = multiplier > 1
+	multiplierChip.Text = `x{string.format("%g", multiplier)}`
 
 	local unlockedCount = 0
 	for _, id in Config.IngredientOrder do

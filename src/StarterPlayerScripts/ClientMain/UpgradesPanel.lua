@@ -23,10 +23,108 @@ type Card = {
 local UpgradesPanel = {}
 
 UpgradesPanel.OnBuy = nil :: ((upgradeId: string) -> ())?
+UpgradesPanel.OnRebirth = nil :: (() -> ())?
 UpgradesPanel.OnClose = nil :: (() -> ())?
 
 local panel: Frame
 local cards: { [string]: Card } = {}
+
+type RebirthCard = { Frame: Frame, Count: TextLabel, Summary: TextLabel, Button: Frame, Face: TextButton }
+local rebirthCard: RebirthCard
+local rebirthReady = false
+local confirmUntil = 0
+local lastState: State? = nil
+
+local function buildRebirthCard(list: Instance)
+	local R = Config.Tuning.Rebirth
+	local card = Ui.new("Frame", {
+		Name = "Rebirth",
+		Size = UDim2.new(1, 0, 0, 118),
+		BackgroundColor3 = P.PanelMid,
+		LayoutOrder = 200,
+		ZIndex = 10,
+		Parent = list,
+	}, { Ui.corner(14), Ui.stroke(P.Gold, 3) })
+	local icon = Ui.new("Frame", {
+		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(66, 66),
+		BackgroundColor3 = P.Gold,
+		ZIndex = 11,
+		Parent = card,
+	}, { Ui.round(), Ui.stroke(P.TextDark, 2, 0.3) })
+	local count = Ui.label({
+		Size = UDim2.fromScale(1, 1),
+		Text = "0",
+		TextColor3 = P.TextDark,
+		ZIndex = 12,
+		Parent = icon,
+	}, 30)
+	Ui.label({
+		Position = UDim2.fromOffset(90, 8),
+		Size = UDim2.new(1, -250, 0, 28),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.Gold,
+		Text = "Rebirth",
+		ZIndex = 11,
+		Parent = card,
+	}, 24)
+	Ui.label({
+		Position = UDim2.fromOffset(90, 38),
+		Size = UDim2.new(1, -250, 0, 36),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		TextColor3 = P.PanelLight,
+		Text = `Start your shop over for +{math.floor(R.CoinBonus * 100)}% coins from every sale, forever. You keep your familiar, decor and recipes.`,
+		ZIndex = 11,
+		Parent = card,
+	}, 15)
+	local summary = Ui.label({
+		Position = UDim2.fromOffset(90, 80),
+		Size = UDim2.new(1, -250, 0, 22),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.TextLight,
+		Text = "",
+		ZIndex = 11,
+		Parent = card,
+	}, 17)
+	local button, face = Ui.button({
+		Name = "Buy",
+		Text = "",
+		Color = P.ButtonOff,
+		Shade = P.ButtonOffDark,
+		Size = UDim2.fromOffset(140, 62),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		TextSize = 20,
+		Parent = card,
+	})
+	button.ZIndex = 11
+	face.ZIndex = 12
+	face.Activated:Connect(function()
+		if not rebirthReady then
+			return
+		end
+		if os.clock() < confirmUntil then
+			confirmUntil = 0
+			if UpgradesPanel.OnRebirth then
+				UpgradesPanel.OnRebirth()
+			end
+			return
+		end
+		-- starting over is big: ask for a second tap
+		confirmUntil = os.clock() + 3
+		face.Text = "Tap again!"
+		Ui.setButtonColor(button, P.Danger, Color3.fromRGB(170, 50, 60))
+		task.delay(3.05, function()
+			local s = lastState
+			if s and os.clock() >= confirmUntil then
+				UpgradesPanel.SetState(s)
+			end
+		end)
+	end)
+	rebirthCard = { Frame = card, Count = count, Summary = summary, Button = button, Face = face }
+end
 
 function UpgradesPanel.Init(root: Frame)
 	local body, close
@@ -155,9 +253,26 @@ function UpgradesPanel.Init(root: Frame)
 			BuyFace = buyFace,
 		}
 	end
+	buildRebirthCard(list)
 end
 
 function UpgradesPanel.SetState(state: State)
+	lastState = state
+	local rebirths = state.Rebirths or 0
+	local ready, reason = Config.CanRebirth(state)
+	rebirthReady = ready
+	rebirthCard.Count.Text = tostring(rebirths)
+	local multNow, multNext = Config.GetCoinMultiplier(rebirths), Config.GetCoinMultiplier(rebirths + 1)
+	rebirthCard.Summary.Text = `Coins x{string.format("%g", multNow)}  ->  x{string.format("%g", multNext)}`
+	rebirthCard.Frame.LayoutOrder = if ready then 0 else 200 -- on top when you can do it
+	if os.clock() >= confirmUntil then
+		rebirthCard.Face.Text = if ready then "REBIRTH" else reason or ""
+		Ui.setButtonColor(
+			rebirthCard.Button,
+			if ready then P.Gold else P.ButtonOff,
+			if ready then Color3.fromRGB(190, 140, 30) else P.ButtonOffDark
+		)
+	end
 	for upgradeId, card in cards do
 		local upgrade = Config.Upgrades[upgradeId]
 		local level = Config.GetLevel(state.Upgrades, upgradeId)

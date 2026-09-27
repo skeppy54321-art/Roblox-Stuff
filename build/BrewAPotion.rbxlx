@@ -43,6 +43,7 @@ export type State = {
 	Discovered: { [string]: boolean },
 	Stats: { [string]: number },
 	Daily: DailyState,
+	Rebirths: number,
 }
 
 -- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.
@@ -271,6 +272,28 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 		end
 	end
 	return if usefulLeft then nil else cosmetic
+end
+
+-- Rebirth: what the next one costs, the coin multiplier you have, and whether you can
+-- rebirth now (with the reason if not).
+function Config.GetRebirthCost(rebirths: number): number
+	return Tuning.Rebirth.BaseCost + Tuning.Rebirth.CostStep * rebirths
+end
+
+function Config.GetCoinMultiplier(rebirths: number?): number
+	return 1 + Tuning.Rebirth.CoinBonus * (rebirths or 0)
+end
+
+function Config.CanRebirth(state: State): (boolean, string?)
+	local R = Tuning.Rebirth
+	if Config.GetLevel(state.Upgrades, R.Requires) < 1 then
+		return false, `Grow the {Upgrades[R.Requires].DisplayName} first`
+	end
+	local cost = Config.GetRebirthCost(state.Rebirths or 0)
+	if state.Coins < cost then
+		return false, `{Config.FormatNumber(cost)} coins`
+	end
+	return true, nil
 end
 
 -- Has this player brewed every potion at least once? (the Master Brewer title)
@@ -830,6 +853,14 @@ Tuning.UpgradePath = {
 	"GreenThumb",
 	"EmberGarden",
 	"CloudGarden",
+}
+
+Tuning.Rebirth = {
+	Requires = "CloudGarden", -- you can rebirth once you've bought this
+	BaseCost = 5000, -- coins for the first rebirth
+	CostStep = 5000, -- each rebirth after that costs this much more
+	CoinBonus = 0.25, -- +25% coins from every sale, per rebirth
+	Keep = { "CozyDecor", "Familiar" }, -- upgrades you keep (everything else starts over)
 }
 
 Tuning.Daily = {
@@ -2363,7 +2394,6 @@ end
 -- Starts every server module and handles players joining/leaving.
 
 local Players = game:GetService("Players")
-local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
 
 local Modules = script.Parent:WaitForChild("Modules")
 local Net = require(Modules:WaitForChild("Net")) -- creates the Remotes folder first
@@ -2428,7 +2458,7 @@ local function onPlayerAdded(player: Player)
 
 	SocialService.PlayerJoined(player, data, plot)
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
-	PlotService.SetSignTitle(player, Config.IsMasterBrewer(data.Discovered))
+	PlotService.RefreshSign(player, data)
 
 	-- new players face their first job (the Moonberry bush); everyone else faces the counter
 	local function facing(): Vector3?
@@ -2618,7 +2648,7 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
 		if Config.IsMasterBrewer(data.Discovered) then
 			-- that was the last one: every potion brewed at least once
-			PlotService.SetSignTitle(player, true)
+			PlotService.RefreshSign(player, data)
 			Net.Cue(player, "Master", {})
 			SocialService.Announce(
 				player,
@@ -3275,7 +3305,8 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 
 	-- All checks passed: change state immediately so a double-press can't sell twice.
 	slot.Phase = "Reacting"
-	local price = recipe.SellPrice * (if slot.Vip then T.VipPriceMultiplier else 1)
+	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
+	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
 	data.Potions[slot.Wants] = have - 1
 	data.Coins += price
 	PlayerData.AddStat(data, "PotionsSold", 1)
@@ -4730,6 +4761,7 @@ Net.RequestUpgrade = remote("RemoteEvent", "RequestUpgrade") :: RemoteEvent -- (
 Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipeId)
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
 Net.ClaimDaily = remote("RemoteEvent", "ClaimDaily") :: RemoteEvent -- () the daily gift
+Net.RequestRebirth = remote("RemoteEvent", "RequestRebirth") :: RemoteEvent -- () start the shop over for a bonus
 
 -- "news" = something another player did; "heart" = a cheer
 export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
@@ -4748,7 +4780,8 @@ function Net.NotifyOthers(except: Player, text: string, kind: NotifyKind?)
 end
 
 -- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade",
--- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's), "Daily" (gift claimed).
+-- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's), "Daily" (gift claimed),
+-- "Master" (brewed every potion), "Rebirth" (started over with a bonus).
 function Net.Cue(player: Player, cue: string, data: { [string]: any }?)
 	Net.CueRemote:FireClient(player, cue, data or {})
 end
@@ -4784,7 +4817,7 @@ export type Data = Config.State
 -- Changing STORE_NAME starts everyone from scratch. Change SCHEMA_VERSION (and add a
 -- step to `migrate`) when the shape of saved data changes instead.
 local STORE_NAME = "PlayerData"
-local SCHEMA_VERSION = 2
+local SCHEMA_VERSION = 3
 -- true = Studio play tests never touch real saves, even with API access on.
 local USE_MOCK_IN_STUDIO = false
 
@@ -4797,6 +4830,7 @@ local TEMPLATE: Data = {
 	Discovered = {},
 	Stats = {},
 	Daily = { Last = 0, Streak = 0 },
+	Rebirths = 0,
 }
 
 -- The parts of a ProfileStore profile this module uses.
@@ -4854,6 +4888,10 @@ local function migrate(data: Data)
 		-- returning player starts a fresh streak with a gift ready.
 		version = 2
 	end
+	if version < 3 then
+		-- 2 -> 3: rebirths. Reconcile already added Rebirths = 0.
+		version = 3
+	end
 	data.SchemaVersion = version
 end
 
@@ -4889,6 +4927,7 @@ local function sanitize(data: Data)
 		then math.clamp(math.floor(daily.Streak), 0, 100000)
 		else 0
 	data.Daily = { Last = last, Streak = streak }
+	data.Rebirths = if isNumber(data.Rebirths) then math.clamp(math.floor(data.Rebirths), 0, 1000) else 0
 end
 
 ------------------------------------------------------------------
@@ -5081,15 +5120,21 @@ function PlotService.Assign(player: Player): Plot?
 	return nil
 end
 
--- The owner's name on the sign, with "Master Brewer" under it once they've earned it.
-function PlotService.SetSignTitle(player: Player, master: boolean)
+-- The owner's name on the sign, with their titles under it ("Master Brewer", "Rebirth 2").
+function PlotService.RefreshSign(player: Player, data: Config.State)
 	local plot = plotByPlayer[player]
-	if plot then
-		setSign(
-			plot,
-			if master then `{player.DisplayName}'s Potions\nMaster Brewer` else `{player.DisplayName}'s Potions`
-		)
+	if not plot then
+		return
 	end
+	local titles = {}
+	if Config.IsMasterBrewer(data.Discovered) then
+		table.insert(titles, "Master Brewer")
+	end
+	if (data.Rebirths or 0) > 0 then
+		table.insert(titles, `Rebirth {data.Rebirths}`)
+	end
+	local name = `{player.DisplayName}'s Potions`
+	setSign(plot, if #titles > 0 then `{name}\n{table.concat(titles, "  ")}` else name)
 end
 
 function PlotService.Release(player: Player)
@@ -8897,6 +8942,7 @@ local PlotService = require(Modules:WaitForChild("PlotService"))
 local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
+local BrewService = require(Modules:WaitForChild("BrewService"))
 
 type Plot = PlotService.Plot
 
@@ -8961,8 +9007,55 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	end
 end
 
+-- Rebirth: start the shop over (coins, ingredients, potions, useful upgrades) for a
+-- permanent coin bonus. Cosmetics (Tuning.Rebirth.Keep), recipes and stats are kept.
+function UpgradeService.Rebirth(player: Player)
+	if not Guard.Cooldown(player, "Rebirth", 2) then
+		return
+	end
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+	local ok, reason = Config.CanRebirth(data)
+	if not ok then
+		Net.Notify(player, `Not yet: {reason or "keep going"}.`, "bad")
+		return
+	end
+	if BrewService.IsBrewing(player) then
+		Net.Notify(player, "Finish your brew first!", "bad")
+		return
+	end
+
+	-- All checks passed (no yields since reading the data).
+	local kept: { [string]: number } = {}
+	for _, id in Config.Tuning.Rebirth.Keep do
+		local level = data.Upgrades[id]
+		if level then
+			kept[id] = level
+		end
+	end
+	data.Coins = 0
+	data.Ingredients = {}
+	data.Potions = {}
+	data.Upgrades = kept
+	data.Rebirths += 1
+	local plot = PlotService.GetPlot(player)
+	if plot then
+		UpgradeService.ApplyAll(plot, data.Upgrades)
+		IngredientService.ApplyOwner(plot, data.Upgrades, true)
+		CustomerService.StartPlot(plot, player) -- one counter spot again, fresh customers
+	end
+	UpgradeService.ApplyPlayer(player, data.Upgrades)
+	PlotService.RefreshSign(player, data)
+	PlayerData.Push(player)
+	Net.Cue(player, "Rebirth", { Rebirths = data.Rebirths, Multiplier = Config.GetCoinMultiplier(data.Rebirths) })
+	SocialService.Announce(player, `{player.DisplayName} started their shop over for Rebirth {data.Rebirths}!`)
+end
+
 function UpgradeService.Init(plots: { Plot })
 	Net.RequestUpgrade.OnServerEvent:Connect(UpgradeService.Purchase)
+	Net.RequestRebirth.OnServerEvent:Connect(UpgradeService.Rebirth)
 	-- "for sale" signs for locked plants
 	for _, plot in plots do
 		for upgradeId, lot in plot.Lots do
@@ -9135,6 +9228,7 @@ local RequestUpgrade = Remotes:WaitForChild("RequestUpgrade") :: RemoteEvent
 local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
 local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
+local RequestRebirth = Remotes:WaitForChild("RequestRebirth") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -9245,6 +9339,10 @@ UpgradesPanel.OnClose = function()
 end
 RecipeBook.OnClose = function()
 	setPanel(nil)
+end
+UpgradesPanel.OnRebirth = function()
+	Sfx.Play("Click")
+	RequestRebirth:FireServer()
 end
 UpgradesPanel.OnBuy = function(upgradeId)
 	Sfx.Play("Click")
@@ -9478,6 +9576,10 @@ local function nextGoal(): (string, BasePart?, string?)
 		if upgradeId then
 			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end
+		if Config.CanRebirth(s) then
+			local bonus = math.floor(Config.Tuning.Rebirth.CoinBonus * 100)
+			return `You can REBIRTH for +{bonus}% coins forever! Tap UPGRADES.`, nil, nil
+		end
 	end
 	if Config.PotionTotal(s.Potions) >= Config.GetMaxPotions(s.Upgrades) then
 		return "Your shelf is full! Wait for a customer who wants one of your potions.", nil, nil
@@ -9687,6 +9789,11 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			Sfx.Play("Upgrade")
 			Hud.Celebrate("MASTER BREWER!", "You've brewed every potion!", P.Gold)
 		end)
+	elseif cue == "Rebirth" then
+		Sfx.Play("Discover")
+		local multiplier = tonumber(data.Multiplier) or 1
+		Hud.Celebrate("REBIRTH!", `Fresh start, now x{string.format("%g", multiplier)} coins forever!`, P.Gold)
+		setPanel(nil)
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")
 		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)
@@ -10961,6 +11068,7 @@ Hud.OnGiftPressed = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
+local multiplierChip: TextLabel
 local coinText: TextLabel
 local goalFrame: Frame
 local goalText: TextLabel
@@ -11043,6 +11151,21 @@ function Hud.Init(parent: Frame)
 		Text = "0",
 		Parent = coinsPill,
 	}, 32)
+	-- "x1.25" under the coins after a rebirth (every sale pays that much more)
+	multiplierChip = Ui.label({
+		Name = "Multiplier",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(1, -6, 1, -4),
+		Size = UDim2.fromOffset(62, 24),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = P.Gold,
+		TextColor3 = P.TextDark,
+		Text = "x1",
+		Visible = false,
+		ZIndex = 3,
+		Parent = coinsPill,
+	}, 17)
+	Ui.corner(10).Parent = multiplierChip
 	coinValue = Instance.new("NumberValue")
 	coinValue.Changed:Connect(function(value)
 		coinText.Text = Config.FormatNumber(value)
@@ -11351,6 +11474,10 @@ function Hud.SetState(state: State)
 			Ui.pop(coinsPill, 0.18)
 		end
 	end
+
+	local multiplier = Config.GetCoinMultiplier(state.Rebirths)
+	multiplierChip.Visible = multiplier > 1
+	multiplierChip.Text = `x{string.format("%g", multiplier)}`
 
 	local unlockedCount = 0
 	for _, id in Config.IngredientOrder do
@@ -13049,10 +13176,108 @@ type Card = {
 local UpgradesPanel = {}
 
 UpgradesPanel.OnBuy = nil :: ((upgradeId: string) -> ())?
+UpgradesPanel.OnRebirth = nil :: (() -> ())?
 UpgradesPanel.OnClose = nil :: (() -> ())?
 
 local panel: Frame
 local cards: { [string]: Card } = {}
+
+type RebirthCard = { Frame: Frame, Count: TextLabel, Summary: TextLabel, Button: Frame, Face: TextButton }
+local rebirthCard: RebirthCard
+local rebirthReady = false
+local confirmUntil = 0
+local lastState: State? = nil
+
+local function buildRebirthCard(list: Instance)
+	local R = Config.Tuning.Rebirth
+	local card = Ui.new("Frame", {
+		Name = "Rebirth",
+		Size = UDim2.new(1, 0, 0, 118),
+		BackgroundColor3 = P.PanelMid,
+		LayoutOrder = 200,
+		ZIndex = 10,
+		Parent = list,
+	}, { Ui.corner(14), Ui.stroke(P.Gold, 3) })
+	local icon = Ui.new("Frame", {
+		Position = UDim2.fromOffset(12, 12),
+		Size = UDim2.fromOffset(66, 66),
+		BackgroundColor3 = P.Gold,
+		ZIndex = 11,
+		Parent = card,
+	}, { Ui.round(), Ui.stroke(P.TextDark, 2, 0.3) })
+	local count = Ui.label({
+		Size = UDim2.fromScale(1, 1),
+		Text = "0",
+		TextColor3 = P.TextDark,
+		ZIndex = 12,
+		Parent = icon,
+	}, 30)
+	Ui.label({
+		Position = UDim2.fromOffset(90, 8),
+		Size = UDim2.new(1, -250, 0, 28),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.Gold,
+		Text = "Rebirth",
+		ZIndex = 11,
+		Parent = card,
+	}, 24)
+	Ui.label({
+		Position = UDim2.fromOffset(90, 38),
+		Size = UDim2.new(1, -250, 0, 36),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Top,
+		TextWrapped = true,
+		TextColor3 = P.PanelLight,
+		Text = `Start your shop over for +{math.floor(R.CoinBonus * 100)}% coins from every sale, forever. You keep your familiar, decor and recipes.`,
+		ZIndex = 11,
+		Parent = card,
+	}, 15)
+	local summary = Ui.label({
+		Position = UDim2.fromOffset(90, 80),
+		Size = UDim2.new(1, -250, 0, 22),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextColor3 = P.TextLight,
+		Text = "",
+		ZIndex = 11,
+		Parent = card,
+	}, 17)
+	local button, face = Ui.button({
+		Name = "Buy",
+		Text = "",
+		Color = P.ButtonOff,
+		Shade = P.ButtonOffDark,
+		Size = UDim2.fromOffset(140, 62),
+		Position = UDim2.new(1, -12, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		TextSize = 20,
+		Parent = card,
+	})
+	button.ZIndex = 11
+	face.ZIndex = 12
+	face.Activated:Connect(function()
+		if not rebirthReady then
+			return
+		end
+		if os.clock() < confirmUntil then
+			confirmUntil = 0
+			if UpgradesPanel.OnRebirth then
+				UpgradesPanel.OnRebirth()
+			end
+			return
+		end
+		-- starting over is big: ask for a second tap
+		confirmUntil = os.clock() + 3
+		face.Text = "Tap again!"
+		Ui.setButtonColor(button, P.Danger, Color3.fromRGB(170, 50, 60))
+		task.delay(3.05, function()
+			local s = lastState
+			if s and os.clock() >= confirmUntil then
+				UpgradesPanel.SetState(s)
+			end
+		end)
+	end)
+	rebirthCard = { Frame = card, Count = count, Summary = summary, Button = button, Face = face }
+end
 
 function UpgradesPanel.Init(root: Frame)
 	local body, close
@@ -13181,9 +13406,26 @@ function UpgradesPanel.Init(root: Frame)
 			BuyFace = buyFace,
 		}
 	end
+	buildRebirthCard(list)
 end
 
 function UpgradesPanel.SetState(state: State)
+	lastState = state
+	local rebirths = state.Rebirths or 0
+	local ready, reason = Config.CanRebirth(state)
+	rebirthReady = ready
+	rebirthCard.Count.Text = tostring(rebirths)
+	local multNow, multNext = Config.GetCoinMultiplier(rebirths), Config.GetCoinMultiplier(rebirths + 1)
+	rebirthCard.Summary.Text = `Coins x{string.format("%g", multNow)}  ->  x{string.format("%g", multNext)}`
+	rebirthCard.Frame.LayoutOrder = if ready then 0 else 200 -- on top when you can do it
+	if os.clock() >= confirmUntil then
+		rebirthCard.Face.Text = if ready then "REBIRTH" else reason or ""
+		Ui.setButtonColor(
+			rebirthCard.Button,
+			if ready then P.Gold else P.ButtonOff,
+			if ready then Color3.fromRGB(190, 140, 30) else P.ButtonOffDark
+		)
+	end
 	for upgradeId, card in cards do
 		local upgrade = Config.Upgrades[upgradeId]
 		local level = Config.GetLevel(state.Upgrades, upgradeId)

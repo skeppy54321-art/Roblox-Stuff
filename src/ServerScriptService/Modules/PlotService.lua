@@ -97,15 +97,21 @@ function PlotService.Assign(player: Player): Plot?
 	return nil
 end
 
--- The owner's name on the sign, with "Master Brewer" under it once they've earned it.
-function PlotService.SetSignTitle(player: Player, master: boolean)
+-- The owner's name on the sign, with their titles under it ("Master Brewer", "Rebirth 2").
+function PlotService.RefreshSign(player: Player, data: Config.State)
 	local plot = plotByPlayer[player]
-	if plot then
-		setSign(
-			plot,
-			if master then `{player.DisplayName}'s Potions\nMaster Brewer` else `{player.DisplayName}'s Potions`
-		)
+	if not plot then
+		return
 	end
+	local titles = {}
+	if Config.IsMasterBrewer(data.Discovered) then
+		table.insert(titles, "Master Brewer")
+	end
+	if (data.Rebirths or 0) > 0 then
+		table.insert(titles, `Rebirth {data.Rebirths}`)
+	end
+	local name = `{player.DisplayName}'s Potions`
+	setSign(plot, if #titles > 0 then `{name}\n{table.concat(titles, "  ")}` else name)
 end
 
 function PlotService.Release(player: Player)

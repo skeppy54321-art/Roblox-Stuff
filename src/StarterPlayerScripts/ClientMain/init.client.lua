@@ -39,6 +39,7 @@ local RequestUpgrade = Remotes:WaitForChild("RequestUpgrade") :: RemoteEvent
 local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
 local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
+local RequestRebirth = Remotes:WaitForChild("RequestRebirth") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -149,6 +150,10 @@ UpgradesPanel.OnClose = function()
 end
 RecipeBook.OnClose = function()
 	setPanel(nil)
+end
+UpgradesPanel.OnRebirth = function()
+	Sfx.Play("Click")
+	RequestRebirth:FireServer()
 end
 UpgradesPanel.OnBuy = function(upgradeId)
 	Sfx.Play("Click")
@@ -382,6 +387,10 @@ local function nextGoal(): (string, BasePart?, string?)
 		if upgradeId then
 			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end
+		if Config.CanRebirth(s) then
+			local bonus = math.floor(Config.Tuning.Rebirth.CoinBonus * 100)
+			return `You can REBIRTH for +{bonus}% coins forever! Tap UPGRADES.`, nil, nil
+		end
 	end
 	if Config.PotionTotal(s.Potions) >= Config.GetMaxPotions(s.Upgrades) then
 		return "Your shelf is full! Wait for a customer who wants one of your potions.", nil, nil
@@ -591,6 +600,11 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			Sfx.Play("Upgrade")
 			Hud.Celebrate("MASTER BREWER!", "You've brewed every potion!", P.Gold)
 		end)
+	elseif cue == "Rebirth" then
+		Sfx.Play("Discover")
+		local multiplier = tonumber(data.Multiplier) or 1
+		Hud.Celebrate("REBIRTH!", `Fresh start, now x{string.format("%g", multiplier)} coins forever!`, P.Gold)
+		setPanel(nil)
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")
 		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)

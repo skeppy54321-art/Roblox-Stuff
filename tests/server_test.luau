@@ -583,7 +583,7 @@ local savedCoins = data.Coins
 task.wait(1.5)
 
 print("== rejoin (mock save) ==")
-local player2 = newPlayer("Tester", 1001)
+local player2, root2 = newPlayer("Tester", 1001)
 local data2 = waitFor(10, function()
 	return PlayerData.Get(player2)
 end)
@@ -599,6 +599,55 @@ if data2 then
 	local plot2 = market:FindFirstChild(player2:GetAttribute("PlotName"))
 	task.wait(0.3)
 	check("upgrades shown again", plot2 and plot2:FindFirstChild("DecorGold") ~= nil)
+end
+
+print("== rebirth ==")
+if data2 then
+	local plotB = market:FindFirstChild(player2:GetAttribute("PlotName"))
+	local cauldronB = plotB.Cauldron
+	Engine.setCFrame(root2, CFrame.new(cauldronB.Hitbox.CFrame.Position + Vector3.new(0, 0, 3)))
+	local RequestRebirth = game:GetService("ReplicatedStorage").Remotes.RequestRebirth
+	data2.Coins = 100
+	Engine.signal(RequestRebirth, "OnServerEvent"):Fire(player2)
+	task.wait(0.2)
+	check("rebirth needs enough coins", (data2.Rebirths or 0) == 0 and data2.Coins == 100)
+	task.wait(2.1) -- the rebirth remote's cooldown
+	data2.Coins = 6000
+	data2.Potions = { Rainbow = 2 }
+	data2.Ingredients = { Moonberry = 3 }
+	Engine.signal(RequestRebirth, "OnServerEvent"):Fire(player2)
+	task.wait(0.3)
+	check("rebirth happened", data2.Rebirths == 1, data2.Rebirths)
+	check("coins, potions and ingredients start over", data2.Coins == 0 and next(data2.Potions) == nil and next(data2.Ingredients) == nil)
+	check("useful upgrades reset, cosmetics kept", data2.Upgrades.CloudGarden == nil and data2.Upgrades.BrewSpeed == nil and data2.Upgrades.CozyDecor == 3 and data2.Upgrades.Familiar == 3)
+	check("recipes kept", data2.Discovered.GiantHead == true and data2.Discovered.Rocket == true)
+	check("the shop is back to basics", plotB.Sources:FindFirstChild("Starflower") == nil and plotB.Lots:FindFirstChild("StarflowerBedLot") ~= nil)
+	local signB = plotB.Sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
+	check("the sign shows the rebirth", signB:find("Rebirth 1") ~= nil, signB)
+	check("familiar kept", player2:GetAttribute("Familiar") == 3)
+	-- sales now pay 25% more
+	local waitingB = waitFor(10, function()
+		for _, c in plotB:GetChildren() do
+			if c.Name == "Customer" and c:GetAttribute("Phase") == "Waiting" then
+				return c
+			end
+		end
+		return nil
+	end)
+	check("customers come back after a rebirth", waitingB ~= nil)
+	if waitingB then
+		local wants = waitingB:GetAttribute("Wants")
+		data2.Potions = { [wants] = 1 }
+		local before = data2.Coins
+		Engine.setCFrame(root2, CFrame.new(waitingB.Torso.CFrame.Position + Vector3.new(0, 0, 3)))
+		task.wait(0.1)
+		Engine.signal(waitingB.Torso.SellPrompt, "Triggered"):Fire(player2)
+		task.wait(0.3)
+		local price = Config.Recipes[wants].SellPrice
+		local vip = waitingB:FindFirstChild("VipTag", true) ~= nil
+		local expected = math.floor(price * (if vip then 2 else 1) * 1.25 + 0.5)
+		check("sales pay 25% more after a rebirth", data2.Coins - before == expected, `{data2.Coins - before} vs {expected}`)
+	end
 end
 
 print("")

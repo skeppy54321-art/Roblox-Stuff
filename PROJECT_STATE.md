@@ -118,12 +118,15 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 
 The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`): new potions early, boosts after, and it saves up for the next step instead of spending on whatever is cheapest. Cozy Decor and Magic Familiar are cosmetic, suggested only when nothing useful is left.
 
+**Rebirth**
+* Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The goal banner suggests it once there's nothing useful left to buy.
+
 **Daily gift**
 * A GIFT button (top of the right-hand column) with a badge when it's ready: once every 20 hours, 30 / 50 / 80 / 120 / 160 / 220 / 300 coins for day 1–7 of a streak (later days repeat 300). Come back within 48 hours to keep the streak. The server's clock decides; the button counts down to the next one.
 
 **Saving** (Milestone 3)
 * ProfileStore: session locking (no duping across servers), autosave, final save on leave and on shutdown.
-* Versioned data (`SchemaVersion`, now 2: the daily gift), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
+* Versioned data (`SchemaVersion`, now 3: v2 added the daily gift, v3 rebirths), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
 * Can't load → you're kicked with a friendly "please rejoin" (so nobody plays unsaved). Loaded on another server → kicked from the old one.
 * Leaving mid-brew keeps the potion (it finishes instantly) instead of losing the ingredients.
 
@@ -190,5 +193,5 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 1. **You:** open `build/BrewAPotion.rbxlx`, run the test checklist, send errors or "it works" (screenshots help a lot for the look).
 2. Fix what the playtest finds; tune lighting, colors and economy numbers (re-run `tests/pacing_bot.luau` after price changes).
 3. Listen to the 4 chosen sounds and the music; fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
-4. After the familiars there is nothing left to buy: next content could be a prestige/"Grand Opening" reset, more decor themes, or special orders.
+4. More content for rebirth runs: more decor themes, special orders, a rebirth-only potion or ingredient.
 5. Later: monetization (see the API notes above), a global all-time leaderboard (OrderedDataStore), trading between friends.
