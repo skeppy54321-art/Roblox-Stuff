@@ -237,6 +237,29 @@ function Config.PotionTotal(potions: { [string]: number }): number
 end
 
 -- 1234567 -> "1,234,567"
+-- The upgrade the goal banner should suggest buying now, or nil: the first affordable
+-- useful one; a cosmetic one only when no useful upgrade is left to work toward.
+function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
+	local cosmetic: string? = nil
+	local usefulLeft = false
+	for _, id in Config.UpgradeOrder do
+		local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
+		if cost and Config.IsUpgradeAvailable(upgrades, id) then
+			local isCosmetic = Upgrades[id].Cosmetic == true
+			if not isCosmetic then
+				usefulLeft = true
+			end
+			if coins >= cost then
+				if not isCosmetic then
+					return id
+				end
+				cosmetic = cosmetic or id
+			end
+		end
+	end
+	return if usefulLeft then nil else cosmetic
+end
+
 -- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
 -- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
 -- os.time() on the server, workspace:GetServerTimeNow() on clients.
@@ -810,6 +833,7 @@ export type Upgrade = {
 	Unlocks: string?,
 	Requires: string?,
 	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
+	Cosmetic: boolean?, -- only looks nice: the goal banner suggests it after the useful upgrades
 	Order: number,
 }
 
@@ -922,6 +946,7 @@ local Upgrades: { [string]: Upgrade } = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
 		Description = "Make your shop the fanciest in the market!",
+		Cosmetic = true,
 		BaseSummary = "Plain shop",
 		Color = Color3.fromRGB(240, 100, 160),
 		Levels = {
@@ -9324,13 +9349,11 @@ local function nextGoal(): (string, BasePart?, string?)
 	if isBrewing(cauldron) then
 		return "Brewing! Press the cauldron to STIR, or grab more ingredients.", nil, nil
 	end
-	-- something affordable to buy (after your first sale)
+	-- something worth buying (after your first sale)
 	if (s.Stats.PotionsSold or 0) > 0 then
-		for _, upgradeId in Config.UpgradeOrder do
-			local cost = Config.GetNextUpgradeCost(upgradeId, Config.GetLevel(s.Upgrades, upgradeId))
-			if cost and s.Coins >= cost and Config.IsUpgradeAvailable(s.Upgrades, upgradeId) then
-				return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
-			end
+		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins)
+		if upgradeId then
+			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end
 	end
 	if Config.PotionTotal(s.Potions) >= Config.GetMaxPotions(s.Upgrades) then

@@ -251,6 +251,14 @@ if customer then
 end
 
 print("== upgrades ==")
+do
+	local C = Engine.loaded(game:GetService("ReplicatedStorage").Config)
+	local early = { BrewSpeed = 3, StarflowerBed = 1, Shelves = 2, GreenThumb = 2 }
+	check("banner suggests a useful upgrade first", C.GetSuggestedUpgrade({}, 160) == "BrewSpeed")
+	check("banner skips cosmetics while useful upgrades are left", C.GetSuggestedUpgrade(early, 160) == nil, C.GetSuggestedUpgrade(early, 160))
+	local done = { BrewSpeed = 3, StarflowerBed = 1, Shelves = 2, GreenThumb = 2, CounterSpace = 1, FrostGrotto = 1, EmberGarden = 1, CloudGarden = 1 }
+	check("banner suggests decor once nothing useful is left", C.GetSuggestedUpgrade(done, 160) == "CozyDecor")
+end
 local RequestUpgrade = game:GetService("ReplicatedStorage").Remotes.RequestUpgrade
 local RequestBrew = game:GetService("ReplicatedStorage").Remotes.RequestBrew
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")

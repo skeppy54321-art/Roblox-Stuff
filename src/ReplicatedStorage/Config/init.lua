@@ -223,6 +223,29 @@ function Config.PotionTotal(potions: { [string]: number }): number
 end
 
 -- 1234567 -> "1,234,567"
+-- The upgrade the goal banner should suggest buying now, or nil: the first affordable
+-- useful one; a cosmetic one only when no useful upgrade is left to work toward.
+function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
+	local cosmetic: string? = nil
+	local usefulLeft = false
+	for _, id in Config.UpgradeOrder do
+		local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
+		if cost and Config.IsUpgradeAvailable(upgrades, id) then
+			local isCosmetic = Upgrades[id].Cosmetic == true
+			if not isCosmetic then
+				usefulLeft = true
+			end
+			if coins >= cost then
+				if not isCosmetic then
+					return id
+				end
+				cosmetic = cosmetic or id
+			end
+		end
+	end
+	return if usefulLeft then nil else cosmetic
+end
+
 -- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
 -- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
 -- os.time() on the server, workspace:GetServerTimeNow() on clients.

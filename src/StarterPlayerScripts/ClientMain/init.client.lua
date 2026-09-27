@@ -346,13 +346,11 @@ local function nextGoal(): (string, BasePart?, string?)
 	if isBrewing(cauldron) then
 		return "Brewing! Press the cauldron to STIR, or grab more ingredients.", nil, nil
 	end
-	-- something affordable to buy (after your first sale)
+	-- something worth buying (after your first sale)
 	if (s.Stats.PotionsSold or 0) > 0 then
-		for _, upgradeId in Config.UpgradeOrder do
-			local cost = Config.GetNextUpgradeCost(upgradeId, Config.GetLevel(s.Upgrades, upgradeId))
-			if cost and s.Coins >= cost and Config.IsUpgradeAvailable(s.Upgrades, upgradeId) then
-				return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
-			end
+		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins)
+		if upgradeId then
+			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end
 	end
 	if Config.PotionTotal(s.Potions) >= Config.GetMaxPotions(s.Upgrades) then

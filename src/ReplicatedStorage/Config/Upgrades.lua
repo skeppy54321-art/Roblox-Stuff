@@ -26,6 +26,7 @@ export type Upgrade = {
 	Unlocks: string?,
 	Requires: string?,
 	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
+	Cosmetic: boolean?, -- only looks nice: the goal banner suggests it after the useful upgrades
 	Order: number,
 }
 
@@ -138,6 +139,7 @@ local Upgrades: { [string]: Upgrade } = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
 		Description = "Make your shop the fanciest in the market!",
+		Cosmetic = true,
 		BaseSummary = "Plain shop",
 		Color = Color3.fromRGB(240, 100, 160),
 		Levels = {

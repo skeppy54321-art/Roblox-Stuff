@@ -192,18 +192,16 @@ while os.clock() - started < MINUTES * 60 do
 	-- 2. buy what the goal banner would suggest (after the first sale)
 	if (data.Stats.PotionsSold or 0) > 0 then
 		local bought = false
-		for _, id in Config.UpgradeOrder do
-			local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(data.Upgrades, id))
-			if cost and data.Coins >= cost and Config.IsUpgradeAvailable(data.Upgrades, id) then
-				local level = Config.GetLevel(data.Upgrades, id)
-				Engine.signal(remotes.RequestUpgrade, "OnServerEvent"):Fire(player, id)
-				task.wait(0.5)
-				if Config.GetLevel(data.Upgrades, id) > level then
-					log(`bought {id} level {level + 1} for {cost}`)
-					table.insert(timeline, `{id} {level + 1} at {stamp()}`)
-					bought = true
-				end
-				break
+		local id = Config.GetSuggestedUpgrade(data.Upgrades, data.Coins)
+		if id then
+			local level = Config.GetLevel(data.Upgrades, id)
+			local cost = Config.GetNextUpgradeCost(id, level)
+			Engine.signal(remotes.RequestUpgrade, "OnServerEvent"):Fire(player, id)
+			task.wait(0.5)
+			if Config.GetLevel(data.Upgrades, id) > level then
+				log(`bought {id} level {level + 1} for {cost}`)
+				table.insert(timeline, `{id} {level + 1} at {stamp()}`)
+				bought = true
 			end
 		end
 		if bought then
