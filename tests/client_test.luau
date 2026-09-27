@@ -188,6 +188,24 @@ check("a new player faces the Moonberry bush", Vector3.new(rootLook.X, 0, rootLo
 local camLook = workspace.CurrentCamera.CFrame.LookVector
 check("the camera looks the same way", Vector3.new(camLook.X, 0, camLook.Z).Unit:Dot(bushDir) > 0.9, camLook)
 
+print("== familiars ==")
+local Familiars = Engine.loaded(clientMain.Familiars)
+check("no familiar yet", Familiars.Get(player) == nil)
+player:SetAttribute("Familiar", 1)
+Engine.signal(player, "Attr:Familiar"):Fire()
+local cat = Familiars.Get(player)
+check("shop cat appears", cat ~= nil and cat.Name:find("ShopCat") ~= nil, cat and cat.Name)
+task.wait(1)
+local catBody = cat and cat:FindFirstChild("Body")
+check("the cat follows its owner", catBody and (catBody.CFrame.Position - root.CFrame.Position).Magnitude < 6, catBody and (catBody.CFrame.Position - root.CFrame.Position).Magnitude)
+player:SetAttribute("Familiar", 3)
+Engine.signal(player, "Attr:Familiar"):Fire()
+local dragon = Familiars.Get(player)
+check("upgrades to a baby dragon", dragon ~= nil and dragon.Name:find("BabyDragon") ~= nil and cat.Parent == nil)
+player:SetAttribute("Familiar", 0)
+Engine.signal(player, "Attr:Familiar"):Fire()
+check("familiar goes away at level 0", Familiars.Get(player) == nil and dragon.Parent == nil)
+
 print("== townsfolk ==")
 local folkFolder = workspace.Market.Town.Townsfolk
 local villagers = folkFolder:GetChildren()

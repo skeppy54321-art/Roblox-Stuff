@@ -66,6 +66,7 @@ local function onPlayerAdded(player: Player)
 	end
 
 	SocialService.PlayerJoined(player, data, plot)
+	UpgradeService.ApplyPlayer(player, data.Upgrades)
 
 	-- new players face their first job (the Moonberry bush); everyone else faces the counter
 	local function facing(): Vector3?

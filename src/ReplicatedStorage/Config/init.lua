@@ -223,9 +223,22 @@ function Config.PotionTotal(potions: { [string]: number }): number
 end
 
 -- 1234567 -> "1,234,567"
--- The upgrade the goal banner should suggest buying now, or nil: the first affordable
--- useful one; a cosmetic one only when no useful upgrade is left to work toward.
+-- The upgrade the goal banner should suggest buying now, or nil (keep playing / save up).
+-- Follows Tuning.UpgradePath; after it, the first affordable useful upgrade, and a
+-- cosmetic one only when no useful upgrade is left to work toward.
 function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
+	local seen: { [string]: number } = {}
+	for _, id in Tuning.UpgradePath do
+		seen[id] = (seen[id] or 0) + 1
+		if Config.GetLevel(upgrades, id) < seen[id] then
+			-- the next step on the path
+			local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
+			if cost and coins >= cost and Config.IsUpgradeAvailable(upgrades, id) then
+				return id
+			end
+			return nil
+		end
+	end
 	local cosmetic: string? = nil
 	local usefulLeft = false
 	for _, id in Config.UpgradeOrder do

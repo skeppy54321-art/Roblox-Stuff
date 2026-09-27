@@ -49,6 +49,25 @@ Tuning.Customers = {
 -- The bouncing helper arrow shows until this many potions have been sold.
 Tuning.GuideUntilSales = 8
 
+-- The order the goal banner suggests upgrades in. Each entry means "the next level of
+-- this upgrade" (the 2nd "Shelves" is Shelves level 2). New potions come early, then the
+-- boosts. The banner waits (you save up) until the next step is affordable; after the
+-- path, it suggests anything useful that's left, and cosmetics last.
+Tuning.UpgradePath = {
+	"BrewSpeed",
+	"StarflowerBed",
+	"Shelves",
+	"BrewSpeed",
+	"GreenThumb",
+	"CounterSpace",
+	"FrostGrotto",
+	"Shelves",
+	"BrewSpeed",
+	"GreenThumb",
+	"EmberGarden",
+	"CloudGarden",
+}
+
 Tuning.Daily = {
 	CooldownHours = 20, -- a new gift this long after the last one
 	StreakHours = 48, -- come back within this long to keep your streak going

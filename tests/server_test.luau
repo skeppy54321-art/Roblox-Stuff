@@ -256,6 +256,8 @@ do
 	local early = { BrewSpeed = 3, StarflowerBed = 1, Shelves = 2, GreenThumb = 2 }
 	check("banner suggests a useful upgrade first", C.GetSuggestedUpgrade({}, 160) == "BrewSpeed")
 	check("banner skips cosmetics while useful upgrades are left", C.GetSuggestedUpgrade(early, 160) == nil, C.GetSuggestedUpgrade(early, 160))
+	local midway = { BrewSpeed = 2, StarflowerBed = 1, Shelves = 1, GreenThumb = 1, CounterSpace = 1 }
+	check("banner saves up for the Frost Grotto before more boosts", C.GetSuggestedUpgrade(midway, 350) == nil and C.GetSuggestedUpgrade(midway, 400) == "FrostGrotto")
 	local done = { BrewSpeed = 3, StarflowerBed = 1, Shelves = 2, GreenThumb = 2, CounterSpace = 1, FrostGrotto = 1, EmberGarden = 1, CloudGarden = 1 }
 	check("banner suggests decor once nothing useful is left", C.GetSuggestedUpgrade(done, 160) == "CozyDecor")
 end
@@ -271,7 +273,7 @@ for _, junk in { 123, "Nope", {}, "BrewSpeed\0", string.rep("x", 500) } do
 end
 task.wait(0.6)
 check("junk remotes ignored", data.Coins == 20)
-data.Coins = 8000
+data.Coins = 20000
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "FrostGrotto")
 task.wait(0.5)
 check("frost grotto needs starflower first", (data.Upgrades.FrostGrotto or 0) == 0)
@@ -285,7 +287,7 @@ check("lot hidden", plot.Lots:FindFirstChild("StarflowerBedLot") == nil)
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "CloudGarden")
 task.wait(0.5)
 check("cloud garden needs the ember garden first", (data.Upgrades.CloudGarden or 0) == 0)
-for _, id in { "BrewSpeed", "BrewSpeed", "BrewSpeed", "Shelves", "Shelves", "GreenThumb", "GreenThumb", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden", "CozyDecor", "CozyDecor", "CozyDecor" } do
+for _, id in { "BrewSpeed", "BrewSpeed", "BrewSpeed", "Shelves", "Shelves", "GreenThumb", "GreenThumb", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden", "CozyDecor", "CozyDecor", "CozyDecor", "Familiar", "Familiar", "Familiar" } do
 	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, id)
 	task.wait(0.45)
 end
@@ -298,7 +300,8 @@ check("decor 3", data.Upgrades.CozyDecor == 3)
 check("ember + cloud gardens", data.Upgrades.EmberGarden == 1 and data.Upgrades.CloudGarden == 1)
 check("ember peppers planted", plot.Sources:FindFirstChild("EmberPepper") ~= nil and plot.Lots:FindFirstChild("EmberGardenLot") == nil)
 check("cloud puffs floating", plot.Sources:FindFirstChild("CloudPuff") ~= nil and plot.Lots:FindFirstChild("CloudGardenLot") == nil)
-check("coins spent exactly", data.Coins == 8000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 900 + 1600 + 150 + 500 + 1500 + 60), data.Coins)
+check("coins spent exactly", data.Coins == 20000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 900 + 1600 + 150 + 500 + 1500 + 1000 + 3000 + 8000 + 60), data.Coins)
+check("baby dragon familiar", data.Upgrades.Familiar == 3 and player:GetAttribute("Familiar") == 3, player:GetAttribute("Familiar"))
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
 task.wait(0.5)
 check("maxed upgrade not charged", data.Upgrades.BrewSpeed == 3)

@@ -17,6 +17,11 @@ type Plot = PlotService.Plot
 
 local UpgradeService = {}
 
+-- Things that follow the player rather than the shop: their familiar (clients draw it).
+function UpgradeService.ApplyPlayer(player: Player, upgrades: { [string]: number })
+	player:SetAttribute("Familiar", Config.GetLevel(upgrades, "Familiar"))
+end
+
 -- Makes the whole shop match the owner's upgrades (visuals, plants, counter spots).
 function UpgradeService.ApplyAll(plot: Plot, upgrades: { [string]: number }?)
 	PlotService.ApplyVisuals(plot, upgrades)
@@ -63,6 +68,7 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	if plot then
 		UpgradeService.ApplyAll(plot, data.Upgrades)
 	end
+	UpgradeService.ApplyPlayer(player, data.Upgrades)
 	PlayerData.Push(player)
 	Net.Cue(player, "Upgrade", { Upgrade = id, Level = level + 1 }) -- the client celebrates
 	if upgrade.Announce then

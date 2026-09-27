@@ -149,6 +149,21 @@ local Upgrades: { [string]: Upgrade } = {
 		},
 		Order = 9,
 	},
+	Familiar = {
+		Id = "Familiar",
+		DisplayName = "Magic Familiar",
+		Description = "A magical pet that floats along behind you. Everyone can see it!",
+		BaseSummary = "No familiar yet",
+		Color = Color3.fromRGB(170, 110, 230),
+		Levels = {
+			{ Cost = 1000, Summary = "Shop Cat" },
+			{ Cost = 3000, Summary = "Wise Owl" },
+			{ Cost = 8000, Summary = "Baby Dragon" },
+		},
+		Cosmetic = true,
+		Announce = "got a new magic familiar",
+		Order = 10,
+	},
 }
 
 return Upgrades

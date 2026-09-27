@@ -28,6 +28,7 @@ local GoalMarker = require(script:WaitForChild("GoalMarker"))
 local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
+local Familiars = require(script:WaitForChild("Familiars"))
 
 local StateUpdate = Remotes:WaitForChild("StateUpdate") :: RemoteEvent
 local Notify = Remotes:WaitForChild("Notify") :: RemoteEvent
@@ -65,6 +66,15 @@ Popups.Init(playerGui)
 GoalMarker.Init(playerGui)
 CustomerAnimator.Init()
 Ambience.Init(market)
+do -- pets are purely cosmetic: a failure here must never stop the game
+	local ok, err = pcall(function(): any
+		Familiars.Init()
+		return nil
+	end)
+	if not ok then
+		warn(`[ClientMain] familiars disabled: {err}`)
+	end
+end
 task.spawn(function() -- waits for the villagers to replicate; purely cosmetic, so never fatal
 	local ok, err = pcall(function(): any
 		Townsfolk.Init(market)

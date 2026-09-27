@@ -50,7 +50,7 @@ ServerScriptService
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
     children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
-              GoalMarker, CustomerAnimator, Ambience, Townsfolk
+              GoalMarker, CustomerAnimator, Ambience, Townsfolk, Familiars
 ```
 `Remotes`, `Market` and `PlotStash` are created by code; don't make them.
 
@@ -102,6 +102,7 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 | Ember Garden | 900 (needs Frost Grotto) | Grows Ember Peppers (back left corner); unlocks Fire Breath + Dance |
 | Cloud Garden | 1600 (needs Ember Garden) | Grows Cloud Puffs (back right corner); unlocks Bubble, Ghost + Rocket |
 | Cozy Decor | 150 / 500 / 1500 | String lights + flower boxes → banners + glowing sign → golden cauldron, star and sparkles |
+| Magic Familiar | 1000 / 3000 / 8000 | A pet that floats behind you, visible to everyone: Shop Cat → Wise Owl (flapping wings) → Baby Dragon (puffs fire) |
 
 **UI** (scales for phones; see `design/`)
 * Coins (count up and bounce), goal banner that always says the next step, basket with ingredients and potions, Upgrades / Recipes / Sound buttons with badges, toasts, a big celebration banner, floating "+1" / "+coins" popups.
@@ -114,6 +115,8 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 * **Market news:** when someone discovers a recipe or buys a big upgrade (Starflower Bed, Second Counter Spot, Frost Grotto), everyone else gets a violet toast.
 * **Cheer stand:** a pink heart at the front of every shop. At someone else's shop, press it to cheer: hearts burst out for everyone, the owner gets a pink toast, and the shop's cheer count goes up (saved). One cheer per shop per visit. No coins involved.
 * **Market Stars board** in the plaza (across from the welcome sign): everyone in the server ranked by coins earned, with recipes found and cheers.
+
+The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`): new potions early, boosts after, and it saves up for the next step instead of spending on whatever is cheapest. Cozy Decor and Magic Familiar are cosmetic, suggested only when nothing useful is left.
 
 **Daily gift**
 * A GIFT button (top of the right-hand column) with a badge when it's ready: once every 20 hours, 30 / 50 / 80 / 120 / 160 / 220 / 300 coins for day 1–7 of a streak (later days repeat 300). Come back within 48 hours to keep the streak. The server's clock decides; the button counts down to the next one.
