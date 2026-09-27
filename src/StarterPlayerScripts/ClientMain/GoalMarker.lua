@@ -68,9 +68,9 @@ end
 
 -- Point at `part` with a short label, or hide (nil).
 function GoalMarker.Set(part: BasePart?, text: string?)
-	if part ~= target then
+	if part and part ~= target then
 		target = part
-		billboard.Adornee = part :: any -- nil clears it
+		billboard.Adornee = part
 	end
 	billboard.Enabled = part ~= nil and part.Parent ~= nil
 	label.Text = text or ""

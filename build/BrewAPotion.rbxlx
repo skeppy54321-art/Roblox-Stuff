@@ -7449,12 +7449,20 @@ local function nextGoal(): (string, BasePart?, string?)
 end
 
 task.spawn(function()
+	local warned = false
 	while true do
-		local text, part, label = nextGoal()
-		Hud.SetGoal(text)
-		local s = state
-		local guiding = s ~= nil and (s.Stats.PotionsSold or 0) < Config.Tuning.GuideUntilSales
-		GoalMarker.Set(if guiding then part else nil, label)
+		-- one bad frame must never freeze the goal banner for the rest of the session
+		local ok, err = pcall(function()
+			local text, part, label = nextGoal()
+			Hud.SetGoal(text)
+			local s = state
+			local guiding = s ~= nil and (s.Stats.PotionsSold or 0) < Config.Tuning.GuideUntilSales
+			GoalMarker.Set(if guiding then part else nil, label)
+		end)
+		if not ok and not warned then
+			warned = true
+			warn(`[ClientMain] goal update failed: {err}`)
+		end
 		task.wait(0.25)
 	end
 end)
@@ -7804,9 +7812,11 @@ function CauldronFx.Watch(cauldron: Model?)
 	end
 	watched = cauldron
 	local hitbox = if cauldron then cauldron:FindFirstChild("Hitbox") else nil
-	bar.Adornee = (if hitbox and hitbox:IsA("BasePart") then hitbox else nil) :: any -- nil clears it
+	if hitbox and hitbox:IsA("BasePart") then
+		bar.Adornee = hitbox
+	end
 	if not cauldron then
-		return
+		return -- the bar hides itself while nothing is watched
 	end
 	lastEndTime = brewInfo(cauldron)
 	watchConnection = cauldron:GetAttributeChangedSignal("BrewEndTime"):Connect(function()
@@ -8350,9 +8360,9 @@ end
 
 -- Point at `part` with a short label, or hide (nil).
 function GoalMarker.Set(part: BasePart?, text: string?)
-	if part ~= target then
+	if part and part ~= target then
 		target = part
-		billboard.Adornee = part :: any -- nil clears it
+		billboard.Adornee = part
 	end
 	billboard.Enabled = part ~= nil and part.Parent ~= nil
 	label.Text = text or ""

@@ -1,0 +1,343 @@
+--!nocheck
+-- server_test.luau: boots Brew a Potion's server from the built place file and plays a session.
+-- Usage: lune run server_test.luau <place.rbxlx> <out_dir>
+
+local roblox = require("@lune/roblox")
+local fs = require("@lune/fs")
+local task = require("@lune/task")
+local serde = require("@lune/serde")
+local process = require("@lune/process")
+local Engine = require("./engine")
+
+local PLACE, OUT = process.args[1], process.args[2]
+local game = roblox.deserializePlace(fs.readFile(PLACE))
+Engine.game = game
+Engine.install(game, { client = false })
+
+local Players = game:GetService("Players")
+local workspace = game:GetService("Workspace")
+local Vector3, CFrame = roblox.Vector3, roblox.CFrame
+
+local passed, failed = 0, 0
+local function check(name, condition, detail)
+	if condition then
+		passed += 1
+		print("  ok   " .. name)
+	else
+		failed += 1
+		print("  FAIL " .. name .. (if detail then "  (" .. tostring(detail) .. ")" else ""))
+	end
+end
+local function waitFor(seconds, predicate)
+	local deadline = os.clock() + seconds
+	while os.clock() < deadline do
+		local ok, value = pcall(predicate)
+		if ok and value then
+			return value
+		end
+		task.wait(0.05)
+	end
+	return nil
+end
+local function remoteCount(name, method)
+	local n = 0
+	for _, entry in Engine.log do
+		if entry.remote == name and (method == nil or entry.method == method) then
+			n += 1
+		end
+	end
+	return n
+end
+local function lastRemote(name)
+	for i = #Engine.log, 1, -1 do
+		if Engine.log[i].remote == name then
+			return Engine.log[i]
+		end
+	end
+	return nil
+end
+
+-- Heartbeat for ProfileStore's autosave loop, and Position syncing for new/moved parts
+task.spawn(function()
+	local rs = game:GetService("RunService")
+	local elapsed = 0
+	while true do
+		local dt = task.wait(1 / 30)
+		Engine.signal(rs, "Heartbeat"):Fire(dt)
+		elapsed += dt
+		if elapsed > 0.1 then
+			elapsed = 0
+			Engine.syncPositions(workspace)
+		end
+	end
+end)
+
+print("== boot ==")
+Engine.run(game:GetService("ServerScriptService"):FindFirstChild("Main"))
+local market = waitFor(5, function()
+	return workspace:FindFirstChild("Market")
+end)
+check("Market folder exists", market ~= nil)
+task.wait(0.5)
+local plots = {}
+for _, child in market:GetChildren() do
+	if child:GetAttribute("IsPlot") then
+		table.insert(plots, child)
+	end
+end
+check("6 plots built", #plots == 6, #plots)
+Engine.syncPositions(workspace)
+local town = market:FindFirstChild("Town")
+check("town built", town ~= nil)
+check("spawn exists", workspace:FindFirstChild("MarketSpawn") ~= nil)
+local lighting = game:GetService("Lighting")
+check("atmosphere set", lighting:FindFirstChildOfClass("Atmosphere") ~= nil)
+check("clock time set", math.abs(lighting.ClockTime - 17.3) < 0.01, lighting.ClockTime)
+
+-- world dump for the 3D preview
+local parts, lights = Engine.dumpParts(workspace)
+print(`  parts in world: {#parts}, lights: {#lights}`)
+check("part count reasonable (< 6000)", #parts < 6000, #parts)
+fs.writeFile(OUT .. "/parts.json", serde.encode("json", { parts = parts, lights = lights }))
+
+print("== join ==")
+local modules = game:GetService("ServerScriptService"):FindFirstChild("Modules")
+local function newPlayer(name, userId)
+	local player = roblox.Instance.new("Player")
+	player.Name = name
+	player.UserId = userId
+	player.DisplayName = name
+	player.Parent = Players
+	Engine.signal(Players, "PlayerAdded"):Fire(player)
+	local character = roblox.Instance.new("Model")
+	character.Name = name
+	local root = roblox.Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	Engine.setCFrame(root, CFrame.new(0, 3, -20))
+	root.Parent = character
+	character.PrimaryPart = root
+	character.Parent = workspace
+	player.Character = character
+	Engine.signal(player, "CharacterAdded"):Fire(character)
+	return player, root
+end
+
+local player, root = newPlayer("Tester", 1001)
+local PlayerData = waitFor(3, function()
+	return Engine.loaded(modules:FindFirstChild("PlayerData"))
+end)
+local data = waitFor(10, function()
+	return PlayerData.Get(player)
+end)
+check("profile loaded", data ~= nil)
+if not data then
+	print("cannot continue without data")
+	process.exit(1)
+end
+check("save mode attribute", player:GetAttribute("SaveMode") ~= nil, player:GetAttribute("SaveMode"))
+local plotName = waitFor(2, function()
+	return player:GetAttribute("PlotName")
+end)
+check("got a plot", plotName ~= nil)
+local plot = market:FindFirstChild(plotName)
+check("sign shows owner", (function()
+	for _, d in plot:FindFirstChild("Sign"):GetDescendants() do
+		if d:IsA("TextLabel") then
+			return d.Text == "Tester's Potions"
+		end
+	end
+	return false
+end)())
+task.wait(0.3)
+check("moved into shop", (root.CFrame.Position - plot:FindFirstChild("SpawnPoint").CFrame.Position).Magnitude < 5, root.CFrame.Position)
+check("starflower locked (not in shop)", plot.Sources:FindFirstChild("Starflower") == nil)
+check("starflower lot shown", plot.Lots:FindFirstChild("StarflowerBedLot") ~= nil)
+check("state pushed to client", remoteCount("StateUpdate") > 0)
+
+local function goTo(part)
+	Engine.setCFrame(root, CFrame.new(part.CFrame.Position + Vector3.new(0, 0, 3)))
+end
+local function trigger(prompt, who)
+	Engine.signal(prompt, "Triggered"):Fire(who or player)
+	task.wait(0.35) -- collect cooldown is 0.25s
+end
+
+print("== collect ==")
+local bush = plot.Sources.Moonberry
+goTo(bush.Hitbox)
+trigger(bush.Hitbox.CollectPrompt)
+check("collected a moonberry", (data.Ingredients.Moonberry or 0) == 1, data.Ingredients.Moonberry)
+check("prompt text shows charges", bush.Hitbox.CollectPrompt.ObjectText:find("2/3") ~= nil, bush.Hitbox.CollectPrompt.ObjectText)
+check("a berry disappeared", bush.Charge3.Transparency == 1 and bush.Charge1.Transparency == 0)
+check("collect cue sent", remoteCount("Cue") > 0)
+local shrooms = plot.Sources.Glowshroom
+goTo(shrooms.Hitbox)
+trigger(shrooms.Hitbox.CollectPrompt)
+check("collected a glowshroom", (data.Ingredients.Glowshroom or 0) == 1)
+-- too far away
+Engine.setCFrame(root, CFrame.new(0, 5, 0))
+trigger(shrooms.Hitbox.CollectPrompt)
+check("far away collect rejected", data.Ingredients.Glowshroom == 1)
+-- another player's prompt
+local stranger = roblox.Instance.new("Player")
+stranger.Name = "Stranger"
+stranger.UserId = 2002
+trigger(shrooms.Hitbox.CollectPrompt, stranger)
+check("stranger can't collect", data.Ingredients.Glowshroom == 1)
+
+print("== brew ==")
+local cauldron = plot.Cauldron
+goTo(cauldron.Hitbox)
+task.wait(0.3)
+check("suggested recipe set", cauldron:GetAttribute("SuggestedRecipe") == "GiantHead", cauldron:GetAttribute("SuggestedRecipe"))
+check("prompt names suggestion", cauldron.Hitbox.BrewPrompt.ObjectText == "Giant Head Potion", cauldron.Hitbox.BrewPrompt.ObjectText)
+trigger(cauldron.Hitbox.BrewPrompt)
+check("brewing started", cauldron:GetAttribute("BrewRecipe") == "GiantHead")
+check("ingredients taken", data.Ingredients.Moonberry == 0 and data.Ingredients.Glowshroom == 0)
+check("liquid tinted", cauldron.Liquid.Color == roblox.Color3.fromRGB(255, 110, 200))
+local endBefore = cauldron:GetAttribute("BrewEndTime")
+trigger(cauldron.Hitbox.BrewPrompt)
+check("stir moves end time earlier", cauldron:GetAttribute("BrewEndTime") < endBefore)
+local brewed = waitFor(7, function()
+	return (data.Potions.GiantHead or 0) == 1
+end)
+check("potion brewed", brewed)
+check("discovered + bonus", data.Discovered.GiantHead == true and data.Coins == 10, data.Coins)
+check("cauldron idle again", cauldron:GetAttribute("BrewRecipe") == "")
+
+print("== customer ==")
+local customer = waitFor(8, function()
+	local c = plot:FindFirstChild("Customer")
+	return c and c:GetAttribute("Phase") == "Waiting" and c
+end)
+check("customer arrived and waits", customer ~= nil)
+if customer then
+	check("first customer wants Giant Head", customer:GetAttribute("Wants") == "GiantHead", customer:GetAttribute("Wants"))
+	check("walk-from on the plaza", typeof(customer:GetAttribute("WalkFrom")) == "Vector3")
+	local sellPrompt = customer.Torso:FindFirstChild("SellPrompt")
+	check("sell prompt exists", sellPrompt ~= nil)
+	goTo(customer.Torso)
+	Engine.signal(sellPrompt, "Triggered"):Fire(player)
+	Engine.signal(sellPrompt, "Triggered"):Fire(player) -- double press
+	task.wait(0.4)
+	check("sold once for 10", data.Coins == 20 and data.Stats.PotionsSold == 1, `coins {data.Coins} sold {data.Stats.PotionsSold}`)
+	check("effect fired to all", remoteCount("PlayEffect", "FireAllClients") == 1)
+	check("customer reacting", customer:GetAttribute("Phase") == "Reacting")
+	local left = waitFor(9, function()
+		return customer.Parent == nil
+	end)
+	check("customer left and was removed", left)
+	local next = waitFor(6, function()
+		return plot:FindFirstChild("Customer")
+	end)
+	check("next customer came", next ~= nil)
+end
+
+print("== upgrades ==")
+local RequestUpgrade = game:GetService("ReplicatedStorage").Remotes.RequestUpgrade
+local RequestBrew = game:GetService("ReplicatedStorage").Remotes.RequestBrew
+Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
+task.wait(0.5)
+check("can't afford BrewSpeed at 20", (data.Upgrades.BrewSpeed or 0) == 0 and data.Coins == 20)
+-- junk from a hacked client
+for _, junk in { 123, "Nope", {}, "BrewSpeed\0", string.rep("x", 500) } do
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, junk)
+	Engine.signal(RequestBrew, "OnServerEvent"):Fire(player, junk)
+end
+task.wait(0.6)
+check("junk remotes ignored", data.Coins == 20)
+data.Coins = 5000
+Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "FrostGrotto")
+task.wait(0.5)
+check("frost grotto needs starflower first", (data.Upgrades.FrostGrotto or 0) == 0)
+local lot = plot.Lots:FindFirstChild("StarflowerBedLot")
+goTo(lot.Hitbox)
+trigger(lot.Hitbox.UnlockPrompt)
+task.wait(0.2)
+check("bought starflower bed from the lot", data.Upgrades.StarflowerBed == 1)
+check("starflower planted", plot.Sources:FindFirstChild("Starflower") ~= nil)
+check("lot hidden", plot.Lots:FindFirstChild("StarflowerBedLot") == nil)
+for _, id in { "BrewSpeed", "BrewSpeed", "BrewSpeed", "Shelves", "Shelves", "GreenThumb", "GreenThumb", "CounterSpace", "FrostGrotto", "CozyDecor", "CozyDecor", "CozyDecor" } do
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, id)
+	task.wait(0.45)
+end
+check("brew speed maxed", data.Upgrades.BrewSpeed == 3, data.Upgrades.BrewSpeed)
+check("shelves 2", data.Upgrades.Shelves == 2)
+check("green thumb 2", data.Upgrades.GreenThumb == 2)
+check("counter space", data.Upgrades.CounterSpace == 1)
+check("frost grotto", data.Upgrades.FrostGrotto == 1)
+check("decor 3", data.Upgrades.CozyDecor == 3)
+check("coins spent exactly", data.Coins == 5000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 150 + 500 + 1500 + 60), data.Coins)
+Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
+task.wait(0.5)
+check("maxed upgrade not charged", data.Upgrades.BrewSpeed == 3)
+check("shelf 3 visible", plot:FindFirstChild("Shelf3") ~= nil)
+check("golden decor visible", plot:FindFirstChild("DecorGold") ~= nil)
+check("golden cauldron", cauldron.Belly.Material == roblox.Enum.Material.Foil)
+check("fire color level 3", cauldron:FindFirstChild("Flame").Color == roblox.Color3.fromRGB(90, 255, 140))
+check("green thumb gives 5 charges", plot.Sources.Moonberry.Hitbox.CollectPrompt.ObjectText:find("/5") ~= nil, plot.Sources.Moonberry.Hitbox.CollectPrompt.ObjectText)
+local two = waitFor(8, function()
+	local n = 0
+	for _, c in plot:GetChildren() do
+		if c.Name == "Customer" then
+			n += 1
+		end
+	end
+	return n >= 2
+end)
+check("second counter spot brings a 2nd customer", two)
+
+do
+	local upgradedParts, upgradedLights = Engine.dumpParts(workspace)
+	fs.writeFile(OUT .. "/parts_upgraded.json", serde.encode("json", { parts = upgradedParts, lights = upgradedLights, plot = plotName }))
+	print(`  upgraded world dumped ({#upgradedParts} parts), owner plot {plotName}`)
+end
+
+print("== brew a specific recipe ==")
+data.Ingredients.Starflower = 1
+data.Ingredients.Glowshroom = 1
+goTo(cauldron.Hitbox)
+Engine.signal(RequestBrew, "OnServerEvent"):Fire(player, "Floaty")
+task.wait(0.4)
+check("floaty brewing", cauldron:GetAttribute("BrewRecipe") == "Floaty")
+local floatyTime = cauldron:GetAttribute("BrewDuration")
+check("floaty time uses level 3 speed", math.abs(floatyTime - 3) < 0.05, floatyTime)
+Engine.signal(RequestBrew, "OnServerEvent"):Fire(player, "GiantHead")
+task.wait(0.4)
+check("can't start a second brew", cauldron:GetAttribute("BrewRecipe") == "Floaty")
+
+print("== leave mid-brew ==")
+local floatyBefore = data.Potions.Floaty or 0
+Engine.signal(Players, "PlayerRemoving"):Fire(player)
+task.wait(0.3)
+player.Parent = nil
+check("potion kept on leave", (data.Potions.Floaty or 0) == floatyBefore + 1, data.Potions.Floaty)
+check("plot released", plot:GetAttribute("OwnerUserId") == 0)
+check("customers removed", plot:FindFirstChild("Customer") == nil)
+check("plot visuals reset", plot.Sources:FindFirstChild("Starflower") == nil and plot:FindFirstChild("DecorGold") == nil)
+check("cauldron back to black", cauldron.Belly.Material == roblox.Enum.Material.Metal)
+local savedCoins = data.Coins
+task.wait(1.5)
+
+print("== rejoin (mock save) ==")
+local player2 = newPlayer("Tester", 1001)
+local data2 = waitFor(10, function()
+	return PlayerData.Get(player2)
+end)
+check("profile reloaded", data2 ~= nil)
+if data2 then
+	check("coins restored", data2.Coins == savedCoins, `{data2.Coins} vs {savedCoins}`)
+	check("upgrades restored", data2.Upgrades.CozyDecor == 3)
+	check("discoveries restored", data2.Discovered.GiantHead == true)
+	local plot2 = market:FindFirstChild(player2:GetAttribute("PlotName"))
+	task.wait(0.3)
+	check("upgrades shown again", plot2 and plot2:FindFirstChild("DecorGold") ~= nil)
+end
+
+print("")
+print(`== RESULT: {passed} passed, {failed} failed, {#Engine.problems} problems, {#Engine.warnings} warnings ==`)
+for _, p in Engine.problems do
+	print("problem: " .. p)
+end
+process.exit(if failed == 0 and #Engine.problems == 0 then 0 else 1)

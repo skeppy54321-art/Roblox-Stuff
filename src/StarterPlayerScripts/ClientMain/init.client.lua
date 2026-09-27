@@ -305,12 +305,20 @@ local function nextGoal(): (string, BasePart?, string?)
 end
 
 task.spawn(function()
+	local warned = false
 	while true do
-		local text, part, label = nextGoal()
-		Hud.SetGoal(text)
-		local s = state
-		local guiding = s ~= nil and (s.Stats.PotionsSold or 0) < Config.Tuning.GuideUntilSales
-		GoalMarker.Set(if guiding then part else nil, label)
+		-- one bad frame must never freeze the goal banner for the rest of the session
+		local ok, err = pcall(function()
+			local text, part, label = nextGoal()
+			Hud.SetGoal(text)
+			local s = state
+			local guiding = s ~= nil and (s.Stats.PotionsSold or 0) < Config.Tuning.GuideUntilSales
+			GoalMarker.Set(if guiding then part else nil, label)
+		end)
+		if not ok and not warned then
+			warned = true
+			warn(`[ClientMain] goal update failed: {err}`)
+		end
 		task.wait(0.25)
 	end
 end)

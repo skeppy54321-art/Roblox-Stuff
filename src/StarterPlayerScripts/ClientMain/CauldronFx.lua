@@ -100,9 +100,11 @@ function CauldronFx.Watch(cauldron: Model?)
 	end
 	watched = cauldron
 	local hitbox = if cauldron then cauldron:FindFirstChild("Hitbox") else nil
-	bar.Adornee = (if hitbox and hitbox:IsA("BasePart") then hitbox else nil) :: any -- nil clears it
+	if hitbox and hitbox:IsA("BasePart") then
+		bar.Adornee = hitbox
+	end
 	if not cauldron then
-		return
+		return -- the bar hides itself while nothing is watched
 	end
 	lastEndTime = brewInfo(cauldron)
 	watchConnection = cauldron:GetAttributeChangedSignal("BrewEndTime"):Connect(function()
