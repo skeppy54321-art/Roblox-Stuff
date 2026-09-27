@@ -595,4 +595,11 @@ task.spawn(function()
 	end
 	local mode = player:GetAttribute("SaveMode")
 	Hud.SetSaveMode(if typeof(mode) == "string" then mode else nil)
+	-- a brand-new shopkeeper gets a short welcome (it never blocks anything)
+	local s = state
+	if s and (s.Stats.PotionsBrewed or 0) == 0 and (s.Stats.PotionsSold or 0) == 0 and myPlot() then
+		task.wait(1)
+		Sfx.Play("Open")
+		Hud.Celebrate("WELCOME!", "This potion shop is all yours!", P.Gold)
+	end
 end)

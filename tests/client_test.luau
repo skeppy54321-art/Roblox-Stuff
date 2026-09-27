@@ -126,6 +126,11 @@ local scale = uiRoot and uiRoot:FindFirstChildOfClass("UIScale")
 check("phone UI scale ~0.7", scale and math.abs(scale.Scale - 0.696) < 0.02, scale and scale.Scale)
 check("brew bar billboard", playerGui:FindFirstChild("BrewBar") ~= nil)
 check("goal marker billboard", playerGui:FindFirstChild("GoalMarker") ~= nil)
+local welcomed = waitFor(3, function()
+	local title = uiRoot.Celebration:FindFirstChild("Title")
+	return uiRoot.Celebration.Visible and title and title.Text == "WELCOME!"
+end)
+check("a new player is welcomed", welcomed)
 task.wait(0.6)
 
 print("== sounds ==")
