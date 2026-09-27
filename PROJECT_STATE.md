@@ -22,7 +22,7 @@ Nothing below counts as "working" until it has been played in Studio.
 
 ## Play it (fastest way)
 
-1. Download `build/BrewAPotion.rbxlx` from this branch on GitHub (open the file, then **Download raw file**).
+1. Download `build/BrewAPotion.rbxlx` from this branch on GitHub (open the file, then **Download raw file**). You need a Windows PC or Mac: Studio doesn't run on phones.
 2. Roblox Studio > **File > Open from File** > pick it.
 3. Press **Play**. Output should say `[Brew a Potion] Server started`.
 
@@ -41,16 +41,16 @@ The place file already has **StreamingEnabled off** and **Lighting > Technology 
 ReplicatedStorage
   Config (ModuleScript = Config/init.lua)  children: Tuning, Ingredients, Recipes, Upgrades, Palette, Sounds, World
   Effects (ModuleScript = Effects/init.lua) children: BigHead, Rainbow, Tiny, Floaty, Twirl, Frosty, Froggy,
-                                            FireBreath, Dance, Bubble, Ghost, Rocket
+                                            FireBreath, Dance, Bubble, Ghost, Rocket, Starlight
 ServerScriptService
   Main (Script)
   Modules (Folder): Net, PlayerData, ProfileStore, Guard, Kit, ShopBuilder, CustomerBuilder, MarketBuilder,
                     WorldService, PlotService, IngredientService, BrewService, CustomerService, UpgradeService,
-                    SocialService, GiftService, FameService, BoardKit
+                    SocialService, GiftService, FameService, QuestService, BoardKit
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
-    children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
-              GoalMarker, CustomerAnimator, Ambience, Townsfolk, Familiars
+    children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, QuestsPanel, CauldronMenu, CauldronFx, PromptUi,
+              Popups, GoalMarker, CustomerAnimator, Ambience, DayCycle, Butterflies, Townsfolk, Familiars, Juice
 ```
 `Remotes`, `Market` and `PlotStash` are created by code; don't make them.
 
