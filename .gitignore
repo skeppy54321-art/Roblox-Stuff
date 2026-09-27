@@ -1,0 +1,31 @@
+# Roblox place files (build output / local saves)
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.lock
+
+# Rojo / tooling
+sourcemap.json
+/Packages
+/tools/bin
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# selene generates this from the Roblox API (run: selene generate-roblox-std)
+roblox.yml
+
+# The built place is committed so it can be opened in Studio without Rojo
+!build/BrewAPotion.rbxlx
+
+# test + preview tool output
+/out
+tests/preview/node_modules
+tests/preview/*.json
+!tests/preview/package.json
+tests/preview/shots
+tests/preview/ui_*.json
+tests/preview/bg-*.png

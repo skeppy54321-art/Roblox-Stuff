@@ -1,0 +1,2 @@
+std = "roblox"
+exclude = ["src/ServerScriptService/Modules/ProfileStore.luau"]

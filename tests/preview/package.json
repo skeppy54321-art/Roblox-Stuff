@@ -1,0 +1,10 @@
+{
+  "name": "brew-a-potion-preview",
+  "private": true,
+  "type": "module",
+  "description": "Renders the headless test's world dump (parts.json) in 3D with three.js and screenshots it.",
+  "dependencies": {
+    "playwright": "1.56.1",
+    "three": "0.170.0"
+  }
+}
