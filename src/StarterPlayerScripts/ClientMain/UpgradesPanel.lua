@@ -30,7 +30,14 @@ UpgradesPanel.OnClose = nil :: (() -> ())?
 local panel: Frame
 local cards: { [string]: Card } = {}
 
-type RebirthCard = { Frame: Frame, Count: TextLabel, Summary: TextLabel, Button: Frame, Face: TextButton }
+type RebirthCard = {
+	Frame: Frame,
+	Count: TextLabel,
+	Description: TextLabel,
+	Summary: TextLabel,
+	Button: Frame,
+	Face: TextButton,
+}
 local rebirthCard: RebirthCard
 local rebirthReady = false
 local confirmUntil = 0
@@ -38,7 +45,6 @@ local lastState: State? = nil
 local swatches: { UIStroke } = {}
 
 local function buildRebirthCard(list: Instance)
-	local R = Config.Tuning.Rebirth
 	local card = Ui.new("Frame", {
 		Name = "Rebirth",
 		Size = UDim2.new(1, 0, 0, 118),
@@ -70,14 +76,14 @@ local function buildRebirthCard(list: Instance)
 		ZIndex = 11,
 		Parent = card,
 	}, 24)
-	Ui.label({
+	local description = Ui.label({
 		Position = UDim2.fromOffset(90, 38),
 		Size = UDim2.new(1, -250, 0, 36),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
 		TextColor3 = P.PanelLight,
-		Text = `Start your shop over for +{math.floor(R.CoinBonus * 100)}% coins from every sale, forever. You keep your familiar, decor and recipes.`,
+		Text = "",
 		ZIndex = 11,
 		Parent = card,
 	}, 15)
@@ -125,7 +131,8 @@ local function buildRebirthCard(list: Instance)
 			end
 		end)
 	end)
-	rebirthCard = { Frame = card, Count = count, Summary = summary, Button = button, Face = face }
+	rebirthCard =
+		{ Frame = card, Count = count, Description = description, Summary = summary, Button = button, Face = face }
 end
 
 -- Shop Colors: six two-tone swatches; tap one to repaint your shop (free).
@@ -345,6 +352,10 @@ function UpgradesPanel.SetState(state: State)
 	local ready, reason = Config.CanRebirth(state)
 	rebirthReady = ready
 	rebirthCard.Count.Text = tostring(rebirths)
+	local bonus = math.floor(Config.Tuning.Rebirth.CoinBonus * 100)
+	rebirthCard.Description.Text = if rebirths == 0
+		then `Start over for +{bonus}% coins from every sale, forever, and unlock the Star Well! You keep your familiar, decor and recipes.`
+		else `Start over for another +{bonus}% coins from every sale, forever. You keep your familiar, decor and recipes.`
 	local multNow, multNext = Config.GetCoinMultiplier(rebirths), Config.GetCoinMultiplier(rebirths + 1)
 	rebirthCard.Summary.Text = `Coins x{string.format("%g", multNow)}  ->  x{string.format("%g", multNext)}`
 	rebirthCard.Frame.LayoutOrder = if ready then 0 else 200 -- on top when you can do it
@@ -373,9 +384,12 @@ function UpgradesPanel.SetState(state: State)
 		if not nextEntry then
 			card.BuyFace.Text = "MAXED"
 			Ui.setButtonColor(card.Buy, P.Gold, Color3.fromRGB(190, 140, 30))
-		elseif not Config.IsUpgradeAvailable(state.Upgrades, upgradeId) then
+		elseif not Config.IsUpgradeAvailable(state.Upgrades, upgradeId, state.Rebirths) then
 			local required = Config.Upgrades[upgrade.Requires or ""]
-			card.BuyFace.Text = if required then `Needs {required.DisplayName}` else "Locked"
+			card.BuyFace.Text = if Config.NeedsRebirth(upgradeId, state.Rebirths)
+				then "Needs a Rebirth"
+				elseif required then `Needs {required.DisplayName}`
+				else "Locked"
 			Ui.setButtonColor(card.Buy, P.ButtonOff, P.ButtonOffDark)
 		else
 			card.BuyFace.Text = `{Config.FormatNumber(nextEntry.Cost)} coins`

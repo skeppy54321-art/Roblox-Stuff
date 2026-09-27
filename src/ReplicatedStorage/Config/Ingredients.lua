@@ -59,6 +59,14 @@ local Ingredients: { [string]: Ingredient } = {
 		UnlockedBy = "CloudGarden",
 		Order = 6,
 	},
+	Stardust = { -- only after a rebirth (the Star Well needs one)
+		Id = "Stardust",
+		DisplayName = "Stardust",
+		Color = Color3.fromRGB(150, 165, 255),
+		Where = "the star well",
+		UnlockedBy = "StarWell",
+		Order = 7,
+	},
 }
 
 return Ingredients

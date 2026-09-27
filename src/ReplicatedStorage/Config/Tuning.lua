@@ -69,6 +69,7 @@ Tuning.UpgradePath = {
 	"BrewSpeed",
 	"GreenThumb",
 	"CounterSpace",
+	"StarWell", -- (only after a rebirth; skipped before)
 	"FrostGrotto",
 	"Shelves",
 	"BrewSpeed",

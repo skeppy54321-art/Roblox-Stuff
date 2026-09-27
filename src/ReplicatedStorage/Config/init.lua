@@ -100,10 +100,17 @@ function Config.GetNextUpgradeCost(upgradeId: string, level: number): number?
 	return if nextLevel then nextLevel.Cost else nil
 end
 
--- Has the upgrade this one depends on been bought?
-function Config.IsUpgradeAvailable(upgrades: Levels, upgradeId: string): boolean
+-- Only for players who have rebirthed enough (the Star Well)?
+function Config.NeedsRebirth(upgradeId: string, rebirths: number?): boolean
 	local upgrade = Upgrades[upgradeId]
-	if not upgrade then
+	return upgrade ~= nil and upgrade.MinRebirths ~= nil and (rebirths or 0) < upgrade.MinRebirths
+end
+
+-- Can this upgrade be bought now: has the upgrade it depends on been bought, and (for
+-- rebirth-only upgrades) has the player rebirthed enough?
+function Config.IsUpgradeAvailable(upgrades: Levels, upgradeId: string, rebirths: number?): boolean
+	local upgrade = Upgrades[upgradeId]
+	if not upgrade or Config.NeedsRebirth(upgradeId, rebirths) then
 		return false
 	end
 	return upgrade.Requires == nil or Config.GetLevel(upgrades, upgrade.Requires) >= 1
@@ -228,14 +235,14 @@ end
 -- The upgrade the goal banner should suggest buying now, or nil (keep playing / save up).
 -- Follows Tuning.UpgradePath; after it, the first affordable useful upgrade, and a
 -- cosmetic one only when no useful upgrade is left to work toward.
-function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
+function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number, rebirths: number?): string?
 	local seen: { [string]: number } = {}
 	for _, id in Tuning.UpgradePath do
 		seen[id] = (seen[id] or 0) + 1
-		if Config.GetLevel(upgrades, id) < seen[id] then
+		if Config.GetLevel(upgrades, id) < seen[id] and not Config.NeedsRebirth(id, rebirths) then
 			-- the next step on the path
 			local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
-			if cost and coins >= cost and Config.IsUpgradeAvailable(upgrades, id) then
+			if cost and coins >= cost and Config.IsUpgradeAvailable(upgrades, id, rebirths) then
 				return id
 			end
 			return nil
@@ -245,7 +252,7 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 	local usefulLeft = false
 	for _, id in Config.UpgradeOrder do
 		local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
-		if cost and Config.IsUpgradeAvailable(upgrades, id) then
+		if cost and Config.IsUpgradeAvailable(upgrades, id, rebirths) then
 			local isCosmetic = Upgrades[id].Cosmetic == true
 			if not isCosmetic then
 				usefulLeft = true

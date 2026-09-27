@@ -456,7 +456,7 @@ local function nextGoal(): (string, BasePart?, string?)
 	end
 	-- something worth buying (after your first sale)
 	if (s.Stats.PotionsSold or 0) > 0 then
-		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins)
+		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins, s.Rebirths)
 		if upgradeId then
 			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end

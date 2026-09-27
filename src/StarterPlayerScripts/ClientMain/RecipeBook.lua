@@ -179,8 +179,12 @@ function RecipeBook.SetState(state: State)
 		local seconds = Config.GetBrewSeconds(state.Upgrades, recipeId)
 		card.Info.Text = `{recipe.SellPrice} coins\n{seconds}s brew`
 		if not Config.IsRecipeUnlocked(state.Upgrades, recipeId) then
-			local unlocker = Config.Upgrades[Config.GetRecipeUnlocker(recipeId) or ""]
-			card.Tag.Text = if unlocker then `Needs {unlocker.DisplayName}` else "Locked"
+			local unlockerId = Config.GetRecipeUnlocker(recipeId) or ""
+			local unlocker = Config.Upgrades[unlockerId]
+			card.Tag.Text = if Config.NeedsRebirth(unlockerId, state.Rebirths)
+				then "Needs a Rebirth"
+				elseif unlocker then `Needs {unlocker.DisplayName}`
+				else "Locked"
 			card.Tag.BackgroundColor3 = P.ButtonOff
 			card.Shade.Visible = true
 		elseif state.Discovered[recipeId] then

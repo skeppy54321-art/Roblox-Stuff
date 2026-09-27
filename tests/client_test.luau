@@ -478,7 +478,7 @@ local CustomerBuilder = Engine.loaded(game:GetService("ServerScriptService").Mod
 local Effects = Engine.require(game:GetService("ReplicatedStorage"):FindFirstChild("Effects"))
 local warningsBefore = #Engine.warnings
 local models = {}
-for i, name in { "BigHead", "Rainbow", "Tiny", "Floaty", "Twirl", "Frosty", "Froggy", "FireBreath", "Dance", "Bubble", "Ghost", "Rocket" } do
+for i, name in { "BigHead", "Rainbow", "Tiny", "Floaty", "Twirl", "Frosty", "Froggy", "FireBreath", "Dance", "Bubble", "Ghost", "Rocket", "Starlight" } do
 	local model = CustomerBuilder.Build(CFrame.new(i * 8, 0.3, -10), { Vip = i % 2 == 0, WantsText = "test", WantsColor = roblox.Color3.new(1, 0, 0) })
 	model.Parent = workspace
 	models[name] = model
@@ -501,6 +501,7 @@ if process.args[2] then -- mid-effect poses for tests/preview (views fire, dance
 		dance = { pos = { 73.5, 7.5, -0.5 }, look = { 72, 6, -10 }, fov = 55 },
 		bubble = { pos = { 81.5, 8.5, -0.5 }, look = { 80, 7.5, -10 }, fov = 55 },
 		ghost = { pos = { 89.5, 6.8, -2.5 }, look = { 88, 5.6, -10 }, fov = 50 },
+		starlight = { pos = { 105.5, 7, -1.5 }, look = { 104, 5.4, -10 }, fov = 55 },
 	}
 	fs.writeFile(process.args[2] .. "/parts_effects.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
 end
@@ -534,6 +535,7 @@ check("dance: arms back down", not armUp(models.Dance))
 check("bubble popped and landed", workspace:FindFirstChild("SoapBubble") == nil and landed("Bubble"))
 check("ghost solid again", models.Ghost.Torso.Transparency == 0 and landed("Ghost"))
 check("rocket came back down", workspace:FindFirstChild("Parachute") == nil and landed("Rocket"))
+check("starlight: stars gone, colors back, landed", models.Starlight:FindFirstChild("OrbitStar") == nil and models.Starlight.Torso.Material ~= Enum.Material.Neon and landed("Starlight"))
 
 print("== daily gift ==")
 local giftFace = find(uiRoot, "SideButtons.GiftButton.Face")

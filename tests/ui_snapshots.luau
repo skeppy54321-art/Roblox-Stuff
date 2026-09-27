@@ -129,7 +129,7 @@ data.Upgrades.BrewSpeed = 1
 data.Discovered.GiantHead = true
 data.Discovered.Rainbow = true
 data.Stats.PotionsSold = 3
-UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades)
+UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades, data.Rebirths)
 PlayerData.Push(player)
 goTo(plot.Cauldron.Hitbox)
 waitFor(2, function()
@@ -148,6 +148,12 @@ do -- the Shop Colors card sits far down the list; lift it to the top for its ow
 	colors.LayoutOrder = -10
 	snap("colors")
 	colors.LayoutOrder = order
+	-- ...and the Star Well card, locked until a rebirth
+	local well = ui.UpgradesPanel.Body.List.StarWell
+	local wellOrder = well.LayoutOrder
+	well.LayoutOrder = -10
+	snap("starwell")
+	well.LayoutOrder = wellOrder
 end
 
 Engine.signal(ui.SideButtons.RecipesButton.Face, "Activated"):Fire()
@@ -162,9 +168,11 @@ Net.Cue(player, "Discover", { Recipe = "Floaty", Bonus = 24 })
 task.wait(0.1)
 snap("celebrate")
 
--- late game: everything bought, all six ingredients, a full shelf of different potions
+-- late game after a rebirth: everything bought (the Star Well too), all seven ingredients,
+-- a full shelf of different potions
 task.wait(3) -- let the celebration banner finish
-for _, id in { "StarflowerBed", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden" } do
+data.Rebirths = 1
+for _, id in { "StarflowerBed", "CounterSpace", "FrostGrotto", "EmberGarden", "CloudGarden", "StarWell" } do
 	data.Upgrades[id] = 1
 end
 data.Upgrades.BrewSpeed = 3
@@ -172,15 +180,15 @@ data.Upgrades.Shelves = 2
 data.Upgrades.GreenThumb = 2
 data.Upgrades.CozyDecor = 3
 data.Coins = 12480
-for _, id in { "Moonberry", "Glowshroom", "Starflower", "FrostCrystal", "EmberPepper", "CloudPuff" } do
+for _, id in { "Moonberry", "Glowshroom", "Starflower", "FrostCrystal", "EmberPepper", "CloudPuff", "Stardust" } do
 	data.Ingredients[id] = 4
 end
-data.Potions = { FireBreath = 2, Dance = 1, Bubble = 2, Ghost = 1, Rocket = 1, Froggy = 2, Frosty = 1 }
+data.Potions = { FireBreath = 2, Dance = 1, Bubble = 2, Ghost = 1, Rocket = 1, Froggy = 2, Starlight = 1 }
 for _, id in { "GiantHead", "Rainbow", "Tiny", "Floaty", "Twirly", "Frosty", "Froggy", "FireBreath", "Dance", "Bubble" } do
 	data.Discovered[id] = true
 end
 data.Stats.PotionsSold = 240
-UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades)
+UpgradeService.ApplyAll(PlotService.GetPlot(player), data.Upgrades, data.Rebirths)
 PlayerData.Push(player)
 goTo(plot.Cauldron.Hitbox)
 task.wait(1.2)

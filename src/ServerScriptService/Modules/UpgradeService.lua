@@ -24,8 +24,9 @@ function UpgradeService.ApplyPlayer(player: Player, upgrades: { [string]: number
 end
 
 -- Makes the whole shop match the owner's upgrades (visuals, plants, counter spots).
-function UpgradeService.ApplyAll(plot: Plot, upgrades: { [string]: number }?)
-	PlotService.ApplyVisuals(plot, upgrades)
+-- `rebirths` shows the "for sale" signs of rebirth-only upgrades (the Star Well).
+function UpgradeService.ApplyAll(plot: Plot, upgrades: { [string]: number }?, rebirths: number?)
+	PlotService.ApplyVisuals(plot, upgrades, rebirths)
 	IngredientService.ApplyOwner(plot, upgrades, false)
 	if upgrades then
 		CustomerService.UpdateSlots(plot, upgrades)
@@ -45,7 +46,11 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 		return
 	end
 	local upgrade = Config.Upgrades[id]
-	if not Config.IsUpgradeAvailable(data.Upgrades, id) then
+	if Config.NeedsRebirth(id, data.Rebirths) then
+		Net.Notify(player, `The {upgrade.DisplayName} unlocks after your first Rebirth!`, "bad")
+		return
+	end
+	if not Config.IsUpgradeAvailable(data.Upgrades, id, data.Rebirths) then
 		local required = Config.Upgrades[upgrade.Requires or ""]
 		Net.Notify(player, `Buy {if required then required.DisplayName else "the one before it"} first!`, "bad")
 		return
@@ -67,7 +72,7 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	PlayerData.AddStat(data, "CoinsSpent", cost)
 	local plot = PlotService.GetPlot(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 	end
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
 	PlayerData.Push(player)
@@ -112,7 +117,7 @@ function UpgradeService.Rebirth(player: Player)
 	data.Rebirths += 1
 	local plot = PlotService.GetPlot(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 		IngredientService.ApplyOwner(plot, data.Upgrades, true)
 		CustomerService.StartPlot(plot, player) -- one counter spot again, fresh customers
 	end

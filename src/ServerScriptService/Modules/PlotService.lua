@@ -127,17 +127,21 @@ function PlotService.Release(player: Player)
 	PlotService.ApplyTheme(plot, nil)
 end
 
--- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop).
-function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?)
+-- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop). Rebirth-only
+-- sources (the Star Well) get their "for sale" sign once `rebirths` is enough.
+function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?, rebirths: number?)
 	for ingredientId, source in plot.Sources do
 		local unlocked = Config.IsIngredientUnlocked(upgrades, ingredientId)
 		show(plot, source, unlocked, plot.SourcesFolder)
 		local upgradeId = Config.Ingredients[ingredientId].UnlockedBy
 		local lot = if upgradeId then plot.Lots[upgradeId] else nil
-		if lot then
-			show(plot, lot, not unlocked, plot.LotsFolder)
+		if lot and upgradeId then
+			show(plot, lot, not unlocked and not Config.NeedsRebirth(upgradeId, rebirths), plot.LotsFolder)
 		end
 	end
+	-- the barrel in the front-left corner makes room for the Star Well once you can build it
+	local wellSpot = Config.GetLevel(upgrades, "StarWell") >= 1 or not Config.NeedsRebirth("StarWell", rebirths)
+	show(plot, plot.Features.CornerBarrel, not wellSpot, plot.Model)
 
 	local shelves = Config.GetLevel(upgrades, "Shelves")
 	show(plot, plot.Features.Shelf2, shelves >= 1, plot.Model)

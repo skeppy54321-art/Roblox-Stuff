@@ -114,10 +114,17 @@ function Config.GetNextUpgradeCost(upgradeId: string, level: number): number?
 	return if nextLevel then nextLevel.Cost else nil
 end
 
--- Has the upgrade this one depends on been bought?
-function Config.IsUpgradeAvailable(upgrades: Levels, upgradeId: string): boolean
+-- Only for players who have rebirthed enough (the Star Well)?
+function Config.NeedsRebirth(upgradeId: string, rebirths: number?): boolean
 	local upgrade = Upgrades[upgradeId]
-	if not upgrade then
+	return upgrade ~= nil and upgrade.MinRebirths ~= nil and (rebirths or 0) < upgrade.MinRebirths
+end
+
+-- Can this upgrade be bought now: has the upgrade it depends on been bought, and (for
+-- rebirth-only upgrades) has the player rebirthed enough?
+function Config.IsUpgradeAvailable(upgrades: Levels, upgradeId: string, rebirths: number?): boolean
+	local upgrade = Upgrades[upgradeId]
+	if not upgrade or Config.NeedsRebirth(upgradeId, rebirths) then
 		return false
 	end
 	return upgrade.Requires == nil or Config.GetLevel(upgrades, upgrade.Requires) >= 1
@@ -242,14 +249,14 @@ end
 -- The upgrade the goal banner should suggest buying now, or nil (keep playing / save up).
 -- Follows Tuning.UpgradePath; after it, the first affordable useful upgrade, and a
 -- cosmetic one only when no useful upgrade is left to work toward.
-function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
+function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number, rebirths: number?): string?
 	local seen: { [string]: number } = {}
 	for _, id in Tuning.UpgradePath do
 		seen[id] = (seen[id] or 0) + 1
-		if Config.GetLevel(upgrades, id) < seen[id] then
+		if Config.GetLevel(upgrades, id) < seen[id] and not Config.NeedsRebirth(id, rebirths) then
 			-- the next step on the path
 			local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
-			if cost and coins >= cost and Config.IsUpgradeAvailable(upgrades, id) then
+			if cost and coins >= cost and Config.IsUpgradeAvailable(upgrades, id, rebirths) then
 				return id
 			end
 			return nil
@@ -259,7 +266,7 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 	local usefulLeft = false
 	for _, id in Config.UpgradeOrder do
 		local cost = Config.GetNextUpgradeCost(id, Config.GetLevel(upgrades, id))
-		if cost and Config.IsUpgradeAvailable(upgrades, id) then
+		if cost and Config.IsUpgradeAvailable(upgrades, id, rebirths) then
 			local isCosmetic = Upgrades[id].Cosmetic == true
 			if not isCosmetic then
 				usefulLeft = true
@@ -411,6 +418,14 @@ local Ingredients: { [string]: Ingredient } = {
 		Where = "the cloud garden",
 		UnlockedBy = "CloudGarden",
 		Order = 6,
+	},
+	Stardust = { -- only after a rebirth (the Star Well needs one)
+		Id = "Stardust",
+		DisplayName = "Stardust",
+		Color = Color3.fromRGB(150, 165, 255),
+		Where = "the star well",
+		UnlockedBy = "StarWell",
+		Order = 7,
 	},
 }
 
@@ -690,6 +705,18 @@ local Recipes: { [string]: Recipe } = {
 		Color = Color3.fromRGB(255, 175, 60),
 		Order = 12,
 	},
+	Starlight = { -- Stardust comes from the Star Well, which needs a rebirth
+		Id = "Starlight",
+		DisplayName = "Starlight Potion",
+		Description = "They turn into a starry night sky, with stars swirling around them!",
+		Reaction = "I'm made of stars!",
+		Ingredients = { Stardust = 1, Moonberry = 1, Starflower = 1 },
+		SellPrice = 100,
+		BrewMultiplier = 2,
+		Effect = "Starlight",
+		Color = Color3.fromRGB(110, 120, 255),
+		Order = 13,
+	},
 }
 
 return Recipes
@@ -780,6 +807,7 @@ local Sounds: { [string]: SoundDef } = {
 	Rocket = sound(BOOM, 0.22, 0.8, "rocket launch"),
 	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
 	Boo = sound("", 0.5, 1, "ghost boo"),
+	Twinkle = sound(TICK, 0.5, 1.6, "magic twinkle stars", { Id = CHIME, MaxSeconds = 2 }),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
 	Fountain = sound("", 0.3, 1, "fountain water loop", { Id = WATER }), -- 3D, at the plaza fountain
 }
@@ -862,6 +890,7 @@ Tuning.UpgradePath = {
 	"BrewSpeed",
 	"GreenThumb",
 	"CounterSpace",
+	"StarWell", -- (only after a rebirth; skipped before)
 	"FrostGrotto",
 	"Shelves",
 	"BrewSpeed",
@@ -903,6 +932,7 @@ return Tuning
 -- next level's cost plus the numbers that level switches on.
 --   Unlocks  = ingredient id whose source gets planted at level 1
 --   Requires = upgrade id that must be bought first
+--   MinRebirths = only for players who have rebirthed at least this many times
 
 export type UpgradeLevel = {
 	Cost: number,
@@ -924,6 +954,7 @@ export type Upgrade = {
 	Levels: { UpgradeLevel },
 	Unlocks: string?,
 	Requires: string?,
+	MinRebirths: number?,
 	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
 	Cosmetic: boolean?, -- only looks nice: the goal banner suggests it after the useful upgrades
 	Order: number,
@@ -1034,6 +1065,20 @@ local Upgrades: { [string]: Upgrade } = {
 		Announce = "grew a Cloud Garden",
 		Order = 8,
 	},
+	StarWell = {
+		Id = "StarWell",
+		DisplayName = "Star Well",
+		Description = "A wishing well that catches falling stars. Unlocks the Starlight Potion!",
+		BaseSummary = "Not built",
+		Color = Color3.fromRGB(140, 150, 255),
+		Levels = {
+			{ Cost = 600, Summary = "Stardust twinkling" },
+		},
+		Unlocks = "Stardust",
+		MinRebirths = 1,
+		Announce = "built a Star Well",
+		Order = 9,
+	},
 	CozyDecor = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
@@ -1046,7 +1091,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 500, Summary = "Banners + magic sign" },
 			{ Cost = 1500, Summary = "Golden cauldron!" },
 		},
-		Order = 9,
+		Order = 10,
 	},
 	Familiar = {
 		Id = "Familiar",
@@ -1061,7 +1106,7 @@ local Upgrades: { [string]: Upgrade } = {
 		},
 		Cosmetic = true,
 		Announce = "got a new magic familiar",
-		Order = 10,
+		Order = 11,
 	},
 }
 
@@ -2416,6 +2461,141 @@ end
       </Item>
       <Item class="ModuleScript" referent="21">
         <Properties>
+          <string name="Name">Starlight</string>
+          <string name="Source"><![CDATA[--!strict
+-- Starlight (ModuleScript) — ReplicatedStorage.Effects.Starlight
+-- Starlight Potion (after a rebirth): the customer turns into a glowing night sky full of
+-- twinkles, floats up and turns slowly inside a ring of circling stars, then comes back
+-- down in a shower of stardust.
+
+local Debris = game:GetService("Debris")
+local Effects = require(script.Parent)
+
+local NIGHT = Color3.fromRGB(45, 45, 130)
+local STAR = Color3.fromRGB(240, 244, 255)
+local DUST = Color3.fromRGB(150, 165, 255)
+local STARS = 6
+
+type Saved = { Color: Color3, Material: Enum.Material }
+
+return function(customer: Model, fx: Effects.Helpers)
+	local pivot = customer:GetPivot()
+	local scale = customer:GetScale()
+	local torso = customer.PrimaryPart
+
+	local saved: { [BasePart]: Saved } = {}
+	for _, part in fx.BodyParts(customer) do
+		if part.Transparency < 1 then
+			saved[part] = { Color = part.Color, Material = part.Material }
+		end
+	end
+	local function paint(amount: number)
+		for part, s in saved do
+			part.Color = s.Color:Lerp(NIGHT, amount)
+			part.Material = if amount > 0.5 then Enum.Material.Neon else s.Material
+		end
+	end
+
+	-- twinkles all over them
+	local twinkles: ParticleEmitter? = nil
+	if torso then
+		local e = Instance.new("ParticleEmitter")
+		e.Texture = Effects.Textures.Sparkles
+		e.Color = ColorSequence.new(STAR, DUST)
+		e.LightEmission = 1
+		e.LightInfluence = 0
+		e.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.5, 0.4 * scale),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		e.Lifetime = NumberRange.new(0.5, 0.9)
+		e.Speed = NumberRange.new(0.5, 1.5)
+		e.SpreadAngle = Vector2.new(180, 180)
+		e.Rate = 30
+		e.Parent = torso
+		twinkles = e
+	end
+
+	-- a ring of stars (parented to the customer, so they go away with them)
+	local ring: { Part } = {}
+	for i = 1, STARS do
+		local star = Instance.new("Part")
+		star.Name = "OrbitStar"
+		star.Anchored = true
+		star.CanCollide = false
+		star.CanQuery = false
+		star.CanTouch = false
+		star.CastShadow = false
+		star.Material = Enum.Material.Neon
+		star.Color = if i % 2 == 0 then STAR else DUST
+		star.Shape = Enum.PartType.Ball
+		star.Size = Vector3.one * 0.05
+		star.CFrame = pivot
+		star.Parent = customer
+		table.insert(ring, star)
+	end
+	local turn = 0
+	local function orbit(center: CFrame, size: number, radius: number, dt: number)
+		turn += dt * 2.6
+		for i, star in ring do
+			local angle = turn + i * (math.pi * 2 / STARS)
+			local height = math.sin(angle * 2 + i) * 0.9 * scale
+			star.Size = Vector3.one * math.max(size, 0.05)
+			star.CFrame = CFrame.new(
+				center.Position + Vector3.new(math.cos(angle) * radius, 3 * scale + height, math.sin(angle) * radius)
+			)
+		end
+	end
+
+	fx.Sound("Twinkle", torso)
+
+	-- turn into the night sky while the stars appear
+	fx.Animate(customer, 0.5, function(alpha, dt)
+		paint(alpha)
+		orbit(customer:GetPivot(), 0.5 * scale * alpha, 2.3 * scale, dt)
+	end)
+
+	-- float and turn inside the ring
+	fx.Animate(customer, 2.2, function(alpha, dt)
+		local rise = math.sin(math.min(alpha / 0.35, 1) * math.pi / 2) * 1.6 * scale
+		local bob = math.sin(alpha * math.pi * 4) * 0.2 * scale
+		local here = pivot * CFrame.new(0, rise + bob, 0) * CFrame.Angles(0, alpha * math.pi, 0)
+		customer:PivotTo(here)
+		orbit(here, 0.5 * scale, 2.3 * scale, dt)
+	end)
+
+	-- back down; the stars fly out and fade, stardust everywhere
+	local from = customer:GetPivot()
+	if torso then
+		fx.Burst(torso, DUST, 40, 9)
+	end
+	fx.Animate(customer, 0.6, function(alpha, dt)
+		customer:PivotTo(from:Lerp(pivot, alpha))
+		paint(1 - alpha)
+		orbit(customer:GetPivot(), 0.5 * scale * (1 - alpha), (2.3 + alpha * 3) * scale, dt)
+	end)
+
+	for _, star in ring do
+		star:Destroy()
+	end
+	if twinkles then
+		twinkles.Enabled = false
+		Debris:AddItem(twinkles, 1.2)
+	end
+	if customer.Parent then
+		customer:PivotTo(pivot)
+	end
+	for part, s in saved do
+		part.Color = s.Color
+		part.Material = s.Material
+	end
+end
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="22">
+        <Properties>
           <string name="Name">Tiny</string>
           <string name="Source"><![CDATA[--!strict
 -- Tiny (ModuleScript) — ReplicatedStorage.Effects.Tiny
@@ -2450,7 +2630,7 @@ end
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="22">
+      <Item class="ModuleScript" referent="23">
         <Properties>
           <string name="Name">Twirl</string>
           <string name="Source"><![CDATA[--!strict
@@ -2484,11 +2664,11 @@ end
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="23">
+  <Item class="ServerScriptService" referent="24">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="24">
+    <Item class="Script" referent="25">
       <Properties>
         <string name="Name">Main</string>
         <token name="RunContext">0</token>
@@ -2567,7 +2747,7 @@ local function onPlayerAdded(player: Player)
 
 	local plot = PlotService.Assign(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 		IngredientService.ApplyOwner(plot, data.Upgrades, true)
 		CustomerService.StartPlot(plot, player)
 	else
@@ -2625,11 +2805,11 @@ print("[Brew a Potion] Server started")
 ]]></string>
       </Properties>
     </Item>
-    <Item class="Folder" referent="25">
+    <Item class="Folder" referent="26">
       <Properties>
         <string name="Name">Modules</string>
       </Properties>
-      <Item class="ModuleScript" referent="26">
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">BoardKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -2718,7 +2898,7 @@ return BoardKit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">BrewService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3020,7 +3200,7 @@ return BrewService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">CustomerBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -3367,7 +3547,7 @@ return CustomerBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">CustomerService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3808,7 +3988,7 @@ return CustomerService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">FameService</string>
           <string name="Source"><![CDATA[--!strict
@@ -4059,7 +4239,7 @@ return FameService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">GiftService</string>
           <string name="Source"><![CDATA[--!strict
@@ -4112,7 +4292,7 @@ return GiftService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">Guard</string>
           <string name="Source"><![CDATA[--!strict
@@ -4173,7 +4353,7 @@ return Guard
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">IngredientService</string>
           <string name="Source"><![CDATA[--!strict
@@ -4332,7 +4512,7 @@ return IngredientService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">Kit</string>
           <string name="Source"><![CDATA[--!strict
@@ -4620,7 +4800,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">MarketBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -5259,7 +5439,7 @@ return MarketBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">Net</string>
           <string name="Source"><![CDATA[--!strict
@@ -5333,7 +5513,7 @@ return Net
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--!strict
@@ -5567,7 +5747,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">PlotService</string>
           <string name="Source"><![CDATA[--!strict
@@ -5699,17 +5879,21 @@ function PlotService.Release(player: Player)
 	PlotService.ApplyTheme(plot, nil)
 end
 
--- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop).
-function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?)
+-- Makes the shop look like its owner's upgrades (nil = a fresh, empty shop). Rebirth-only
+-- sources (the Star Well) get their "for sale" sign once `rebirths` is enough.
+function PlotService.ApplyVisuals(plot: Plot, upgrades: { [string]: number }?, rebirths: number?)
 	for ingredientId, source in plot.Sources do
 		local unlocked = Config.IsIngredientUnlocked(upgrades, ingredientId)
 		show(plot, source, unlocked, plot.SourcesFolder)
 		local upgradeId = Config.Ingredients[ingredientId].UnlockedBy
 		local lot = if upgradeId then plot.Lots[upgradeId] else nil
-		if lot then
-			show(plot, lot, not unlocked, plot.LotsFolder)
+		if lot and upgradeId then
+			show(plot, lot, not unlocked and not Config.NeedsRebirth(upgradeId, rebirths), plot.LotsFolder)
 		end
 	end
+	-- the barrel in the front-left corner makes room for the Star Well once you can build it
+	local wellSpot = Config.GetLevel(upgrades, "StarWell") >= 1 or not Config.NeedsRebirth("StarWell", rebirths)
+	show(plot, plot.Features.CornerBarrel, not wellSpot, plot.Model)
 
 	local shelves = Config.GetLevel(upgrades, "Shelves")
 	show(plot, plot.Features.Shelf2, shelves >= 1, plot.Model)
@@ -5809,7 +5993,7 @@ return PlotService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">ProfileStore</string>
           <string name="Source">--[[
@@ -8057,7 +8241,7 @@ end)
 return ProfileStore</string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">ShopBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -8107,6 +8291,7 @@ ShopBuilder.SourceSpots = {
 	FrostCrystal = Vector3.new(10.5, 0, -3),
 	EmberPepper = Vector3.new(-10.5, 0, 10.5),
 	CloudPuff = Vector3.new(10.5, 0, 10.5),
+	Stardust = Vector3.new(-12.5, 0, -7.2), -- front-left corner, against the side wall
 } :: { [string]: Vector3 }
 
 -- Customers line up in front of the counter, this far out (plot space z).
@@ -8494,19 +8679,116 @@ local function buildCloudPuff(parent: Instance, at: At): Model
 	return garden
 end
 
+-- Star well (after a rebirth): a little stone wishing well with a tiled roof and glowing
+-- water; the stars twinkling above the water = charges. Compact, so there's still room to
+-- walk past it out of the shop.
+local function buildStardust(parent: Instance, at: At): Model
+	local well = sourceModel(parent, "Stardust")
+	local c = ShopBuilder.SourceSpots.Stardust
+	local color = Config.Ingredients.Stardust.Color
+	local stone = Color3.fromRGB(150, 148, 172)
+	-- a ring of stone blocks (solid) around a dark shaft
+	local RING, BLOCKS = 1.2, 8
+	for i = 1, BLOCKS do
+		local angle = (i - 1) / BLOCKS * math.pi * 2
+		local cf = at(c.X + math.cos(angle) * RING, 0.65, c.Z + math.sin(angle) * RING)
+			* CFrame.Angles(0, -(angle + math.pi / 2), 0)
+		Kit.Part(
+			well,
+			"Stone",
+			Vector3.new(0.98, 1.3, 0.45),
+			cf,
+			Kit.Vary(stone, Random.new(i), 0.06),
+			Enum.Material.Cobblestone
+		)
+	end
+	Kit.Cylinder(well, "Shaft", 1, 2.1, at(c.X, 0.5, c.Z), Color3.fromRGB(40, 40, 70), Enum.Material.Slate) -- (under the water)
+	local water = Kit.Cylinder(
+		well,
+		"Water",
+		0.1,
+		2.05,
+		at(c.X, 1.12, c.Z),
+		Color3.fromRGB(90, 95, 230),
+		NEON,
+		{ CastShadow = false }
+	)
+	-- posts, the crank bar and a little roof
+	for _, x in { -RING, RING } do
+		Kit.Part(well, "Post", Vector3.new(0.3, 3.9, 0.3), at(c.X + x, 1.95, c.Z), P.DarkWood, WOOD)
+	end
+	Kit.Rod(well, "Crank", at(c.X - RING, 3.3, c.Z).Position, at(c.X + RING, 3.3, c.Z).Position, 0.22, P.DarkWood, WOOD)
+	for _, side in { -1, 1 } do
+		Kit.Decor(
+			well,
+			"Roof",
+			Vector3.new(3.1, 0.2, 1.5),
+			at(c.X, 4.15, c.Z + side * 0.6) * CFrame.Angles(math.rad(32 * side), 0, 0),
+			P.Roof,
+			Enum.Material.ClayRoofTiles
+		)
+	end
+	Kit.Cylinder(well, "Bucket", 0.5, 0.5, at(c.X, 1.55, c.Z + RING), P.Wood, WOOD)
+	-- stars over the water
+	local stars = {
+		{ -0.4, 1.8, -0.2 },
+		{ 0.35, 2.25, -0.3 },
+		{ 0.3, 1.75, 0.35 },
+		{ -0.3, 2.6, 0.3 },
+		{ 0.05, 2.9, -0.05 },
+	}
+	for i = 1, CHARGE_SLOTS do
+		local d = stars[i]
+		local center = at(c.X + d[1], d[2], c.Z + d[3]) * CFrame.Angles(0, i * 1.3, 0)
+		local star = Kit.Model(well, "Charge" .. i)
+		Kit.Ball(star, "Glow", 0.36, center.Position, color, NEON, { CastShadow = false })
+		for k = 0, 1 do
+			Kit.Decor(
+				star,
+				"Ray",
+				Vector3.new(0.75, 0.12, 0.12),
+				center * CFrame.Angles(0, 0, math.rad(90 * k)),
+				Color3.fromRGB(235, 240, 255),
+				NEON,
+				{ CastShadow = false }
+			)
+		end
+	end
+	Kit.Light(water, color, 9, 0.9)
+	Kit.Sparkles(water, color, 4)
+	collectPrompt(well, Vector3.new(3.4, 4.2, 3.4), at(c.X, 2.1, c.Z), "Stardust")
+	return well
+end
+
 -- "For sale" lot shown where a locked source will be planted.
--- `faceX` = +1 turns the sign toward +X (the shop's middle), -1 toward -X.
-local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vector3, faceX: number): Model
+-- `faceX` = +1 turns the sign toward +X (the shop's middle), -1 toward -X. `size` is the
+-- patch of dirt (default 4.6 x 3.8 studs).
+local function buildLot(
+	parent: Instance,
+	at: At,
+	upgradeId: string,
+	spot: Vector3,
+	faceX: number,
+	size: Vector2?
+): Model
 	local upgrade = Config.Upgrades[upgradeId]
 	local cost = upgrade.Levels[1].Cost
 	local lot = Kit.Model(parent, upgradeId .. "Lot")
 	lot:SetAttribute("Upgrade", upgradeId)
-	local dirt =
-		Kit.Decor(lot, "Dirt", Vector3.new(4.6, 0.1, 3.8), at(spot.X, 0.05, spot.Z), P.Dirt, Enum.Material.Ground)
+	local patch = size or Vector2.new(4.6, 3.8)
+	local dirt = Kit.Decor(
+		lot,
+		"Dirt",
+		Vector3.new(patch.X, 0.1, patch.Y),
+		at(spot.X, 0.05, spot.Z),
+		P.Dirt,
+		Enum.Material.Ground
+	)
 	Kit.Sparkles(dirt, upgrade.Color, 3)
 	-- little stakes at the corners
+	local sx, sz = patch.X / 2 - 0.1, patch.Y / 2 - 0.1
 	for _, corner in
-		{ Vector3.new(-2.2, 0, -1.8), Vector3.new(2.2, 0, -1.8), Vector3.new(-2.2, 0, 1.8), Vector3.new(2.2, 0, 1.8) }
+		{ Vector3.new(-sx, 0, -sz), Vector3.new(sx, 0, -sz), Vector3.new(-sx, 0, sz), Vector3.new(sx, 0, sz) }
 	do
 		Kit.Decor(
 			lot,
@@ -8524,7 +8806,7 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 		Kit.Decor(lot, "SignBoard", Vector3.new(3.6, 1.9, 0.2), base * CFrame.new(0, 2.9, 0) * face, P.LightWood, WOOD)
 	local label = Kit.SurfaceText(board, Enum.NormalId.Front, `{upgrade.DisplayName}\n{cost} coins`, P.TextDark, 60)
 	label.Name = "LotLabel"
-	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
+	local box = Kit.Hitbox(lot, Vector3.new(patch.X, 4.5, patch.Y), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
 end
@@ -8957,8 +9239,9 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	end
 
 	-- A barrel and crates in the front corners, beside the counter (the back corners grow
-	-- the Ember and Cloud gardens)
-	barrel(decor, at(-12.4, 1.3, -6.6))
+	-- the Ember and Cloud gardens; the barrel makes way for the Star Well after a rebirth)
+	local cornerBarrel = Kit.Model(plot, "CornerBarrel")
+	barrel(cornerBarrel, at(-12.4, 1.3, -6.6))
 	Kit.Part(
 		decor,
 		"Crate",
@@ -8985,6 +9268,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		FrostCrystal = buildFrostCrystal(sourcesFolder, at),
 		EmberPepper = buildEmberPepper(sourcesFolder, at),
 		CloudPuff = buildCloudPuff(sourcesFolder, at),
+		Stardust = buildStardust(sourcesFolder, at),
 	}
 
 	-- "For sale" lots for the sources that start locked
@@ -8993,7 +9277,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	for ingredientId, spot in ShopBuilder.SourceSpots do
 		local upgradeId = Config.Ingredients[ingredientId].UnlockedBy
 		if upgradeId then
-			lots[upgradeId] = buildLot(lotsFolder, at, upgradeId, spot, if spot.X < 0 then 1 else -1)
+			local size = if ingredientId == "Stardust" then Vector2.new(3, 3) else nil -- (a snug corner)
+			lots[upgradeId] = buildLot(lotsFolder, at, upgradeId, spot, if spot.X < 0 then 1 else -1, size)
 		end
 	end
 
@@ -9009,6 +9294,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		DecorGold = buildDecorGold(plot, at),
 		Shelf2 = buildShelfLevel(plot, at, "Shelf2", 5.1, rng),
 		Shelf3 = buildShelfLevel(plot, at, "Shelf3", 7.4, rng),
+		CornerBarrel = cornerBarrel,
 	}
 
 	local cheerStand = buildCheerStand(plot, at)
@@ -9043,7 +9329,7 @@ return ShopBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">SocialService</string>
           <string name="Source"><![CDATA[--!strict
@@ -9448,7 +9734,7 @@ return SocialService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="42">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">UpgradeService</string>
           <string name="Source"><![CDATA[--!strict
@@ -9477,8 +9763,9 @@ function UpgradeService.ApplyPlayer(player: Player, upgrades: { [string]: number
 end
 
 -- Makes the whole shop match the owner's upgrades (visuals, plants, counter spots).
-function UpgradeService.ApplyAll(plot: Plot, upgrades: { [string]: number }?)
-	PlotService.ApplyVisuals(plot, upgrades)
+-- `rebirths` shows the "for sale" signs of rebirth-only upgrades (the Star Well).
+function UpgradeService.ApplyAll(plot: Plot, upgrades: { [string]: number }?, rebirths: number?)
+	PlotService.ApplyVisuals(plot, upgrades, rebirths)
 	IngredientService.ApplyOwner(plot, upgrades, false)
 	if upgrades then
 		CustomerService.UpdateSlots(plot, upgrades)
@@ -9498,7 +9785,11 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 		return
 	end
 	local upgrade = Config.Upgrades[id]
-	if not Config.IsUpgradeAvailable(data.Upgrades, id) then
+	if Config.NeedsRebirth(id, data.Rebirths) then
+		Net.Notify(player, `The {upgrade.DisplayName} unlocks after your first Rebirth!`, "bad")
+		return
+	end
+	if not Config.IsUpgradeAvailable(data.Upgrades, id, data.Rebirths) then
 		local required = Config.Upgrades[upgrade.Requires or ""]
 		Net.Notify(player, `Buy {if required then required.DisplayName else "the one before it"} first!`, "bad")
 		return
@@ -9520,7 +9811,7 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	PlayerData.AddStat(data, "CoinsSpent", cost)
 	local plot = PlotService.GetPlot(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 	end
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
 	PlayerData.Push(player)
@@ -9565,7 +9856,7 @@ function UpgradeService.Rebirth(player: Player)
 	data.Rebirths += 1
 	local plot = PlotService.GetPlot(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 		IngredientService.ApplyOwner(plot, data.Upgrades, true)
 		CustomerService.StartPlot(plot, player) -- one counter spot again, fresh customers
 	end
@@ -9622,7 +9913,7 @@ return UpgradeService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="43">
+      <Item class="ModuleScript" referent="44">
         <Properties>
           <string name="Name">WorldService</string>
           <string name="Source"><![CDATA[--!strict
@@ -9722,15 +10013,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="44">
+  <Item class="StarterPlayer" referent="45">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="45">
+    <Item class="StarterPlayerScripts" referent="46">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="46">
+      <Item class="LocalScript" referent="47">
         <Properties>
           <string name="Name">ClientMain</string>
           <string name="Source"><![CDATA[--!strict
@@ -10191,7 +10482,7 @@ local function nextGoal(): (string, BasePart?, string?)
 	end
 	-- something worth buying (after your first sale)
 	if (s.Stats.PotionsSold or 0) > 0 then
-		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins)
+		local upgradeId = Config.GetSuggestedUpgrade(s.Upgrades, s.Coins, s.Rebirths)
 		if upgradeId then
 			return `You can afford {Config.Upgrades[upgradeId].DisplayName}! Tap UPGRADES.`, nil, nil
 		end
@@ -10509,7 +10800,7 @@ task.spawn(function()
 end)
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">Ambience</string>
             <string name="Source"><![CDATA[--!strict
@@ -10593,7 +10884,7 @@ return Ambience
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">CauldronFx</string>
             <string name="Source"><![CDATA[--!strict
@@ -10816,7 +11107,7 @@ return CauldronFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">CauldronMenu</string>
             <string name="Source"><![CDATA[--!strict
@@ -11092,7 +11383,7 @@ return CauldronMenu
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">CustomerAnimator</string>
             <string name="Source"><![CDATA[--!strict
@@ -11306,7 +11597,7 @@ return CustomerAnimator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">DayCycle</string>
             <string name="Source"><![CDATA[--!strict
@@ -11442,7 +11733,7 @@ return DayCycle
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">Familiars</string>
             <string name="Source"><![CDATA[--!strict
@@ -11753,7 +12044,7 @@ return Familiars
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -11838,7 +12129,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -12333,7 +12624,7 @@ function Hud.SetState(state: State)
 	local canAfford = false
 	for _, upgradeId in Config.UpgradeOrder do
 		local cost = Config.GetNextUpgradeCost(upgradeId, Config.GetLevel(state.Upgrades, upgradeId))
-		if cost and state.Coins >= cost and Config.IsUpgradeAvailable(state.Upgrades, upgradeId) then
+		if cost and state.Coins >= cost and Config.IsUpgradeAvailable(state.Upgrades, upgradeId, state.Rebirths) then
 			canAfford = true
 			break
 		end
@@ -12524,7 +12815,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Juice</string>
             <string name="Source"><![CDATA[--!strict
@@ -12616,7 +12907,7 @@ return Juice
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -12677,7 +12968,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -12922,7 +13213,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -13106,8 +13397,12 @@ function RecipeBook.SetState(state: State)
 		local seconds = Config.GetBrewSeconds(state.Upgrades, recipeId)
 		card.Info.Text = `{recipe.SellPrice} coins\n{seconds}s brew`
 		if not Config.IsRecipeUnlocked(state.Upgrades, recipeId) then
-			local unlocker = Config.Upgrades[Config.GetRecipeUnlocker(recipeId) or ""]
-			card.Tag.Text = if unlocker then `Needs {unlocker.DisplayName}` else "Locked"
+			local unlockerId = Config.GetRecipeUnlocker(recipeId) or ""
+			local unlocker = Config.Upgrades[unlockerId]
+			card.Tag.Text = if Config.NeedsRebirth(unlockerId, state.Rebirths)
+				then "Needs a Rebirth"
+				elseif unlocker then `Needs {unlocker.DisplayName}`
+				else "Locked"
 			card.Tag.BackgroundColor3 = P.ButtonOff
 			card.Shade.Visible = true
 		elseif state.Discovered[recipeId] then
@@ -13137,7 +13432,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -13362,7 +13657,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">Townsfolk</string>
             <string name="Source"><![CDATA[--!strict
@@ -13631,7 +13926,7 @@ return Townsfolk
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -13969,7 +14264,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -14004,7 +14299,14 @@ UpgradesPanel.OnClose = nil :: (() -> ())?
 local panel: Frame
 local cards: { [string]: Card } = {}
 
-type RebirthCard = { Frame: Frame, Count: TextLabel, Summary: TextLabel, Button: Frame, Face: TextButton }
+type RebirthCard = {
+	Frame: Frame,
+	Count: TextLabel,
+	Description: TextLabel,
+	Summary: TextLabel,
+	Button: Frame,
+	Face: TextButton,
+}
 local rebirthCard: RebirthCard
 local rebirthReady = false
 local confirmUntil = 0
@@ -14012,7 +14314,6 @@ local lastState: State? = nil
 local swatches: { UIStroke } = {}
 
 local function buildRebirthCard(list: Instance)
-	local R = Config.Tuning.Rebirth
 	local card = Ui.new("Frame", {
 		Name = "Rebirth",
 		Size = UDim2.new(1, 0, 0, 118),
@@ -14044,14 +14345,14 @@ local function buildRebirthCard(list: Instance)
 		ZIndex = 11,
 		Parent = card,
 	}, 24)
-	Ui.label({
+	local description = Ui.label({
 		Position = UDim2.fromOffset(90, 38),
 		Size = UDim2.new(1, -250, 0, 36),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextWrapped = true,
 		TextColor3 = P.PanelLight,
-		Text = `Start your shop over for +{math.floor(R.CoinBonus * 100)}% coins from every sale, forever. You keep your familiar, decor and recipes.`,
+		Text = "",
 		ZIndex = 11,
 		Parent = card,
 	}, 15)
@@ -14099,7 +14400,8 @@ local function buildRebirthCard(list: Instance)
 			end
 		end)
 	end)
-	rebirthCard = { Frame = card, Count = count, Summary = summary, Button = button, Face = face }
+	rebirthCard =
+		{ Frame = card, Count = count, Description = description, Summary = summary, Button = button, Face = face }
 end
 
 -- Shop Colors: six two-tone swatches; tap one to repaint your shop (free).
@@ -14319,6 +14621,10 @@ function UpgradesPanel.SetState(state: State)
 	local ready, reason = Config.CanRebirth(state)
 	rebirthReady = ready
 	rebirthCard.Count.Text = tostring(rebirths)
+	local bonus = math.floor(Config.Tuning.Rebirth.CoinBonus * 100)
+	rebirthCard.Description.Text = if rebirths == 0
+		then `Start over for +{bonus}% coins from every sale, forever, and unlock the Star Well! You keep your familiar, decor and recipes.`
+		else `Start over for another +{bonus}% coins from every sale, forever. You keep your familiar, decor and recipes.`
 	local multNow, multNext = Config.GetCoinMultiplier(rebirths), Config.GetCoinMultiplier(rebirths + 1)
 	rebirthCard.Summary.Text = `Coins x{string.format("%g", multNow)}  ->  x{string.format("%g", multNext)}`
 	rebirthCard.Frame.LayoutOrder = if ready then 0 else 200 -- on top when you can do it
@@ -14347,9 +14653,12 @@ function UpgradesPanel.SetState(state: State)
 		if not nextEntry then
 			card.BuyFace.Text = "MAXED"
 			Ui.setButtonColor(card.Buy, P.Gold, Color3.fromRGB(190, 140, 30))
-		elseif not Config.IsUpgradeAvailable(state.Upgrades, upgradeId) then
+		elseif not Config.IsUpgradeAvailable(state.Upgrades, upgradeId, state.Rebirths) then
 			local required = Config.Upgrades[upgrade.Requires or ""]
-			card.BuyFace.Text = if required then `Needs {required.DisplayName}` else "Locked"
+			card.BuyFace.Text = if Config.NeedsRebirth(upgradeId, state.Rebirths)
+				then "Needs a Rebirth"
+				elseif required then `Needs {required.DisplayName}`
+				else "Locked"
 			Ui.setButtonColor(card.Buy, P.ButtonOff, P.ButtonOffDark)
 		else
 			card.BuyFace.Text = `{Config.FormatNumber(nextEntry.Cost)} coins`
@@ -14388,7 +14697,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="63">
+  <Item class="Workspace" referent="64">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

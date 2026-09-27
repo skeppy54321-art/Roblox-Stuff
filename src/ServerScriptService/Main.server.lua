@@ -73,7 +73,7 @@ local function onPlayerAdded(player: Player)
 
 	local plot = PlotService.Assign(player)
 	if plot then
-		UpgradeService.ApplyAll(plot, data.Upgrades)
+		UpgradeService.ApplyAll(plot, data.Upgrades, data.Rebirths)
 		IngredientService.ApplyOwner(plot, data.Upgrades, true)
 		CustomerService.StartPlot(plot, player)
 	else

@@ -65,13 +65,13 @@ StarterPlayer > StarterPlayerScripts
 * **Evening cycle** (every 8 minutes): golden hour drifts into a pink sunset and a purple dusk. The first stars come out, lanterns, fires and the fountain potion glow brighter, and three times as many fireflies drift over the plaza; then the sun comes back. Every player sees the same sky (it follows the server clock) and it costs no network. Looks and timing are in `Config/World.lua` (`DayCycle`); `Enabled = false` keeps golden hour all the time.
 
 **Loop**
-* Collect ingredients from your plants (charges regrow). 6 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal, Ember Pepper, Cloud Puff (unlock by buying their plots).
+* Collect ingredients from your plants (charges regrow). 7 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal, Ember Pepper, Cloud Puff (unlock by buying their plots), and Stardust from the Star Well (after a rebirth).
 * Brew at your cauldron. Standing at it opens the **cauldron menu**: every unlocked potion, what you're missing, which one a customer wants. Tap a card (or press 1-9), or press the cauldron to brew the suggested potion. Press again while brewing to stir (faster). The liquid turns the potion's color.
 * When a potion is done, a bottle of it pops out of the cauldron with a sparkle, and your potions stand on the counter as glowing bottles (everyone can see your stock).
-* First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price. Brew all 12 and you become a **Master Brewer**: a celebration, market news, "Master Brewer" under your name on the shop sign, and a gold name on the Market Stars board.
+* First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price. Brew all 13 (the last one, the Starlight Potion, needs a rebirth) and you become a **Master Brewer**: a celebration, market news, "Master Brewer" under your name on the shop sign, and a gold name on the Market Stars board.
 * Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). They wait up to 45 seconds (a bar under their speech bubble runs down from green to red); if your shelf is full and their potion isn't on it, they give up after a few seconds ("Oh, you're all out!") and the next customer asks for something you have, so the shop can never get stuck. A bell rings when a customer reaches your counter; serve them within 8 seconds and they tip 20% extra ("Speedy!"). About 1 in 5 customers is a kid (a bit smaller). Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double. After your 20th sale, about 12% of the others place a **big order** ("I want 3 Floaty Potions!", a blue BIG ORDER tag): they wait twice as long and pay 50% more per potion, but only when you hand over all three at once.
 
-**12 potions and their effects** (every customer drinks the potion first)
+**13 potions and their effects** (every customer drinks the potion first)
 
 | Potion | Ingredients | Coins | Brew | Effect |
 |---|---|---|---|---|
@@ -87,6 +87,7 @@ StarterPlayer > StarterPlayerScripts
 | Bubble | Cloud Puff + Moonberry | 120 | 10.8s | Floats up inside a giant soap bubble until it pops |
 | Ghost | Cloud Puff + Frost Crystal | 150 | 12s | Turns see-through, floats and drifts with wisps, then solid again |
 | Rocket | Ember Pepper + Cloud Puff + Starflower | 220 | 14.4s | Rumbles, blasts off on a jet of fire, fireworks, parachutes down |
+| Starlight (after a rebirth) | Stardust + Moonberry + Starflower | 100 | 12s | Turns into a glowing night sky full of twinkles, floats and turns inside a ring of circling stars |
 
 Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 
@@ -102,6 +103,7 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 | Frost Grotto | 400 (needs Starflower Bed) | Grows Frost Crystals; unlocks Frosty + Froggy |
 | Ember Garden | 900 (needs Frost Grotto) | Grows Ember Peppers (back left corner); unlocks Fire Breath + Dance |
 | Cloud Garden | 2500 (needs Ember Garden) | Grows Cloud Puffs (back right corner); unlocks Bubble, Ghost + Rocket |
+| Star Well | 600 (after your first rebirth) | A little wishing well in the front-left corner (the barrel makes room); gives Stardust, unlocks Starlight |
 | Cozy Decor | 150 / 500 / 1500 | String lights + flower boxes → banners + glowing sign → golden cauldron, star and sparkles |
 | Magic Familiar | 1500 / 5000 / 15000 | A pet that floats behind you, visible to everyone: Shop Cat → Wise Owl (flapping wings) → Baby Dragon (puffs fire) |
 
@@ -124,7 +126,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 * A card in the Upgrades panel with six two-tone swatches (Rose, Teal, Violet, Orange, Green, Blue): tap one to repaint your awning, pom-poms, banners and rug. Free, saved, and your shop goes back to its own colors when you leave.
 
 **Rebirth**
-* Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The goal banner suggests it once there's nothing useful left to buy.
+* Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The first rebirth also unlocks the **Star Well** (rebuilt each run like the other plots), whose Stardust brews the 13th potion, Starlight; before that its card says "Needs a Rebirth" and the recipe book shows the potion locked. The goal banner suggests it once there's nothing useful left to buy.
 
 **Daily gift**
 * A GIFT button (top of the right-hand column) with a badge when it's ready: once every 20 hours, 30 / 50 / 80 / 120 / 160 / 220 / 300 coins for day 1–7 of a streak (later days repeat 300). Come back within 48 hours to keep the streak. The server's clock decides; the button counts down to the next one.
@@ -152,7 +154,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 13. **Leave mid-brew**, rejoin: you have the potion.
 14. **GIFT** button (top right, with a "!"): tap it, "DAILY GIFT! Day 1: +30 coins". Tap again: it says when the next one is ready.
 15. **Late game fast:** in Studio there's an orange **+10K (Studio)** button (bottom left, never in the real game). Use it to buy the Ember and Cloud gardens (they grow up out of the ground), brew Fire Breath / Dance / Bubble / Ghost / Rocket and sell them, and buy a Magic Familiar (a cat floats behind you; the owl and dragon come next).
-16. **Rebirth:** with the Cloud Garden and 5,000+ coins, the Rebirth card is at the top of the Upgrades panel. Tap it twice: your shop starts over, the familiar stays, your coins now show "x1.25", the sign says "Rebirth 1", and sales pay 25% more.
+16. **Rebirth:** with the Cloud Garden and 5,000+ coins, the Rebirth card is at the top of the Upgrades panel. Tap it twice: your shop starts over, the familiar stays, your coins now show "x1.25", the sign says "Rebirth 1", and sales pay 25% more. The barrel in the front-left corner is gone and a "Star Well" for-sale sign stands there: buy it (600), collect Stardust from the glowing well, brew a Starlight Potion.
 17. Watch the plaza for a minute: townsfolk stroll around, stop at the fountain and at shops, and sometimes say something.
 18. **Big order** (after 20 sales, or use the +10K button and sell a while): a customer with a blue BIG ORDER tag asks for 3 of one potion. Selling with 2 on the shelf does nothing; with 3 they all go at once for 1.5x the price.
 19. **Evening:** stay for a few minutes (or set `DayCycle.Seconds = 60` in `Config/World.lua`): the sky turns pink, then purple with stars, lanterns glow brighter, more fireflies. Check that shops and customers are still easy to see at dusk (if not, raise `OutdoorAmbient` in the `dusk` look).
@@ -173,10 +175,10 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 ## Economy (first pass, tune after playtesting)
 
-* **Sources:** potion sales (10–220 coins, VIPs x2, big orders 3 potions at x1.5 each, speedy tips +20%), first-brew bonuses (one per recipe, 887 total), the daily gift (30–300).
-* **Sinks:** 9 useful/decor upgrade tracks (7,425 coins) plus the Magic Familiar (21,500).
-* **Measured pacing** (`tests/pacing_bot.luau`, a quick bot that follows the goal banner, before the last price bump): first sale 0:13, Starflower Bed 1:15, Second Counter Spot 5:35, Frost Grotto 8:03, Ember Garden 12:27, Cloud Garden 14:11. About 100–170 coins/min for the first 8 minutes, 380–540 after the Frost Grotto, 750–870 after the Ember Garden; 101 sales in 16 minutes. A real player is slower (walking around, reading): expect roughly 1.5–2x these times.
-* **Watch for:** the content wall once the familiars are bought (coins then only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. Late-game income is high, so the Cloud Garden (now 2,500) and familiars (1,500 / 5,000 / 15,000) were raised after the run above; re-run the bot after any price change.
+* **Sources:** potion sales (10–220 coins, VIPs x2, big orders 3 potions at x1.5 each, speedy tips +20%), first-brew bonuses (one per recipe, 987 total), the daily gift (30–300).
+* **Sinks:** 10 useful/decor upgrade tracks (8,025 coins, the Star Well only after a rebirth) plus the Magic Familiar (21,500), and rebirths (5,000, 10,000, ...).
+* **Measured pacing** (`tests/pacing_bot.luau`, a quick bot that follows the goal banner, Sep 27 with tips and big orders): first sale 0:13, Starflower Bed 1:09, Second Counter Spot 4:27, Frost Grotto 5:23, Ember Garden 9:18, Cloud Garden 11:23, Magic Familiar 13:50. About 75–175 coins/min for the first 4 minutes, 220–720 after the Frost Grotto, 760–1,490 after the Ember Garden, 1,300–2,700 at the end; 107 sales (9 big orders, 91 tipped) and 13,393 coins earned in 16 minutes, about twice the run before tips and big orders (6,498; Cloud Garden at 14:11). A quick player could rebirth at about 13 minutes. A real player is slower (walking around, reading, missing tips): expect roughly 1.5–2x these times.
+* **Watch for:** the content wall once the familiars are bought (coins then only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. Tips and big orders roughly doubled a quick player's income; if real players rebirth too soon, lower `TipShare` or `BigOrderBonus` in `Config/Tuning.lua` first. Re-run the bot after any price change.
 
 ## Verified API notes (checked Sep 26–27, 2026)
 
@@ -206,5 +208,5 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 1. **You:** open `build/BrewAPotion.rbxlx`, run the test checklist, send errors or "it works" (screenshots help a lot for the look).
 2. Fix what the playtest finds; tune lighting, colors and economy numbers (re-run `tests/pacing_bot.luau` after price changes).
 3. Listen to the 5 chosen sounds (including the music and the fountain); fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
-4. More content for rebirth runs: more decor themes, special orders, a rebirth-only potion or ingredient.
+4. More content for rebirth runs: something new at Rebirth 2 and 3 (the Star Well comes with the first), more decor themes, seasonal events.
 5. Later: monetization (see the API notes above), trading between friends.

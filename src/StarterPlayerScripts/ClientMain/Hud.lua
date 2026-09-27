@@ -490,7 +490,7 @@ function Hud.SetState(state: State)
 	local canAfford = false
 	for _, upgradeId in Config.UpgradeOrder do
 		local cost = Config.GetNextUpgradeCost(upgradeId, Config.GetLevel(state.Upgrades, upgradeId))
-		if cost and state.Coins >= cost and Config.IsUpgradeAvailable(state.Upgrades, upgradeId) then
+		if cost and state.Coins >= cost and Config.IsUpgradeAvailable(state.Upgrades, upgradeId, state.Rebirths) then
 			canAfford = true
 			break
 		end

@@ -79,6 +79,7 @@ local Sounds: { [string]: SoundDef } = {
 	Rocket = sound(BOOM, 0.22, 0.8, "rocket launch"),
 	Disco = sound(TICK, 0.5, 1, "disco dance music", { Id = CELEBRATE, MaxSeconds = 3.2 }),
 	Boo = sound("", 0.5, 1, "ghost boo"),
+	Twinkle = sound(TICK, 0.5, 1.6, "magic twinkle stars", { Id = CHIME, MaxSeconds = 2 }),
 	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
 	Fountain = sound("", 0.3, 1, "fountain water loop", { Id = WATER }), -- 3D, at the plaza fountain
 }

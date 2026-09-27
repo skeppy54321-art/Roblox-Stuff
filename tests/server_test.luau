@@ -261,6 +261,7 @@ do
 	check("banner skips cosmetics while useful upgrades are left", C.GetSuggestedUpgrade(early, 160) == nil, C.GetSuggestedUpgrade(early, 160))
 	local midway = { BrewSpeed = 2, StarflowerBed = 1, Shelves = 1, GreenThumb = 1, CounterSpace = 1 }
 	check("banner saves up for the Frost Grotto before more boosts", C.GetSuggestedUpgrade(midway, 350) == nil and C.GetSuggestedUpgrade(midway, 400) == "FrostGrotto")
+	check("after a rebirth the banner suggests the Star Well first", C.GetSuggestedUpgrade(midway, 500, 1) == nil and C.GetSuggestedUpgrade(midway, 600, 1) == "StarWell")
 	local done = { BrewSpeed = 3, StarflowerBed = 1, Shelves = 2, GreenThumb = 2, CounterSpace = 1, FrostGrotto = 1, EmberGarden = 1, CloudGarden = 1 }
 	check("banner suggests decor once nothing useful is left", C.GetSuggestedUpgrade(done, 160) == "CozyDecor")
 end
@@ -593,7 +594,7 @@ SocialService.RedrawBoard()
 local rowsFolder = town.MarketStars.StarsBoard.BoardGui.Page.Rows
 check("board row 1 is the top earner", rowsFolder.Row1.Visible and rowsFolder.Row1.PlayerName.Text == "Tester", rowsFolder.Row1.PlayerName.Text)
 check("board row 2 is the friend", rowsFolder.Row2.Visible and rowsFolder.Row2.PlayerName.Text == "Friend", rowsFolder.Row2.PlayerName.Text)
-check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == "1/12", rowsFolder.Row2.RecipesValue.Text)
+check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == `1/{#Config.RecipeOrder}`, rowsFolder.Row2.RecipesValue.Text)
 check("board shows cheers", rowsFolder.Row1.CheersValue.Text == "1", rowsFolder.Row1.CheersValue.Text)
 check("unused rows hidden", not rowsFolder.Row3.Visible)
 check("empty note hidden", not rowsFolder.Empty.Visible)
@@ -753,6 +754,12 @@ if data2 then
 	local cauldronB = plotB.Cauldron
 	Engine.setCFrame(root2, CFrame.new(cauldronB.Hitbox.CFrame.Position + Vector3.new(0, 0, 3)))
 	local RequestRebirth = game:GetService("ReplicatedStorage").Remotes.RequestRebirth
+	-- the Star Well is only for players who have rebirthed
+	data2.Coins = 5000
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player2, "StarWell")
+	task.wait(0.2)
+	check("the Star Well needs a rebirth", (data2.Upgrades.StarWell or 0) == 0 and data2.Coins == 5000)
+	check("...its corner has a barrel, no sign", plotB:FindFirstChild("CornerBarrel") ~= nil and plotB.Lots:FindFirstChild("StarWellLot") == nil)
 	data2.Coins = 100
 	Engine.signal(RequestRebirth, "OnServerEvent"):Fire(player2)
 	task.wait(0.2)
@@ -768,6 +775,22 @@ if data2 then
 	check("useful upgrades reset, cosmetics kept", data2.Upgrades.CloudGarden == nil and data2.Upgrades.BrewSpeed == nil and data2.Upgrades.CozyDecor == 3 and data2.Upgrades.Familiar == 3)
 	check("recipes kept", data2.Discovered.GiantHead == true and data2.Discovered.Rocket == true)
 	check("the shop is back to basics", plotB.Sources:FindFirstChild("Starflower") == nil and plotB.Lots:FindFirstChild("StarflowerBedLot") ~= nil)
+	check("the Star Well is for sale now (the barrel made room)", plotB.Lots:FindFirstChild("StarWellLot") ~= nil and plotB:FindFirstChild("CornerBarrel") == nil)
+	-- for tests/preview: the front-left corner of this shop (views well, wellfront)
+	local function dumpCorner(file)
+		local cf = plotB.PrimaryPart.CFrame
+		local function v(x, y, z)
+			local p = (cf * CFrame.new(x, y, z)).Position
+			return { p.X, p.Y, p.Z }
+		end
+		local views = {
+			well = { pos = v(-5.5, 7.5, -1), look = v(-12.5, 2, -7.2), fov = 55 },
+			wellfront = { pos = v(-9, 6.5, -19), look = v(-11.5, 2.5, -7), fov = 55 },
+		}
+		local parts, lights = Engine.dumpParts(workspace)
+		fs.writeFile(OUT .. "/" .. file, serde.encode("json", { parts = parts, lights = lights, views = views }))
+	end
+	dumpCorner("parts_welllot.json")
 	local signB = plotB.Sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
 	check("the sign shows the rebirth", signB:find("Rebirth 1") ~= nil, signB)
 	check("familiar kept", player2:GetAttribute("Familiar") == 3)
@@ -796,6 +819,30 @@ if data2 then
 		local tipB = if cue and cue.args[1] == "Sale" then cue.args[2].Tip else 0
 		check("sales pay 25% more after a rebirth", data2.Coins - before == expected + tipB, `{data2.Coins - before} vs {expected} + {tipB}`)
 	end
+	-- build the Star Well, collect Stardust, brew the Starlight Potion
+	task.wait(0.5) -- the upgrade remote's cooldown
+	data2.Coins = 1000
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player2, "StarWell")
+	task.wait(0.5)
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player2, "StarflowerBed")
+	task.wait(0.3)
+	local well = plotB.Sources:FindFirstChild("Stardust")
+	check("the Star Well can be built after a rebirth", data2.Upgrades.StarWell == 1 and well ~= nil and plotB.Lots:FindFirstChild("StarWellLot") == nil)
+	dumpCorner("parts_well.json")
+	if well then
+		Engine.setCFrame(root2, CFrame.new(well.Hitbox.CFrame.Position + Vector3.new(3, 0, 0)))
+		task.wait(0.2)
+		Engine.signal(well.Hitbox.CollectPrompt, "Triggered"):Fire(player2)
+		task.wait(0.2)
+		check("stardust collected from the well", (data2.Ingredients.Stardust or 0) == 1, data2.Ingredients.Stardust)
+	end
+	data2.Ingredients = { Stardust = 1, Moonberry = 1, Starflower = 1 }
+	data2.Potions = {}
+	Engine.setCFrame(root2, CFrame.new(cauldronB.Hitbox.CFrame.Position + Vector3.new(0, 0, 3)))
+	task.wait(0.2)
+	Engine.signal(RequestBrew, "OnServerEvent"):Fire(player2, "Starlight")
+	task.wait(0.3)
+	check("the Starlight Potion brews", cauldronB:GetAttribute("BrewRecipe") == "Starlight", cauldronB:GetAttribute("BrewRecipe"))
 end
 
 print("")

@@ -45,6 +45,7 @@ ShopBuilder.SourceSpots = {
 	FrostCrystal = Vector3.new(10.5, 0, -3),
 	EmberPepper = Vector3.new(-10.5, 0, 10.5),
 	CloudPuff = Vector3.new(10.5, 0, 10.5),
+	Stardust = Vector3.new(-12.5, 0, -7.2), -- front-left corner, against the side wall
 } :: { [string]: Vector3 }
 
 -- Customers line up in front of the counter, this far out (plot space z).
@@ -432,19 +433,116 @@ local function buildCloudPuff(parent: Instance, at: At): Model
 	return garden
 end
 
+-- Star well (after a rebirth): a little stone wishing well with a tiled roof and glowing
+-- water; the stars twinkling above the water = charges. Compact, so there's still room to
+-- walk past it out of the shop.
+local function buildStardust(parent: Instance, at: At): Model
+	local well = sourceModel(parent, "Stardust")
+	local c = ShopBuilder.SourceSpots.Stardust
+	local color = Config.Ingredients.Stardust.Color
+	local stone = Color3.fromRGB(150, 148, 172)
+	-- a ring of stone blocks (solid) around a dark shaft
+	local RING, BLOCKS = 1.2, 8
+	for i = 1, BLOCKS do
+		local angle = (i - 1) / BLOCKS * math.pi * 2
+		local cf = at(c.X + math.cos(angle) * RING, 0.65, c.Z + math.sin(angle) * RING)
+			* CFrame.Angles(0, -(angle + math.pi / 2), 0)
+		Kit.Part(
+			well,
+			"Stone",
+			Vector3.new(0.98, 1.3, 0.45),
+			cf,
+			Kit.Vary(stone, Random.new(i), 0.06),
+			Enum.Material.Cobblestone
+		)
+	end
+	Kit.Cylinder(well, "Shaft", 1, 2.1, at(c.X, 0.5, c.Z), Color3.fromRGB(40, 40, 70), Enum.Material.Slate) -- (under the water)
+	local water = Kit.Cylinder(
+		well,
+		"Water",
+		0.1,
+		2.05,
+		at(c.X, 1.12, c.Z),
+		Color3.fromRGB(90, 95, 230),
+		NEON,
+		{ CastShadow = false }
+	)
+	-- posts, the crank bar and a little roof
+	for _, x in { -RING, RING } do
+		Kit.Part(well, "Post", Vector3.new(0.3, 3.9, 0.3), at(c.X + x, 1.95, c.Z), P.DarkWood, WOOD)
+	end
+	Kit.Rod(well, "Crank", at(c.X - RING, 3.3, c.Z).Position, at(c.X + RING, 3.3, c.Z).Position, 0.22, P.DarkWood, WOOD)
+	for _, side in { -1, 1 } do
+		Kit.Decor(
+			well,
+			"Roof",
+			Vector3.new(3.1, 0.2, 1.5),
+			at(c.X, 4.15, c.Z + side * 0.6) * CFrame.Angles(math.rad(32 * side), 0, 0),
+			P.Roof,
+			Enum.Material.ClayRoofTiles
+		)
+	end
+	Kit.Cylinder(well, "Bucket", 0.5, 0.5, at(c.X, 1.55, c.Z + RING), P.Wood, WOOD)
+	-- stars over the water
+	local stars = {
+		{ -0.4, 1.8, -0.2 },
+		{ 0.35, 2.25, -0.3 },
+		{ 0.3, 1.75, 0.35 },
+		{ -0.3, 2.6, 0.3 },
+		{ 0.05, 2.9, -0.05 },
+	}
+	for i = 1, CHARGE_SLOTS do
+		local d = stars[i]
+		local center = at(c.X + d[1], d[2], c.Z + d[3]) * CFrame.Angles(0, i * 1.3, 0)
+		local star = Kit.Model(well, "Charge" .. i)
+		Kit.Ball(star, "Glow", 0.36, center.Position, color, NEON, { CastShadow = false })
+		for k = 0, 1 do
+			Kit.Decor(
+				star,
+				"Ray",
+				Vector3.new(0.75, 0.12, 0.12),
+				center * CFrame.Angles(0, 0, math.rad(90 * k)),
+				Color3.fromRGB(235, 240, 255),
+				NEON,
+				{ CastShadow = false }
+			)
+		end
+	end
+	Kit.Light(water, color, 9, 0.9)
+	Kit.Sparkles(water, color, 4)
+	collectPrompt(well, Vector3.new(3.4, 4.2, 3.4), at(c.X, 2.1, c.Z), "Stardust")
+	return well
+end
+
 -- "For sale" lot shown where a locked source will be planted.
--- `faceX` = +1 turns the sign toward +X (the shop's middle), -1 toward -X.
-local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vector3, faceX: number): Model
+-- `faceX` = +1 turns the sign toward +X (the shop's middle), -1 toward -X. `size` is the
+-- patch of dirt (default 4.6 x 3.8 studs).
+local function buildLot(
+	parent: Instance,
+	at: At,
+	upgradeId: string,
+	spot: Vector3,
+	faceX: number,
+	size: Vector2?
+): Model
 	local upgrade = Config.Upgrades[upgradeId]
 	local cost = upgrade.Levels[1].Cost
 	local lot = Kit.Model(parent, upgradeId .. "Lot")
 	lot:SetAttribute("Upgrade", upgradeId)
-	local dirt =
-		Kit.Decor(lot, "Dirt", Vector3.new(4.6, 0.1, 3.8), at(spot.X, 0.05, spot.Z), P.Dirt, Enum.Material.Ground)
+	local patch = size or Vector2.new(4.6, 3.8)
+	local dirt = Kit.Decor(
+		lot,
+		"Dirt",
+		Vector3.new(patch.X, 0.1, patch.Y),
+		at(spot.X, 0.05, spot.Z),
+		P.Dirt,
+		Enum.Material.Ground
+	)
 	Kit.Sparkles(dirt, upgrade.Color, 3)
 	-- little stakes at the corners
+	local sx, sz = patch.X / 2 - 0.1, patch.Y / 2 - 0.1
 	for _, corner in
-		{ Vector3.new(-2.2, 0, -1.8), Vector3.new(2.2, 0, -1.8), Vector3.new(-2.2, 0, 1.8), Vector3.new(2.2, 0, 1.8) }
+		{ Vector3.new(-sx, 0, -sz), Vector3.new(sx, 0, -sz), Vector3.new(-sx, 0, sz), Vector3.new(sx, 0, sz) }
 	do
 		Kit.Decor(
 			lot,
@@ -462,7 +560,7 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 		Kit.Decor(lot, "SignBoard", Vector3.new(3.6, 1.9, 0.2), base * CFrame.new(0, 2.9, 0) * face, P.LightWood, WOOD)
 	local label = Kit.SurfaceText(board, Enum.NormalId.Front, `{upgrade.DisplayName}\n{cost} coins`, P.TextDark, 60)
 	label.Name = "LotLabel"
-	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
+	local box = Kit.Hitbox(lot, Vector3.new(patch.X, 4.5, patch.Y), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
 end
@@ -895,8 +993,9 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	end
 
 	-- A barrel and crates in the front corners, beside the counter (the back corners grow
-	-- the Ember and Cloud gardens)
-	barrel(decor, at(-12.4, 1.3, -6.6))
+	-- the Ember and Cloud gardens; the barrel makes way for the Star Well after a rebirth)
+	local cornerBarrel = Kit.Model(plot, "CornerBarrel")
+	barrel(cornerBarrel, at(-12.4, 1.3, -6.6))
 	Kit.Part(
 		decor,
 		"Crate",
@@ -923,6 +1022,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		FrostCrystal = buildFrostCrystal(sourcesFolder, at),
 		EmberPepper = buildEmberPepper(sourcesFolder, at),
 		CloudPuff = buildCloudPuff(sourcesFolder, at),
+		Stardust = buildStardust(sourcesFolder, at),
 	}
 
 	-- "For sale" lots for the sources that start locked
@@ -931,7 +1031,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 	for ingredientId, spot in ShopBuilder.SourceSpots do
 		local upgradeId = Config.Ingredients[ingredientId].UnlockedBy
 		if upgradeId then
-			lots[upgradeId] = buildLot(lotsFolder, at, upgradeId, spot, if spot.X < 0 then 1 else -1)
+			local size = if ingredientId == "Stardust" then Vector2.new(3, 3) else nil -- (a snug corner)
+			lots[upgradeId] = buildLot(lotsFolder, at, upgradeId, spot, if spot.X < 0 then 1 else -1, size)
 		end
 	end
 
@@ -947,6 +1048,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		DecorGold = buildDecorGold(plot, at),
 		Shelf2 = buildShelfLevel(plot, at, "Shelf2", 5.1, rng),
 		Shelf3 = buildShelfLevel(plot, at, "Shelf3", 7.4, rng),
+		CornerBarrel = cornerBarrel,
 	}
 
 	local cheerStand = buildCheerStand(plot, at)

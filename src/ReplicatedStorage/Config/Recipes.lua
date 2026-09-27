@@ -161,6 +161,18 @@ local Recipes: { [string]: Recipe } = {
 		Color = Color3.fromRGB(255, 175, 60),
 		Order = 12,
 	},
+	Starlight = { -- Stardust comes from the Star Well, which needs a rebirth
+		Id = "Starlight",
+		DisplayName = "Starlight Potion",
+		Description = "They turn into a starry night sky, with stars swirling around them!",
+		Reaction = "I'm made of stars!",
+		Ingredients = { Stardust = 1, Moonberry = 1, Starflower = 1 },
+		SellPrice = 100,
+		BrewMultiplier = 2,
+		Effect = "Starlight",
+		Color = Color3.fromRGB(110, 120, 255),
+		Order = 13,
+	},
 }
 
 return Recipes

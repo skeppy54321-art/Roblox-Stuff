@@ -4,6 +4,7 @@
 -- next level's cost plus the numbers that level switches on.
 --   Unlocks  = ingredient id whose source gets planted at level 1
 --   Requires = upgrade id that must be bought first
+--   MinRebirths = only for players who have rebirthed at least this many times
 
 export type UpgradeLevel = {
 	Cost: number,
@@ -25,6 +26,7 @@ export type Upgrade = {
 	Levels: { UpgradeLevel },
 	Unlocks: string?,
 	Requires: string?,
+	MinRebirths: number?,
 	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
 	Cosmetic: boolean?, -- only looks nice: the goal banner suggests it after the useful upgrades
 	Order: number,
@@ -135,6 +137,20 @@ local Upgrades: { [string]: Upgrade } = {
 		Announce = "grew a Cloud Garden",
 		Order = 8,
 	},
+	StarWell = {
+		Id = "StarWell",
+		DisplayName = "Star Well",
+		Description = "A wishing well that catches falling stars. Unlocks the Starlight Potion!",
+		BaseSummary = "Not built",
+		Color = Color3.fromRGB(140, 150, 255),
+		Levels = {
+			{ Cost = 600, Summary = "Stardust twinkling" },
+		},
+		Unlocks = "Stardust",
+		MinRebirths = 1,
+		Announce = "built a Star Well",
+		Order = 9,
+	},
 	CozyDecor = {
 		Id = "CozyDecor",
 		DisplayName = "Cozy Decor",
@@ -147,7 +163,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 500, Summary = "Banners + magic sign" },
 			{ Cost = 1500, Summary = "Golden cauldron!" },
 		},
-		Order = 9,
+		Order = 10,
 	},
 	Familiar = {
 		Id = "Familiar",
@@ -162,7 +178,7 @@ local Upgrades: { [string]: Upgrade } = {
 		},
 		Cosmetic = true,
 		Announce = "got a new magic familiar",
-		Order = 10,
+		Order = 11,
 	},
 }
 

@@ -204,7 +204,7 @@ while os.clock() - started < MINUTES * 60 do
 	-- 2. buy what the goal banner would suggest (after the first sale)
 	if (data.Stats.PotionsSold or 0) > 0 then
 		local bought = false
-		local id = Config.GetSuggestedUpgrade(data.Upgrades, data.Coins)
+		local id = Config.GetSuggestedUpgrade(data.Upgrades, data.Coins, data.Rebirths)
 		if id then
 			local level = Config.GetLevel(data.Upgrades, id)
 			local cost = Config.GetNextUpgradeCost(id, level)
