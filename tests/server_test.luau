@@ -531,6 +531,30 @@ claim(21 + 20 + 60)
 check("missing days resets the streak", data.Coins == giftStart + 110 and data.Daily.Streak == 1, `{data.Coins - giftStart} day {data.Daily.Streak}`)
 GiftService.Now = realNow
 
+print("== master brewer ==")
+do
+	local stock = table.clone(data.Potions)
+	data.Potions = {}
+	for _, id in Config.RecipeOrder do
+		data.Discovered[id] = id ~= "Tiny" or nil
+	end
+	data.Ingredients.Glowshroom = 2
+	goTo(cauldron.Hitbox)
+	local mastersBefore = cuesTo(player, "Master")
+	Engine.signal(RequestBrew, "OnServerEvent"):Fire(player, "Tiny")
+	local mastered = waitFor(6, function()
+		return cuesTo(player, "Master") > mastersBefore
+	end)
+	check("brewing the last new potion makes you a Master Brewer", mastered)
+	local signText = plot.Sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
+	check("the sign says so", signText:find("Master Brewer") ~= nil, signText)
+	SocialService.RedrawBoard()
+	local firstRow = town.MarketStars.StarsBoard.StarsGui.Page.Rows.Row1.PlayerName
+	check("gold name on the Market Stars board", firstRow.TextColor3 ~= Config.Palette.TextDark)
+	data.Potions = stock
+	PlayerData.Push(player)
+end
+
 print("== brew a specific recipe ==")
 data.Ingredients.Starflower = 1
 data.Ingredients.Glowshroom = 1
@@ -569,6 +593,9 @@ if data2 then
 	check("upgrades restored", data2.Upgrades.CozyDecor == 3)
 	check("discoveries restored", data2.Discovered.GiantHead == true)
 	check("daily streak restored", data2.Daily.Streak == 1 and data2.Daily.Last > 0)
+	local plot2sign = market:FindFirstChild(player2:GetAttribute("PlotName")).Sign
+	local signText2 = plot2sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
+	check("Master Brewer title back on the sign after rejoining", signText2:find("Master Brewer") ~= nil, signText2)
 	local plot2 = market:FindFirstChild(player2:GetAttribute("PlotName"))
 	task.wait(0.3)
 	check("upgrades shown again", plot2 and plot2:FindFirstChild("DecorGold") ~= nil)

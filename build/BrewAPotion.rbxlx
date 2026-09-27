@@ -273,6 +273,19 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 	return if usefulLeft then nil else cosmetic
 end
 
+-- Has this player brewed every potion at least once? (the Master Brewer title)
+function Config.IsMasterBrewer(discovered: { [string]: boolean }?): boolean
+	if not discovered then
+		return false
+	end
+	for _, id in Config.RecipeOrder do
+		if not discovered[id] then
+			return false
+		end
+	end
+	return true
+end
+
 -- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
 -- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
 -- os.time() on the server, workspace:GetServerTimeNow() on clients.
@@ -2350,6 +2363,7 @@ end
 -- Starts every server module and handles players joining/leaving.
 
 local Players = game:GetService("Players")
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
 
 local Modules = script.Parent:WaitForChild("Modules")
 local Net = require(Modules:WaitForChild("Net")) -- creates the Remotes folder first
@@ -2414,6 +2428,7 @@ local function onPlayerAdded(player: Player)
 
 	SocialService.PlayerJoined(player, data, plot)
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
+	PlotService.SetSignTitle(player, Config.IsMasterBrewer(data.Discovered))
 
 	-- new players face their first job (the Moonberry bush); everyone else faces the counter
 	local function facing(): Vector3?
@@ -2601,7 +2616,17 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	PlayerData.Push(player)
 	if isNew then
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
-		SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
+		if Config.IsMasterBrewer(data.Discovered) then
+			-- that was the last one: every potion brewed at least once
+			PlotService.SetSignTitle(player, true)
+			Net.Cue(player, "Master", {})
+			SocialService.Announce(
+				player,
+				`{player.DisplayName} discovered the {recipe.DisplayName} and became a Master Brewer!`
+			)
+		else
+			SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
+		end
 	else
 		Net.Cue(player, "PotionReady", { Recipe = brew.Recipe })
 	end
@@ -5054,6 +5079,17 @@ function PlotService.Assign(player: Player): Plot?
 		end
 	end
 	return nil
+end
+
+-- The owner's name on the sign, with "Master Brewer" under it once they've earned it.
+function PlotService.SetSignTitle(player: Player, master: boolean)
+	local plot = plotByPlayer[player]
+	if plot then
+		setSign(
+			plot,
+			if master then `{player.DisplayName}'s Potions\nMaster Brewer` else `{player.DisplayName}'s Potions`
+		)
+	end
 end
 
 function PlotService.Release(player: Player)
@@ -8728,7 +8764,7 @@ local function buildBoard(board: BasePart)
 	})
 end
 
-type Entry = { Name: string, Earned: number, Recipes: number, Cheers: number }
+type Entry = { Name: string, Earned: number, Recipes: number, Cheers: number, Master: boolean }
 
 local function redrawBoard()
 	local entries: { Entry } = {}
@@ -8745,6 +8781,7 @@ local function redrawBoard()
 				Earned = data.Stats.CoinsEarned or 0,
 				Recipes = recipes,
 				Cheers = data.Stats.Cheers or 0,
+				Master = Config.IsMasterBrewer(data.Discovered),
 			})
 		end
 	end
@@ -8760,6 +8797,7 @@ local function redrawBoard()
 		row.Frame.Visible = entry ~= nil
 		if entry then
 			row.Name.Text = entry.Name
+			row.Name.TextColor3 = if entry.Master then Color3.fromRGB(205, 140, 20) else P.TextDark
 			row.Coins.Text = Config.FormatNumber(entry.Earned)
 			row.Recipes.Text = `{entry.Recipes}/{total}`
 			row.Cheers.Text = Config.FormatNumber(entry.Cheers)
@@ -9644,6 +9682,11 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "CheerSent" then
 		Sfx.Play("Cheer", 1.15)
 		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
+	elseif cue == "Master" then
+		task.delay(3.2, function() -- after the NEW RECIPE banner
+			Sfx.Play("Upgrade")
+			Hud.Celebrate("MASTER BREWER!", "You've brewed every potion!", P.Gold)
+		end)
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")
 		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)

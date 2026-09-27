@@ -259,6 +259,19 @@ function Config.GetSuggestedUpgrade(upgrades: Levels, coins: number): string?
 	return if usefulLeft then nil else cosmetic
 end
 
+-- Has this player brewed every potion at least once? (the Master Brewer title)
+function Config.IsMasterBrewer(discovered: { [string]: boolean }?): boolean
+	if not discovered then
+		return false
+	end
+	for _, id in Config.RecipeOrder do
+		if not discovered[id] then
+			return false
+		end
+	end
+	return true
+end
+
 -- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
 -- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
 -- os.time() on the server, workspace:GetServerTimeNow() on clients.

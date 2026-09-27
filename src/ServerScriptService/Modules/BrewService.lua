@@ -134,7 +134,17 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	PlayerData.Push(player)
 	if isNew then
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
-		SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
+		if Config.IsMasterBrewer(data.Discovered) then
+			-- that was the last one: every potion brewed at least once
+			PlotService.SetSignTitle(player, true)
+			Net.Cue(player, "Master", {})
+			SocialService.Announce(
+				player,
+				`{player.DisplayName} discovered the {recipe.DisplayName} and became a Master Brewer!`
+			)
+		else
+			SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
+		end
 	else
 		Net.Cue(player, "PotionReady", { Recipe = brew.Recipe })
 	end

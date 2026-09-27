@@ -67,7 +67,7 @@ StarterPlayer > StarterPlayerScripts
 * Collect ingredients from your plants (charges regrow). 6 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal, Ember Pepper, Cloud Puff (unlock by buying their plots).
 * Brew at your cauldron. Standing at it opens the **cauldron menu**: every unlocked potion, what you're missing, which one a customer wants. Tap a card (or press 1-9), or press the cauldron to brew the suggested potion. Press again while brewing to stir (faster). The liquid turns the potion's color.
 * When a potion is done, a bottle of it pops out of the cauldron with a sparkle, and your potions stand on the counter as glowing bottles (everyone can see your stock).
-* First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price.
+* First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price. Brew all 12 and you become a **Master Brewer**: a celebration, market news, "Master Brewer" under your name on the shop sign, and a gold name on the Market Stars board.
 * Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). They wait up to 45 seconds; if your shelf is full and their potion isn't on it, they give up after a few seconds ("Oh, you're all out!") and the next customer asks for something you have, so the shop can never get stuck. Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
 
 **12 potions and their effects** (every customer drinks the potion first)
@@ -188,7 +188,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 ## Next steps
 
 1. **You:** open `build/BrewAPotion.rbxlx`, run the test checklist, send errors or "it works" (screenshots help a lot for the look).
-2. Fix what the playtest finds; tune lighting, colors and economy numbers.
+2. Fix what the playtest finds; tune lighting, colors and economy numbers (re-run `tests/pacing_bot.luau` after price changes).
 3. Listen to the 4 chosen sounds and the music; fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
-4. Content after ~30 min: more ingredients and recipes, more decor, maybe a daily reward.
-5. Later: monetization (see the API notes above), leaderboards, trading between friends.
+4. After the familiars there is nothing left to buy: next content could be a prestige/"Grand Opening" reset, more decor themes, or special orders.
+5. Later: monetization (see the API notes above), a global all-time leaderboard (OrderedDataStore), trading between friends.

@@ -97,6 +97,17 @@ function PlotService.Assign(player: Player): Plot?
 	return nil
 end
 
+-- The owner's name on the sign, with "Master Brewer" under it once they've earned it.
+function PlotService.SetSignTitle(player: Player, master: boolean)
+	local plot = plotByPlayer[player]
+	if plot then
+		setSign(
+			plot,
+			if master then `{player.DisplayName}'s Potions\nMaster Brewer` else `{player.DisplayName}'s Potions`
+		)
+	end
+end
+
 function PlotService.Release(player: Player)
 	local plot = plotByPlayer[player]
 	if not plot then

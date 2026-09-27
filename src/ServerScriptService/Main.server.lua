@@ -3,6 +3,7 @@
 -- Starts every server module and handles players joining/leaving.
 
 local Players = game:GetService("Players")
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
 
 local Modules = script.Parent:WaitForChild("Modules")
 local Net = require(Modules:WaitForChild("Net")) -- creates the Remotes folder first
@@ -67,6 +68,7 @@ local function onPlayerAdded(player: Player)
 
 	SocialService.PlayerJoined(player, data, plot)
 	UpgradeService.ApplyPlayer(player, data.Upgrades)
+	PlotService.SetSignTitle(player, Config.IsMasterBrewer(data.Discovered))
 
 	-- new players face their first job (the Moonberry bush); everyone else faces the counter
 	local function facing(): Vector3?

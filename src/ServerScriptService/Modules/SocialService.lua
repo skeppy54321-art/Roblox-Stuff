@@ -340,7 +340,7 @@ local function buildBoard(board: BasePart)
 	})
 end
 
-type Entry = { Name: string, Earned: number, Recipes: number, Cheers: number }
+type Entry = { Name: string, Earned: number, Recipes: number, Cheers: number, Master: boolean }
 
 local function redrawBoard()
 	local entries: { Entry } = {}
@@ -357,6 +357,7 @@ local function redrawBoard()
 				Earned = data.Stats.CoinsEarned or 0,
 				Recipes = recipes,
 				Cheers = data.Stats.Cheers or 0,
+				Master = Config.IsMasterBrewer(data.Discovered),
 			})
 		end
 	end
@@ -372,6 +373,7 @@ local function redrawBoard()
 		row.Frame.Visible = entry ~= nil
 		if entry then
 			row.Name.Text = entry.Name
+			row.Name.TextColor3 = if entry.Master then Color3.fromRGB(205, 140, 20) else P.TextDark
 			row.Coins.Text = Config.FormatNumber(entry.Earned)
 			row.Recipes.Text = `{entry.Recipes}/{total}`
 			row.Cheers.Text = Config.FormatNumber(entry.Cheers)

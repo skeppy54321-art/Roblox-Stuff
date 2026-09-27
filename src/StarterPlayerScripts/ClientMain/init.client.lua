@@ -586,6 +586,11 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "CheerSent" then
 		Sfx.Play("Cheer", 1.15)
 		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
+	elseif cue == "Master" then
+		task.delay(3.2, function() -- after the NEW RECIPE banner
+			Sfx.Play("Upgrade")
+			Hud.Celebrate("MASTER BREWER!", "You've brewed every potion!", P.Gold)
+		end)
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")
 		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)
