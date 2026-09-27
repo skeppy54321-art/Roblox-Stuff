@@ -62,6 +62,7 @@ StarterPlayer > StarterPlayerScripts
 * Six townsfolk stroll around the fountain, stop to admire it and window-shop at the stalls (players' shops first), sometimes saying something nice. The server builds them once; every client walks its own copy (no network cost).
 * Around it: trees between the shops, a forest ring, rolling hills on the horizon.
 * Golden-hour lighting: low warm sun, haze, sunset clouds, bloom on neon, gentle color grading. Fires and lanterns flicker.
+* **Evening cycle** (every 8 minutes): golden hour drifts into a pink sunset and a purple dusk. The first stars come out, lanterns, fires and the fountain potion glow brighter, and three times as many fireflies drift over the plaza; then the sun comes back. Every player sees the same sky (it follows the server clock) and it costs no network. Looks and timing are in `Config/World.lua` (`DayCycle`); `Enabled = false` keeps golden hour all the time.
 
 **Loop**
 * Collect ingredients from your plants (charges regrow). 6 ingredients: Moonberry, Glowshroom (start), Starflower, Frost Crystal, Ember Pepper, Cloud Puff (unlock by buying their plots).
@@ -154,6 +155,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 16. **Rebirth:** with the Cloud Garden and 5,000+ coins, the Rebirth card is at the top of the Upgrades panel. Tap it twice: your shop starts over, the familiar stays, your coins now show "x1.25", the sign says "Rebirth 1", and sales pay 25% more.
 17. Watch the plaza for a minute: townsfolk stroll around, stop at the fountain and at shops, and sometimes say something.
 18. **Big order** (after 20 sales, or use the +10K button and sell a while): a customer with a blue BIG ORDER tag asks for 3 of one potion. Selling with 2 on the shelf does nothing; with 3 they all go at once for 1.5x the price.
+19. **Evening:** stay for a few minutes (or set `DayCycle.Seconds = 60` in `Config/World.lua`): the sky turns pink, then purple with stars, lanterns glow brighter, more fireflies. Check that shops and customers are still easy to see at dusk (if not, raise `OutdoorAmbient` in the `dusk` look).
 
 Send any red Output errors and what you did right before. Yellow `[Effects] ... errored` or `[ClientMain] custom prompts disabled` warnings are worth sending too.
 
@@ -162,6 +164,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 * Everything built by code (no free models). Colors live in `Config.Palette`, all numbers in `Config`.
 * The server decides everything; the client only asks and displays. Every action checks: owns the plot, near enough, cooldown, valid id, has the items. State changes right after the checks with no yields in between, so double presses can't duplicate.
 * Shared rules (what's unlocked, costs, brew times, capacity) are functions in `Config`, so the server and the UI can never disagree.
+* The evening sky runs on each client from the server clock (`ClientMain/DayCycle`); the server's Lighting stays the golden-hour look.
 * Customers walk on the clients only: the server sets `Phase` / `PhaseStart` / `PhaseEnd` / `WalkFrom` attributes and keeps the customer at the counter. Smooth, and it costs no network.
 * Effects run on clients only (`Effects` module), never touch coins, and a broken effect only prints a warning.
 * Locked plants and not-yet-bought decor are built once and parked in `ServerStorage.PlotStash`; buying moves them into the shop.

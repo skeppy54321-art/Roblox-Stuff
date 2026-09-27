@@ -1071,7 +1071,7 @@ return Upgrades
           <string name="Name">World</string>
           <string name="Source"><![CDATA[--!strict
 -- World (ModuleScript) — ReplicatedStorage.Config.World
--- Market layout and the golden-hour lighting look.
+-- Market layout, the golden-hour lighting look and the evening cycle.
 
 local rgb = Color3.fromRGB
 
@@ -1123,6 +1123,92 @@ World.Bloom = { Intensity = 0.7, Size = 28, Threshold = 1.35 }
 World.ColorCorrection = { Brightness = 0.02, Contrast = 0.08, Saturation = 0.14, TintColor = rgb(255, 246, 234) }
 World.SunRays = { Intensity = 0.05, Spread = 0.7 }
 World.Clouds = { Cover = 0.5, Density = 0.55, Color = rgb(255, 230, 215) }
+
+-- How the sky looks at one moment of the evening cycle (below).
+export type SkyLook = {
+	ClockTime: number,
+	Brightness: number,
+	Exposure: number,
+	Ambient: Color3,
+	OutdoorAmbient: Color3,
+	AtmosphereColor: Color3,
+	AtmosphereDecay: Color3,
+	Haze: number,
+	Glare: number,
+	CloudColor: Color3,
+	Tint: Color3,
+	Lanterns: number, -- lantern, fire and fountain lights, times their normal brightness
+	Fireflies: number, -- fireflies over the plaza, times the normal number
+}
+
+-- The golden-hour look above, as a SkyLook.
+local golden: SkyLook = {
+	ClockTime = World.Lighting.ClockTime,
+	Brightness = World.Lighting.Brightness,
+	Exposure = World.Lighting.ExposureCompensation,
+	Ambient = World.Lighting.Ambient,
+	OutdoorAmbient = World.Lighting.OutdoorAmbient,
+	AtmosphereColor = World.Atmosphere.Color,
+	AtmosphereDecay = World.Atmosphere.Decay,
+	Haze = World.Atmosphere.Haze,
+	Glare = World.Atmosphere.Glare,
+	CloudColor = World.Clouds.Color,
+	Tint = World.ColorCorrection.TintColor,
+	Lanterns = 1,
+	Fireflies = 1,
+}
+
+-- The sun touches the rooftops: deep orange haze, pink clouds.
+local sunset: SkyLook = {
+	ClockTime = 17.95,
+	Brightness = 2.1,
+	Exposure = 0.12,
+	Ambient = rgb(96, 76, 104),
+	OutdoorAmbient = rgb(160, 132, 158),
+	AtmosphereColor = rgb(255, 176, 150),
+	AtmosphereDecay = rgb(160, 96, 150),
+	Haze = 1.8,
+	Glare = 0.45,
+	CloudColor = rgb(255, 196, 186),
+	Tint = rgb(255, 238, 232),
+	Lanterns = 1.3,
+	Fireflies = 1.5,
+}
+
+-- Just after sunset: a purple sky with the first stars, lanterns and potions glowing.
+-- Kept bright enough to play (the outdoor ambient light stays high).
+local dusk: SkyLook = {
+	ClockTime = 18.5,
+	Brightness = 1.4,
+	Exposure = 0.25,
+	Ambient = rgb(104, 90, 132),
+	OutdoorAmbient = rgb(136, 124, 178),
+	AtmosphereColor = rgb(206, 158, 210),
+	AtmosphereDecay = rgb(104, 78, 158),
+	Haze = 2,
+	Glare = 0.1,
+	CloudColor = rgb(226, 178, 222),
+	Tint = rgb(244, 236, 255),
+	Lanterns = 1.8,
+	Fireflies = 3,
+}
+
+-- The evening cycle (client only: ClientMain.DayCycle). The market spends most of its time
+-- in golden hour, then drifts through the sunset into dusk and back again. Every player
+-- sees the same sky (it follows the server clock). `At` is the moment in the cycle (0 to
+-- 1); between two keys the look blends smoothly. Enabled = false keeps golden hour.
+World.DayCycle = {
+	Enabled = true,
+	Seconds = 480, -- one whole cycle
+	Keys = {
+		{ At = 0, Look = golden },
+		{ At = 0.45, Look = golden },
+		{ At = 0.56, Look = sunset },
+		{ At = 0.64, Look = dusk },
+		{ At = 0.86, Look = dusk },
+		{ At = 1, Look = golden },
+	},
+}
 
 -- Where shop `index` (1..PlotCount) sits. Its -Z side (the counter) faces the plaza.
 function World.GetPlotCFrame(index: number): CFrame
@@ -9673,6 +9759,7 @@ local Popups = require(script:WaitForChild("Popups"))
 local GoalMarker = require(script:WaitForChild("GoalMarker"))
 local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
+local DayCycle = require(script:WaitForChild("DayCycle"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
 local Familiars = require(script:WaitForChild("Familiars"))
 local Juice = require(script:WaitForChild("Juice"))
@@ -9716,6 +9803,15 @@ Popups.Init(playerGui)
 GoalMarker.Init(playerGui)
 CustomerAnimator.Init()
 Ambience.Init(market)
+do -- the evening sky is only a look: a failure here must never stop the game
+	local ok, err = pcall(function(): any
+		DayCycle.Init(market)
+		return nil
+	end)
+	if not ok then
+		warn(`[ClientMain] evening sky disabled: {err}`)
+	end
+end
 do -- pets are purely cosmetic: a failure here must never stop the game
 	local ok, err = pcall(function(): any
 		Familiars.Init()
@@ -10408,7 +10504,8 @@ end)
             <string name="Source"><![CDATA[--!strict
 -- Ambience (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.Ambience
 -- Small client-only touches that make the market feel alive: the giant potion on the
--- fountain slowly cycles through every potion color, and fires and lanterns flicker.
+-- fountain slowly cycles through every potion color, and fires and lanterns flicker (and
+-- glow brighter at dusk: see DayCycle).
 -- Cheap: updates about 15 times a second and only touches lights and one part.
 
 local RunService = game:GetService("RunService")
@@ -10417,9 +10514,13 @@ local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
 local Ambience = {}
 
+-- Every light here is shown at this times its normal brightness (DayCycle turns it up at dusk).
+Ambience.LightScale = 1
+
 local flickers: { [PointLight]: { Base: number, Seed: number } } = {} -- normal brightness + a random phase
 local statue: BasePart? = nil
 local statueLight: PointLight? = nil
+local statueBrightness = 0
 
 local function consider(inst: Instance)
 	if inst:IsA("PointLight") and flickers[inst] == nil then
@@ -10429,7 +10530,9 @@ local function consider(inst: Instance)
 		end)
 	elseif inst:IsA("BasePart") and inst.Name == "PotionGlass" then
 		statue = inst
-		statueLight = inst:FindFirstChildOfClass("PointLight")
+		local light = inst:FindFirstChildOfClass("PointLight")
+		statueLight = light
+		statueBrightness = if light then light.Brightness else 0
 	end
 end
 
@@ -10461,13 +10564,15 @@ function Ambience.Init(market: Instance)
 			statue.Color = color
 			if statueLight then
 				statueLight.Color = color
+				statueLight.Brightness = statueBrightness * Ambience.LightScale
 			end
 		end
 
 		-- flicker (skipped for the statue, whose light is steady)
+		local scale = Ambience.LightScale
 		for light, info in flickers do
 			if light ~= statueLight then
-				light.Brightness = info.Base * (0.85 + 0.3 * (math.noise(t * 3, info.Seed, 0) + 0.5))
+				light.Brightness = info.Base * scale * (0.85 + 0.3 * (math.noise(t * 3, info.Seed, 0) + 0.5))
 			end
 		end
 	end)
@@ -11192,6 +11297,142 @@ return CustomerAnimator
         </Item>
         <Item class="ModuleScript" referent="51">
           <Properties>
+            <string name="Name">DayCycle</string>
+            <string name="Source"><![CDATA[--!strict
+-- DayCycle (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.DayCycle
+-- The market's evening: golden hour slowly turns into a pink sunset and a purple dusk
+-- (the first stars come out, lanterns glow brighter, more fireflies over the plaza), then
+-- the sun comes back. The looks and timing live in Config.World.DayCycle.
+--
+-- Client only: the server's Lighting (WorldService) is the golden-hour look, and this
+-- changes it locally, so it costs no network. Every client follows the server clock, so
+-- everyone sees the same sky. Updates 5 times a second; the sky moves slowly enough.
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Ambience = require(script.Parent:WaitForChild("Ambience"))
+
+local CYCLE = Config.World.DayCycle
+local UPDATE_EVERY = 0.2 -- seconds
+
+type SkyLook = typeof(CYCLE.Keys[1].Look)
+
+local DayCycle = {}
+
+-- The clock the cycle follows (tests replace it).
+DayCycle.Now = function(): number
+	return workspace:GetServerTimeNow()
+end
+
+local fireflies: ParticleEmitter? = nil -- the plaza's (MarketBuilder)
+local fireflyRate = 0 -- its normal rate
+
+local function smooth(t: number): number
+	return t * t * (3 - 2 * t)
+end
+
+local function blend(a: SkyLook, b: SkyLook, t: number): SkyLook
+	local function n(x: number, y: number): number
+		return x + (y - x) * t
+	end
+	return {
+		ClockTime = n(a.ClockTime, b.ClockTime),
+		Brightness = n(a.Brightness, b.Brightness),
+		Exposure = n(a.Exposure, b.Exposure),
+		Ambient = a.Ambient:Lerp(b.Ambient, t),
+		OutdoorAmbient = a.OutdoorAmbient:Lerp(b.OutdoorAmbient, t),
+		AtmosphereColor = a.AtmosphereColor:Lerp(b.AtmosphereColor, t),
+		AtmosphereDecay = a.AtmosphereDecay:Lerp(b.AtmosphereDecay, t),
+		Haze = n(a.Haze, b.Haze),
+		Glare = n(a.Glare, b.Glare),
+		CloudColor = a.CloudColor:Lerp(b.CloudColor, t),
+		Tint = a.Tint:Lerp(b.Tint, t),
+		Lanterns = n(a.Lanterns, b.Lanterns),
+		Fireflies = n(a.Fireflies, b.Fireflies),
+	}
+end
+
+-- The look at `phase` (0 to 1 through the cycle).
+function DayCycle.LookAt(phase: number): SkyLook
+	local keys = CYCLE.Keys
+	local p = phase % 1
+	for i = 1, #keys - 1 do
+		local a, b = keys[i], keys[i + 1]
+		if p <= b.At then
+			local span = b.At - a.At
+			local t = if span > 0 then math.clamp((p - a.At) / span, 0, 1) else 1
+			return blend(a.Look, b.Look, smooth(t))
+		end
+	end
+	return keys[#keys].Look
+end
+
+-- How far through the cycle the market is right now (0 to 1).
+function DayCycle.Phase(): number
+	return (DayCycle.Now() / CYCLE.Seconds) % 1
+end
+
+-- Shows the look at `phase` right away.
+function DayCycle.Apply(phase: number)
+	local look = DayCycle.LookAt(phase)
+	Lighting.ClockTime = look.ClockTime
+	Lighting.Brightness = look.Brightness
+	Lighting.ExposureCompensation = look.Exposure
+	Lighting.Ambient = look.Ambient
+	Lighting.OutdoorAmbient = look.OutdoorAmbient
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atmosphere then
+		atmosphere.Color = look.AtmosphereColor
+		atmosphere.Decay = look.AtmosphereDecay
+		atmosphere.Haze = look.Haze
+		atmosphere.Glare = look.Glare
+	end
+	local grade = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	if grade then
+		grade.TintColor = look.Tint
+	end
+	local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+	if clouds then
+		clouds.Color = look.CloudColor
+	end
+	Ambience.LightScale = look.Lanterns
+	local emitter = fireflies
+	if emitter then
+		emitter.Rate = fireflyRate * look.Fireflies
+	end
+end
+
+function DayCycle.Init(market: Instance)
+	if not CYCLE.Enabled then
+		return
+	end
+	local town = market:WaitForChild("Town", 10)
+	local area = town and town:FindFirstChild("Fireflies")
+	local emitter = area and area:FindFirstChildOfClass("ParticleEmitter")
+	if emitter then
+		fireflies = emitter
+		fireflyRate = emitter.Rate
+	end
+	DayCycle.Apply(DayCycle.Phase())
+	local elapsed = 0
+	RunService.Heartbeat:Connect(function(dt)
+		elapsed += dt
+		if elapsed < UPDATE_EVERY then
+			return
+		end
+		elapsed = 0
+		DayCycle.Apply(DayCycle.Phase())
+	end)
+end
+
+return DayCycle
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="52">
+          <Properties>
             <string name="Name">Familiars</string>
             <string name="Source"><![CDATA[--!strict
 -- Familiars (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.Familiars
@@ -11501,7 +11742,7 @@ return Familiars
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -11586,7 +11827,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -12272,7 +12513,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">Juice</string>
             <string name="Source"><![CDATA[--!strict
@@ -12364,7 +12605,7 @@ return Juice
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -12425,7 +12666,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -12670,7 +12911,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -12885,7 +13126,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -13110,7 +13351,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">Townsfolk</string>
             <string name="Source"><![CDATA[--!strict
@@ -13379,7 +13620,7 @@ return Townsfolk
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -13717,7 +13958,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -14136,7 +14377,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="62">
+  <Item class="Workspace" referent="63">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

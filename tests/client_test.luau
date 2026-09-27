@@ -253,6 +253,40 @@ if process.args[2] then -- the plaza with its villagers, for tests/preview (view
 	fs.writeFile(process.args[2] .. "/parts_town.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
 end
 
+print("== evening sky ==")
+do
+	local World = Engine.loaded(game:GetService("ReplicatedStorage").Config.World)
+	local DayCycle = Engine.loaded(clientMain.DayCycle)
+	local Ambience = Engine.loaded(clientMain.Ambience)
+	local Lighting = game:GetService("Lighting")
+	local cycle = World.DayCycle
+	local golden, dusk = cycle.Keys[1].Look, cycle.Keys[4].Look
+	local lantern = workspace.Market:FindFirstChild("Lantern", true)
+	local lanternLight = lantern and lantern.Glass:FindFirstChildOfClass("PointLight")
+	local realNow = DayCycle.Now
+	DayCycle.Now = function()
+		return cycle.Seconds * 0.75 -- the middle of dusk
+	end
+	task.wait(0.5)
+	check("dusk: the sun goes down", math.abs(Lighting.ClockTime - dusk.ClockTime) < 0.01, Lighting.ClockTime)
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	check("dusk: the haze turns purple", atmosphere and atmosphere.Color == dusk.AtmosphereColor)
+	local flies = workspace.Market.Town.Fireflies.Fireflies
+	check("dusk: more fireflies", flies.Rate == 8 * dusk.Fireflies, flies.Rate)
+	check("dusk: lanterns glow brighter", Ambience.LightScale == dusk.Lanterns and lanternLight and lanternLight.Brightness > 1.4 * 1.15, lanternLight and lanternLight.Brightness)
+	local between = DayCycle.LookAt(0.5).ClockTime
+	check("the evening comes gradually", between > golden.ClockTime and between < dusk.ClockTime, between)
+	DayCycle.Now = function()
+		return cycle.Seconds * 3 -- a whole number of cycles: golden hour
+	end
+	task.wait(0.5)
+	-- (Lighting keeps 32-bit floats)
+	check("then golden hour again", math.abs(Lighting.ClockTime - golden.ClockTime) < 1e-4 and flies.Rate == 8, Lighting.ClockTime)
+	check("golden hour is the server's look", golden.ClockTime == World.Lighting.ClockTime and math.abs(Lighting.Brightness - World.Lighting.Brightness) < 1e-4, Lighting.Brightness)
+	check("lanterns back to normal", lanternLight and lanternLight.Brightness <= 1.4 * 1.15 + 1e-6, lanternLight and lanternLight.Brightness)
+	DayCycle.Now = realNow
+end
+
 print("== prompt UI ==")
 local PPS = game:GetService("ProximityPromptService")
 local prompt = plot.Sources.Moonberry.Hitbox.CollectPrompt

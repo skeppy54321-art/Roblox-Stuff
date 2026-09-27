@@ -27,6 +27,7 @@ local Popups = require(script:WaitForChild("Popups"))
 local GoalMarker = require(script:WaitForChild("GoalMarker"))
 local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
+local DayCycle = require(script:WaitForChild("DayCycle"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
 local Familiars = require(script:WaitForChild("Familiars"))
 local Juice = require(script:WaitForChild("Juice"))
@@ -70,6 +71,15 @@ Popups.Init(playerGui)
 GoalMarker.Init(playerGui)
 CustomerAnimator.Init()
 Ambience.Init(market)
+do -- the evening sky is only a look: a failure here must never stop the game
+	local ok, err = pcall(function(): any
+		DayCycle.Init(market)
+		return nil
+	end)
+	if not ok then
+		warn(`[ClientMain] evening sky disabled: {err}`)
+	end
+end
 do -- pets are purely cosmetic: a failure here must never stop the game
 	local ok, err = pcall(function(): any
 		Familiars.Init()
