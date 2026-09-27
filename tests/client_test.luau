@@ -202,6 +202,17 @@ player:SetAttribute("Familiar", 3)
 Engine.signal(player, "Attr:Familiar"):Fire()
 local dragon = Familiars.Get(player)
 check("upgrades to a baby dragon", dragon ~= nil and dragon.Name:find("BabyDragon") ~= nil and cat.Parent == nil)
+if process.args[2] then -- the dragon behind its owner, for tests/preview (view "pet")
+	task.wait(1)
+	local rp = root.CFrame
+	local function v(cf)
+		local p = cf.Position
+		return { p.X, p.Y, p.Z }
+	end
+	local parts, lights = Engine.dumpParts(workspace)
+	local views = { pet = { pos = v(rp * CFrame.new(-2.5, 3.2, -6.5)), look = v(rp * CFrame.new(1.8, 2.8, 1.5)), fov = 50 } }
+	fs.writeFile(process.args[2] .. "/parts_pet.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
+end
 player:SetAttribute("Familiar", 0)
 Engine.signal(player, "Attr:Familiar"):Fire()
 check("familiar goes away at level 0", Familiars.Get(player) == nil and dragon.Parent == nil)

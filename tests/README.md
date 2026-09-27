@@ -30,6 +30,18 @@ arrow, custom prompts (cheer prompt only on other players' shops), popups, the c
 (tapping a card brews), celebrations, social toasts, keyboard shortcuts, buying from the
 Upgrades panel, and all twelve potion effects on real customer models (drinking first).
 
+## Pacing bot
+
+```sh
+lune run tests/pacing_bot.luau build/BrewAPotion.rbxlx 12   # plays for 12 real minutes
+```
+
+A bot plays through the real server scripts like a quick, focused player: it walks at
+Roblox's default speed, pauses between actions, stirs every brew, sells across the counter
+and buys whatever the goal banner suggests. It prints a timeline (first sale, every upgrade)
+and the coins earned each minute. Run it after changing numbers in `Config` to see how the
+pacing moved. (It found a softlock: a full shelf of the wrong potions froze the shop.)
+
 ## 3D preview of the world
 
 `server_test.luau` writes `out/parts.json` (the world after boot) and `out/parts_upgraded.json`
