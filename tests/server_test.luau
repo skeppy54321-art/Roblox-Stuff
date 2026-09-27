@@ -273,7 +273,7 @@ for _, junk in { 123, "Nope", {}, "BrewSpeed\0", string.rep("x", 500) } do
 end
 task.wait(0.6)
 check("junk remotes ignored", data.Coins == 20)
-data.Coins = 20000
+data.Coins = 30000
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "FrostGrotto")
 task.wait(0.5)
 check("frost grotto needs starflower first", (data.Upgrades.FrostGrotto or 0) == 0)
@@ -300,7 +300,7 @@ check("decor 3", data.Upgrades.CozyDecor == 3)
 check("ember + cloud gardens", data.Upgrades.EmberGarden == 1 and data.Upgrades.CloudGarden == 1)
 check("ember peppers planted", plot.Sources:FindFirstChild("EmberPepper") ~= nil and plot.Lots:FindFirstChild("EmberGardenLot") == nil)
 check("cloud puffs floating", plot.Sources:FindFirstChild("CloudPuff") ~= nil and plot.Lots:FindFirstChild("CloudGardenLot") == nil)
-check("coins spent exactly", data.Coins == 20000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 900 + 1600 + 150 + 500 + 1500 + 1000 + 3000 + 8000 + 60), data.Coins)
+check("coins spent exactly", data.Coins == 30000 - (25 + 90 + 300 + 80 + 250 + 120 + 350 + 200 + 400 + 900 + 2500 + 150 + 500 + 1500 + 1500 + 5000 + 15000 + 60), data.Coins)
 check("baby dragon familiar", data.Upgrades.Familiar == 3 and player:GetAttribute("Familiar") == 3, player:GetAttribute("Familiar"))
 Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "BrewSpeed")
 task.wait(0.5)

@@ -968,7 +968,7 @@ local Upgrades: { [string]: Upgrade } = {
 		BaseSummary = "Not built",
 		Color = Color3.fromRGB(150, 190, 255),
 		Levels = {
-			{ Cost = 1600, Summary = "Cloud Puffs floating" },
+			{ Cost = 2500, Summary = "Cloud Puffs floating" },
 		},
 		Unlocks = "CloudPuff",
 		Requires = "EmberGarden",
@@ -996,9 +996,9 @@ local Upgrades: { [string]: Upgrade } = {
 		BaseSummary = "No familiar yet",
 		Color = Color3.fromRGB(170, 110, 230),
 		Levels = {
-			{ Cost = 1000, Summary = "Shop Cat" },
-			{ Cost = 3000, Summary = "Wise Owl" },
-			{ Cost = 8000, Summary = "Baby Dragon" },
+			{ Cost = 1500, Summary = "Shop Cat" },
+			{ Cost = 5000, Summary = "Wise Owl" },
+			{ Cost = 15000, Summary = "Baby Dragon" },
 		},
 		Cosmetic = true,
 		Announce = "got a new magic familiar",

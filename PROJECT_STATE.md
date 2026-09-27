@@ -100,9 +100,9 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 | Second Counter Spot | 200 | Two customers at once |
 | Frost Grotto | 400 (needs Starflower Bed) | Grows Frost Crystals; unlocks Frosty + Froggy |
 | Ember Garden | 900 (needs Frost Grotto) | Grows Ember Peppers (back left corner); unlocks Fire Breath + Dance |
-| Cloud Garden | 1600 (needs Ember Garden) | Grows Cloud Puffs (back right corner); unlocks Bubble, Ghost + Rocket |
+| Cloud Garden | 2500 (needs Ember Garden) | Grows Cloud Puffs (back right corner); unlocks Bubble, Ghost + Rocket |
 | Cozy Decor | 150 / 500 / 1500 | String lights + flower boxes → banners + glowing sign → golden cauldron, star and sparkles |
-| Magic Familiar | 1000 / 3000 / 8000 | A pet that floats behind you, visible to everyone: Shop Cat → Wise Owl (flapping wings) → Baby Dragon (puffs fire) |
+| Magic Familiar | 1500 / 5000 / 15000 | A pet that floats behind you, visible to everyone: Shop Cat → Wise Owl (flapping wings) → Baby Dragon (puffs fire) |
 
 **UI** (scales for phones; see `design/`)
 * Coins (count up and bounce), goal banner that always says the next step, basket with ingredients and potions, Upgrades / Recipes / Sound buttons with badges, toasts, a big celebration banner, floating "+1" / "+coins" popups.
@@ -159,9 +159,9 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 ## Economy (first pass, tune after playtesting)
 
 * **Sources:** potion sales (10–220 coins, VIPs x2), first-brew bonuses (one per recipe, 887 total).
-* **Sinks:** 9 upgrade tracks, 6,525 coins to max everything.
-* **Pace estimate:** customers are the bottleneck (about 5–6 sales a minute per counter spot: walk in, drink + effect 4.4s, walk out, 1.5s gap). Early game about 50–70 coins/min, so the first upgrade comes after 2–3 sales and the Starflower Bed at about 2 minutes. After the Frost Grotto, about 200+ coins/min, so the Ember Garden (900) takes ~5 minutes; with Fire Breath and Dance, several hundred coins/min. Maxing everything takes roughly 35–45 minutes.
-* **Watch for:** the content wall after ~40 minutes (nothing left to buy; coins only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. The new tier's prices (90–220) may make the last upgrades come too fast: tune `SellPrice` in `Config/Recipes.lua` after playtesting.
+* **Sinks:** 9 useful/decor upgrade tracks (7,425 coins) plus the Magic Familiar (21,500).
+* **Measured pacing** (`tests/pacing_bot.luau`, a quick bot that follows the goal banner, before the last price bump): first sale 0:13, Starflower Bed 1:15, Second Counter Spot 5:35, Frost Grotto 8:03, Ember Garden 12:27, Cloud Garden 14:11. About 100–170 coins/min for the first 8 minutes, 380–540 after the Frost Grotto, 750–870 after the Ember Garden; 101 sales in 16 minutes. A real player is slower (walking around, reading): expect roughly 1.5–2x these times.
+* **Watch for:** the content wall once the familiars are bought (coins then only feed the Market Stars ranking), and whether Faster Brewing matters while customers are the bottleneck. Late-game income is high, so the Cloud Garden (now 2,500) and familiars (1,500 / 5,000 / 15,000) were raised after the run above; re-run the bot after any price change.
 
 ## Verified API notes (checked Sep 26–27, 2026)
 
