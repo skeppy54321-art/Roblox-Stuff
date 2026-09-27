@@ -496,6 +496,56 @@ function Hud.SetSaveMode(mode: string?)
 	saveChip.Visible = mode ~= nil and mode ~= "Access"
 end
 
+-- Coins fly from `from` to `to` (both in the ScreenGui's own pixel space), then the coin
+-- counter bounces.
+function Hud.FlyCoinsBetween(from: Vector2, to: Vector2, amount: number)
+	local layer = root.Parent
+	if not layer then
+		return
+	end
+	local scale = root:FindFirstChildOfClass("UIScale")
+	local s = if scale then scale.Scale else 1
+	local count = math.clamp(math.floor(amount / 12) + 3, 3, 8)
+	for i = 1, count do
+		local coin = Ui.coin(math.floor(26 * s))
+		coin.Name = "FlyingCoin"
+		coin.AnchorPoint = Vector2.new(0.5, 0.5)
+		local start = from + Vector2.new(math.random(-18, 18), math.random(-12, 12)) * s
+		coin.Position = UDim2.fromOffset(start.X, start.Y)
+		coin.ZIndex = 30
+		coin.Parent = layer
+		task.delay((i - 1) * 0.06, function()
+			local tween = TweenService:Create(
+				coin,
+				TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Position = UDim2.fromOffset(to.X, to.Y) }
+			)
+			tween.Completed:Once(function()
+				coin:Destroy()
+				if i == count then
+					Ui.pop(coinsPill, 0.14)
+				end
+			end)
+			tween:Play()
+		end)
+	end
+end
+
+-- Coins fly from a screen point (Camera:WorldToScreenPoint, the same space as
+-- AbsolutePosition) into the coin counter. Cosmetic: does nothing if layout isn't known.
+function Hud.FlyCoins(from: Vector2, amount: number)
+	local layer = root.Parent
+	if not layer or not layer:IsA("GuiBase2d") then
+		return
+	end
+	local ok, origin, target = pcall(function()
+		return layer.AbsolutePosition, coinsPill.AbsolutePosition + coinsPill.AbsoluteSize / 2
+	end)
+	if ok then
+		Hud.FlyCoinsBetween(from - origin, target - origin, amount)
+	end
+end
+
 -- The daily gift button: bright with a badge when ready, else the time left.
 function Hud.SetGift(ready: boolean, label: string)
 	giftFace.Text = label

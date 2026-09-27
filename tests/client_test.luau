@@ -16,7 +16,7 @@ Engine.install(game, { client = true })
 
 local Players = game:GetService("Players")
 local workspace = game:GetService("Workspace")
-local Vector3, CFrame, Enum = roblox.Vector3, roblox.CFrame, roblox.Enum
+local Vector3, Vector2, CFrame, Enum = roblox.Vector3, roblox.Vector2, roblox.CFrame, roblox.Enum
 
 local passed, failed = 0, 0
 local function check(name, condition, detail)
@@ -332,7 +332,16 @@ if customer then
 	end)
 	check("goal says sell", selling, goalText())
 	Engine.signal(customer.Torso.SellPrompt, "Triggered"):Fire(player)
+	-- (Lune has no GUI layout, so the sale's own coins can't know where to fly here;
+	-- the animation itself is checked with explicit points)
+	local HudModule = Engine.loaded(clientMain.Hud)
+	HudModule.FlyCoinsBetween(Vector2.new(400, 300), Vector2.new(420, 30), 24)
+	local coinsFlew = waitFor(1, function()
+		return hud:FindFirstChild("FlyingCoin") ~= nil
+	end)
+	check("coins fly to the counter", coinsFlew)
 	task.wait(2.5)
+	check("flying coins land and vanish", hud:FindFirstChild("FlyingCoin") == nil)
 	local head = customer.HeadGroup.Head
 	check("giant head effect grew the head", head.Size.X > 2.5, head.Size.X)
 	local leaving = waitFor(6, function()
@@ -342,6 +351,19 @@ if customer then
 	task.wait(0.5)
 	local walked = (customer.Torso.CFrame.Position - customer:GetPivot().Position)
 	check("client walks the customer away", customer.Parent ~= nil)
+	-- the next customer rings the shop bell when they reach the counter
+	local nextCustomer = waitFor(12, function()
+		for _, c in plot:GetChildren() do
+			if c.Name == "Customer" and c ~= customer and c:GetAttribute("Phase") == "Waiting" then
+				return c
+			end
+		end
+		return nil
+	end)
+	local rang = nextCustomer and waitFor(1, function()
+		return nextCustomer.Torso:FindFirstChild("Bell") ~= nil
+	end)
+	check("a bell rings when a customer reaches the counter", rang)
 end
 
 print("== panels + keys ==")
@@ -369,11 +391,27 @@ if buy then
 	Engine.signal(buy, "Activated"):Fire()
 	task.wait(0.5)
 	check("bought from the panel", (data.Upgrades.BrewSpeed or 0) == 1)
+	check("upgrade sparkles at the cauldron", workspace:FindFirstChild("SparkleBurst") ~= nil)
 	check("card now shows next cost", buy.Text:find("90") ~= nil, buy.Text)
 end
 Engine.signal(UIS, "InputBegan"):Fire({ KeyCode = Enum.KeyCode.M, UserInputType = Enum.UserInputType.Keyboard }, false)
 task.wait(0.2)
 check("M mutes", find(uiRoot, "SideButtons.MuteButton.Face").Text == "SOUND OFF")
+
+print("== planting grows in ==")
+do
+	data.Coins += 60
+	local RequestUpgrade = game:GetService("ReplicatedStorage").Remotes.RequestUpgrade
+	Engine.signal(RequestUpgrade, "OnServerEvent"):Fire(player, "StarflowerBed")
+	local planter = waitFor(2, function()
+		local bed = plot.Sources:FindFirstChild("Starflower")
+		return bed and bed:FindFirstChild("Planter")
+	end)
+	task.wait(0.1)
+	check("the new bed starts tiny", planter and planter.Size.X < 4, planter and planter.Size.X)
+	task.wait(1)
+	check("...and grows to full size", planter and math.abs(planter.Size.X - 5) < 0.01, planter and planter.Size.X)
+end
 
 print("== social toasts ==")
 local P = Engine.loaded(game:GetService("ReplicatedStorage").Config.Palette)

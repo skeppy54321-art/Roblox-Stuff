@@ -726,6 +726,7 @@ local Sounds: { [string]: SoundDef } = {
 	Upgrade = sound(SPLASH, 0.45, 1, "level up fanfare", { Id = JINGLE, MaxSeconds = 3.5, Duck = true }),
 	Cheer = sound(TICK, 0.55, 1.25, "cheer sparkle", { Id = CHIME, MaxSeconds = 2 }),
 	News = sound(TICK, 0.3, 1.9, "soft notification"),
+	Bell = sound(TICK, 0.55, 3.2, "shop bell ding"), -- a customer reached your counter
 	Poof = sound(BOOM, 0.12, 2.6, "cartoon poof"),
 	Hop = sound(JUMP, 0.45, 1.3, "cartoon boing"),
 	Ribbit = sound("", 0.6, 1, "frog ribbit"),
@@ -9086,6 +9087,7 @@ local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
 local Familiars = require(script:WaitForChild("Familiars"))
+local Juice = require(script:WaitForChild("Juice"))
 
 local StateUpdate = Remotes:WaitForChild("StateUpdate") :: RemoteEvent
 local Notify = Remotes:WaitForChild("Notify") :: RemoteEvent
@@ -9390,6 +9392,25 @@ if player.Character then
 	task.spawn(settleCamera, player.Character)
 end
 
+-- A little bell rings when a customer reaches your counter (handy while you're out back).
+local rung: { [Model]: boolean } = {}
+local function ringForNewCustomers()
+	for _, c in myCustomers() do
+		if c.Phase == "Waiting" and not rung[c.Model] then
+			rung[c.Model] = true
+			local torso = c.Model.PrimaryPart
+			if torso then
+				Sfx.PlayAt("Bell", torso)
+			end
+		end
+	end
+	for model in rung do
+		if not model.Parent then
+			rung[model] = nil
+		end
+	end
+end
+
 -- Returns the goal text, and optionally a part to point the arrow at with a short label.
 local function nextGoal(): (string, BasePart?, string?)
 	local s = state
@@ -9450,6 +9471,7 @@ task.spawn(function()
 	while true do
 		-- one bad frame must never freeze the goal banner for the rest of the session
 		local ok, err = pcall(function()
+			ringForNewCustomers()
 			local text, part, label = nextGoal()
 			Hud.SetGoal(text)
 			local s = state
@@ -9608,6 +9630,13 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		if typeof(data.Position) == "Vector3" then
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
+			local camera = workspace.CurrentCamera
+			if camera then
+				local point, onScreen = camera:WorldToScreenPoint(data.Position + Vector3.new(0, 2, 0))
+				if onScreen then
+					Hud.FlyCoins(Vector2.new(point.X, point.Y), tonumber(data.Amount) or 10)
+				end
+			end
 		end
 	elseif cue == "Cheered" then
 		Sfx.Play("Cheer")
@@ -9626,6 +9655,21 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			local level = tonumber(data.Level) or 1
 			local entry = Config.GetLevelEntry(data.Upgrade, level)
 			Hud.Celebrate("UPGRADE!", if entry then entry.Summary else upgrade.DisplayName, upgrade.Color)
+			-- a newly planted garden grows up out of the ground; anything else sparkles
+			local plot = myPlot()
+			local sources = if plot then plot:FindFirstChild("Sources") else nil
+			local planted = if upgrade.Unlocks and sources then sources:FindFirstChild(upgrade.Unlocks) else nil
+			local box = if planted then planted:FindFirstChild("Hitbox") else nil
+			if planted and planted:IsA("Model") and box and box:IsA("BasePart") then
+				local center = box.CFrame.Position
+				Juice.GrowIn(planted, center - Vector3.new(0, box.Size.Y / 2, 0))
+				Juice.Sparkle(center, upgrade.Color, 40)
+			else
+				local cauldronBox = hitboxOf(myCauldron())
+				if cauldronBox then
+					Juice.Sparkle(cauldronBox.CFrame.Position + Vector3.new(0, 2, 0), upgrade.Color, 30)
+				end
+			end
 		end
 	end
 end)
@@ -11347,6 +11391,56 @@ function Hud.SetSaveMode(mode: string?)
 	saveChip.Visible = mode ~= nil and mode ~= "Access"
 end
 
+-- Coins fly from `from` to `to` (both in the ScreenGui's own pixel space), then the coin
+-- counter bounces.
+function Hud.FlyCoinsBetween(from: Vector2, to: Vector2, amount: number)
+	local layer = root.Parent
+	if not layer then
+		return
+	end
+	local scale = root:FindFirstChildOfClass("UIScale")
+	local s = if scale then scale.Scale else 1
+	local count = math.clamp(math.floor(amount / 12) + 3, 3, 8)
+	for i = 1, count do
+		local coin = Ui.coin(math.floor(26 * s))
+		coin.Name = "FlyingCoin"
+		coin.AnchorPoint = Vector2.new(0.5, 0.5)
+		local start = from + Vector2.new(math.random(-18, 18), math.random(-12, 12)) * s
+		coin.Position = UDim2.fromOffset(start.X, start.Y)
+		coin.ZIndex = 30
+		coin.Parent = layer
+		task.delay((i - 1) * 0.06, function()
+			local tween = TweenService:Create(
+				coin,
+				TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Position = UDim2.fromOffset(to.X, to.Y) }
+			)
+			tween.Completed:Once(function()
+				coin:Destroy()
+				if i == count then
+					Ui.pop(coinsPill, 0.14)
+				end
+			end)
+			tween:Play()
+		end)
+	end
+end
+
+-- Coins fly from a screen point (Camera:WorldToScreenPoint, the same space as
+-- AbsolutePosition) into the coin counter. Cosmetic: does nothing if layout isn't known.
+function Hud.FlyCoins(from: Vector2, amount: number)
+	local layer = root.Parent
+	if not layer or not layer:IsA("GuiBase2d") then
+		return
+	end
+	local ok, origin, target = pcall(function()
+		return layer.AbsolutePosition, coinsPill.AbsolutePosition + coinsPill.AbsoluteSize / 2
+	end)
+	if ok then
+		Hud.FlyCoinsBetween(from - origin, target - origin, amount)
+	end
+end
+
 -- The daily gift button: bright with a badge when ready, else the time left.
 function Hud.SetGift(ready: boolean, label: string)
 	giftFace.Text = label
@@ -11443,6 +11537,98 @@ return Hud
         </Item>
         <Item class="ModuleScript" referent="52">
           <Properties>
+            <string name="Name">Juice</string>
+            <string name="Source"><![CDATA[--!strict
+-- Juice (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.Juice
+-- Small one-off world effects on this client only: sparkle bursts, and new things
+-- growing in from the ground (a freshly planted garden).
+
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Effects = require(ReplicatedStorage:WaitForChild("Effects"))
+
+local Juice = {}
+
+-- A burst of sparkles at `position`.
+function Juice.Sparkle(position: Vector3, color: Color3, count: number?)
+	local holder = Instance.new("Part")
+	holder.Name = "SparkleBurst"
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.CanQuery = false
+	holder.CanTouch = false
+	holder.Transparency = 1
+	holder.Size = Vector3.one
+	holder.CFrame = CFrame.new(position)
+	holder.Parent = workspace
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = Effects.Textures.Sparkles
+	emitter.Color = ColorSequence.new(color, Color3.fromRGB(255, 240, 170))
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.5),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Lifetime = NumberRange.new(0.6, 1.1)
+	emitter.Speed = NumberRange.new(5, 10)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Acceleration = Vector3.new(0, -4, 0)
+	emitter.Rate = 0
+	emitter.Parent = holder
+	emitter:Emit(count or 30)
+	Debris:AddItem(holder, 2)
+end
+
+local function easeOutBack(t: number): number
+	local c = 1.6
+	return 1 + (c + 1) * (t - 1) ^ 3 + c * (t - 1) ^ 2
+end
+
+-- Grows `model` up out of the ground at `base` (a point under it), with a little
+-- overshoot, then puts every part back exactly as it was.
+function Juice.GrowIn(model: Model, base: Vector3, seconds: number?)
+	local duration = seconds or 0.6
+	local origin = CFrame.new(base)
+	local parts: { BasePart } = {}
+	local sizes: { Vector3 } = {}
+	local offsets: { CFrame } = {}
+	for _, d in model:GetDescendants() do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+			table.insert(sizes, d.Size)
+			table.insert(offsets, origin:ToObjectSpace(d.CFrame))
+		end
+	end
+	local function pose(scale: number)
+		for i, p in parts do
+			local rel = offsets[i]
+			p.Size = sizes[i] * scale
+			p.CFrame = origin * CFrame.new(rel.Position * scale) * rel.Rotation
+		end
+	end
+	pose(0.05)
+	task.spawn(function()
+		local start = os.clock()
+		while model.Parent do
+			local t = math.min((os.clock() - start) / duration, 1)
+			pose(math.max(0.05, easeOutBack(t)))
+			if t >= 1 then
+				break
+			end
+			RunService.RenderStepped:Wait()
+		end
+		pose(1)
+	end)
+end
+
+return Juice
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="53">
+          <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
 -- Popups (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.Popups
@@ -11501,7 +11687,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -11745,7 +11931,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -11960,7 +12146,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -12185,7 +12371,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">Townsfolk</string>
             <string name="Source"><![CDATA[--!strict
@@ -12454,7 +12640,7 @@ return Townsfolk
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -12792,7 +12978,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -13013,7 +13199,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="59">
+  <Item class="Workspace" referent="60">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

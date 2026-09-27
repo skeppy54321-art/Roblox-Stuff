@@ -29,6 +29,7 @@ local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
 local Familiars = require(script:WaitForChild("Familiars"))
+local Juice = require(script:WaitForChild("Juice"))
 
 local StateUpdate = Remotes:WaitForChild("StateUpdate") :: RemoteEvent
 local Notify = Remotes:WaitForChild("Notify") :: RemoteEvent
@@ -333,6 +334,25 @@ if player.Character then
 	task.spawn(settleCamera, player.Character)
 end
 
+-- A little bell rings when a customer reaches your counter (handy while you're out back).
+local rung: { [Model]: boolean } = {}
+local function ringForNewCustomers()
+	for _, c in myCustomers() do
+		if c.Phase == "Waiting" and not rung[c.Model] then
+			rung[c.Model] = true
+			local torso = c.Model.PrimaryPart
+			if torso then
+				Sfx.PlayAt("Bell", torso)
+			end
+		end
+	end
+	for model in rung do
+		if not model.Parent then
+			rung[model] = nil
+		end
+	end
+end
+
 -- Returns the goal text, and optionally a part to point the arrow at with a short label.
 local function nextGoal(): (string, BasePart?, string?)
 	local s = state
@@ -393,6 +413,7 @@ task.spawn(function()
 	while true do
 		-- one bad frame must never freeze the goal banner for the rest of the session
 		local ok, err = pcall(function()
+			ringForNewCustomers()
 			local text, part, label = nextGoal()
 			Hud.SetGoal(text)
 			local s = state
@@ -551,6 +572,13 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		if typeof(data.Position) == "Vector3" then
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
+			local camera = workspace.CurrentCamera
+			if camera then
+				local point, onScreen = camera:WorldToScreenPoint(data.Position + Vector3.new(0, 2, 0))
+				if onScreen then
+					Hud.FlyCoins(Vector2.new(point.X, point.Y), tonumber(data.Amount) or 10)
+				end
+			end
 		end
 	elseif cue == "Cheered" then
 		Sfx.Play("Cheer")
@@ -569,6 +597,21 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			local level = tonumber(data.Level) or 1
 			local entry = Config.GetLevelEntry(data.Upgrade, level)
 			Hud.Celebrate("UPGRADE!", if entry then entry.Summary else upgrade.DisplayName, upgrade.Color)
+			-- a newly planted garden grows up out of the ground; anything else sparkles
+			local plot = myPlot()
+			local sources = if plot then plot:FindFirstChild("Sources") else nil
+			local planted = if upgrade.Unlocks and sources then sources:FindFirstChild(upgrade.Unlocks) else nil
+			local box = if planted then planted:FindFirstChild("Hitbox") else nil
+			if planted and planted:IsA("Model") and box and box:IsA("BasePart") then
+				local center = box.CFrame.Position
+				Juice.GrowIn(planted, center - Vector3.new(0, box.Size.Y / 2, 0))
+				Juice.Sparkle(center, upgrade.Color, 40)
+			else
+				local cauldronBox = hitboxOf(myCauldron())
+				if cauldronBox then
+					Juice.Sparkle(cauldronBox.CFrame.Position + Vector3.new(0, 2, 0), upgrade.Color, 30)
+				end
+			end
 		end
 	end
 end)

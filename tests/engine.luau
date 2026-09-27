@@ -351,6 +351,14 @@ function Engine.install(game, options)
 	end)
 
 	-- Workspace
+	-- a rough projection: everything lands in the middle of the screen, in front of the camera
+	for _, name in { "WorldToScreenPoint", "WorldToViewportPoint" } do
+		roblox.implementMethod("Camera", name, function(camera, position)
+			local size = Engine.viewport or roblox.Vector2.new(844, 390)
+			local depth = (position - camera.CFrame.Position).Magnitude
+			return roblox.Vector3.new(size.X / 2, size.Y / 2, depth), true
+		end)
+	end
 	roblox.implementMethod("Workspace", "GetServerTimeNow", function()
 		return Engine.now()
 	end)
