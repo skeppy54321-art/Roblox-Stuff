@@ -38,6 +38,8 @@ Tuning.Customers = {
 	WalkDistance = 20, -- how far out on the plaza they start walking from
 	EffectSeconds = 4.4, -- how long the customer stays after buying (drinking ~0.8s + the effect)
 	SellCooldown = 0.5,
+	Patience = 45, -- a waiting customer gives up and leaves after this long
+	StuckPatience = 6, -- ...or after this long if your shelf is full and none of their potion is on it
 	StockBias = 0.6, -- chance a customer asks for a potion you already have on your shelf
 	VipChance = 0.12, -- chance a customer is a VIP (after VipMinSales sales)
 	VipMinSales = 5,
@@ -46,6 +48,12 @@ Tuning.Customers = {
 
 -- The bouncing helper arrow shows until this many potions have been sold.
 Tuning.GuideUntilSales = 8
+
+Tuning.Daily = {
+	CooldownHours = 20, -- a new gift this long after the last one
+	StreakHours = 48, -- come back within this long to keep your streak going
+	Rewards = { 30, 50, 80, 120, 160, 220, 300 }, -- coins on day 1..7 of a streak; later days repeat the last
+}
 
 Tuning.Social = {
 	CheerCooldown = 1, -- seconds between cheer presses (each shop can be cheered once per visit)

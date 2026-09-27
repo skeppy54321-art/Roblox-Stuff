@@ -15,6 +15,7 @@ local BrewService = require(Modules:WaitForChild("BrewService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
+local GiftService = require(Modules:WaitForChild("GiftService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -23,6 +24,7 @@ IngredientService.Init(plots)
 BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
+GiftService.Init()
 
 -- Keep the cauldron's suggested potion, the counter display, the player list and the
 -- Market Stars board fresh.

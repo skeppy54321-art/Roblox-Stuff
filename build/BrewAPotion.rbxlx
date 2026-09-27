@@ -42,7 +42,11 @@ export type State = {
 	Upgrades: { [string]: number },
 	Discovered: { [string]: boolean },
 	Stats: { [string]: number },
+	Daily: DailyState,
 }
+
+-- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.
+export type DailyState = { Last: number, Streak: number }
 
 type Levels = { [string]: number }?
 
@@ -233,6 +237,32 @@ function Config.PotionTotal(potions: { [string]: number }): number
 end
 
 -- 1234567 -> "1,234,567"
+-- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
+-- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
+-- os.time() on the server, workspace:GetServerTimeNow() on clients.
+function Config.GetDailyGift(daily: DailyState?, now: number): (boolean, number, number, number)
+	local D = Tuning.Daily
+	local last = if daily then daily.Last else 0
+	local streak = if daily then daily.Streak else 0
+	local since = now - last
+	local ready = last <= 0 or since >= D.CooldownHours * 3600
+	local day = if last > 0 and since < D.StreakHours * 3600 then streak + 1 else 1
+	local reward = D.Rewards[math.clamp(day, 1, #D.Rewards)]
+	local wait = if ready then 0 else math.ceil(D.CooldownHours * 3600 - since)
+	return ready, day, reward, wait
+end
+
+-- "5h 20m", "12m", "40s".
+function Config.FormatDuration(seconds: number): string
+	local s = math.max(0, math.floor(seconds))
+	if s >= 3600 then
+		return `{math.floor(s / 3600)}h {math.floor((s % 3600) / 60)}m`
+	elseif s >= 60 then
+		return `{math.floor(s / 60)}m`
+	end
+	return `{s}s`
+end
+
 function Config.FormatNumber(value: number): string
 	local text = tostring(math.floor(math.abs(value)))
 	local formatted = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
@@ -721,6 +751,8 @@ Tuning.Customers = {
 	WalkDistance = 20, -- how far out on the plaza they start walking from
 	EffectSeconds = 4.4, -- how long the customer stays after buying (drinking ~0.8s + the effect)
 	SellCooldown = 0.5,
+	Patience = 45, -- a waiting customer gives up and leaves after this long
+	StuckPatience = 6, -- ...or after this long if your shelf is full and none of their potion is on it
 	StockBias = 0.6, -- chance a customer asks for a potion you already have on your shelf
 	VipChance = 0.12, -- chance a customer is a VIP (after VipMinSales sales)
 	VipMinSales = 5,
@@ -729,6 +761,12 @@ Tuning.Customers = {
 
 -- The bouncing helper arrow shows until this many potions have been sold.
 Tuning.GuideUntilSales = 8
+
+Tuning.Daily = {
+	CooldownHours = 20, -- a new gift this long after the last one
+	StreakHours = 48, -- come back within this long to keep your streak going
+	Rewards = { 30, 50, 80, 120, 160, 220, 300 }, -- coins on day 1..7 of a streak; later days repeat the last
+}
 
 Tuning.Social = {
 	CheerCooldown = 1, -- seconds between cheer presses (each shop can be cheered once per visit)
@@ -2250,6 +2288,7 @@ local BrewService = require(Modules:WaitForChild("BrewService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
+local GiftService = require(Modules:WaitForChild("GiftService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -2258,6 +2297,7 @@ IngredientService.Init(plots)
 BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
+GiftService.Init()
 
 -- Keep the cauldron's suggested potion, the counter display, the player list and the
 -- Market Stars board fresh.
@@ -2985,6 +3025,7 @@ type Slot = {
 	Model: Model?,
 	Wants: string,
 	Vip: boolean,
+	WaitingSince: number, -- server time they reached the counter
 }
 type Entry = { Owner: Player, Slots: { Slot } }
 
@@ -3012,10 +3053,33 @@ local function spotFor(plot: Plot, index: number, count: number): CFrame
 	return plot.CounterFront.CFrame * CFrame.new(offset, 0, 0)
 end
 
+local function shelfFull(data: PlayerData.Data): boolean
+	return Config.PotionTotal(data.Potions) >= Config.GetMaxPotions(data.Upgrades)
+end
+
 -- Which potion the next customer asks for.
 local function pickWants(data: PlayerData.Data, taken: { [string]: boolean }): string
 	if (data.Stats.PotionsSold or 0) == 0 and not taken.GiantHead then
 		return "GiantHead" -- the very first customer asks for the first recipe
+	end
+	if shelfFull(data) then
+		-- nothing more can be brewed: ask for something on the shelf, so the shop never gets stuck
+		local onShelf = {}
+		for _, id in Config.RecipeOrder do
+			if (data.Potions[id] or 0) > 0 and not taken[id] then
+				table.insert(onShelf, id)
+			end
+		end
+		if #onShelf == 0 then
+			for _, id in Config.RecipeOrder do
+				if (data.Potions[id] or 0) > 0 then
+					table.insert(onShelf, id)
+				end
+			end
+		end
+		if #onShelf > 0 then
+			return onShelf[rng:NextInteger(1, #onShelf)]
+		end
 	end
 	local unlocked, inStock = {}, {}
 	for _, id in Config.RecipeOrder do
@@ -3171,6 +3235,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 			return
 		end
 		slot.Phase = "Waiting"
+		slot.WaitingSince = now()
 		setPhase(model, "Waiting", 0)
 		local torso = model.PrimaryPart
 		if torso then
@@ -3199,7 +3264,8 @@ end
 
 local function addSlot(plot: Plot, entry: Entry)
 	local index = #entry.Slots + 1
-	local slot: Slot = { Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false }
+	local slot: Slot =
+		{ Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false, WaitingSince = 0 }
 	table.insert(entry.Slots, slot)
 	scheduleSpawn(plot, slot, T.FirstSpawnDelay + (index - 1) * 2.5)
 end
@@ -3265,11 +3331,110 @@ function CustomerService.OnChanged(listener: (Plot) -> ())
 	table.insert(listeners, listener)
 end
 
+-- A customer who waited too long (or can't be served: the shelf is full and their potion
+-- isn't on it) gives up and walks away, and a new one comes.
+local function giveUp(plot: Plot, slot: Slot, model: Model, words: string)
+	local prompt = model:FindFirstChild("SellPrompt", true)
+	if prompt then
+		prompt:Destroy()
+	end
+	local text = model:FindFirstChild("Text", true)
+	if text and text:IsA("TextLabel") then
+		text.Text = words
+	end
+	leave(plot, slot, model)
+end
+
+local function checkPatience()
+	local t = now()
+	for plot, entry in byPlot do
+		local data = PlayerData.Get(entry.Owner)
+		for _, slot in entry.Slots do
+			local model = slot.Model
+			if slot.Phase == "Waiting" and model and data then
+				local waited = t - slot.WaitingSince
+				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) == 0
+				if stuck and waited >= T.StuckPatience then
+					giveUp(plot, slot, model, "Oh, you're all out!")
+				elseif waited >= T.Patience then
+					giveUp(plot, slot, model, "Maybe next time!")
+				end
+			end
+		end
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local ok, err = pcall(function(): any
+			checkPatience()
+			return nil
+		end)
+		if not ok then
+			warn("[CustomerService] patience check failed:", err)
+		end
+	end
+end)
+
 return CustomerService
 ]]></string>
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="29">
+        <Properties>
+          <string name="Name">GiftService</string>
+          <string name="Source"><![CDATA[--!strict
+-- GiftService (ModuleScript) — ServerScriptService.Modules.GiftService
+-- The daily gift: once every CooldownHours, and more coins for every day in a row you come
+-- back (see Config.Tuning.Daily). The server's own clock decides; the client only asks.
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+local Modules = script.Parent
+local PlayerData = require(Modules:WaitForChild("PlayerData"))
+local Guard = require(Modules:WaitForChild("Guard"))
+local Net = require(Modules:WaitForChild("Net"))
+
+local GiftService = {}
+
+-- Unix seconds. A function so tests can move time forward.
+GiftService.Now = function(): number
+	return os.time()
+end
+
+function GiftService.Claim(player: Player)
+	if not Guard.Cooldown(player, "Daily", 1) then
+		return
+	end
+	local data = PlayerData.Get(player)
+	if not data then
+		return
+	end
+	local now = GiftService.Now()
+	local ready, day, reward, wait = Config.GetDailyGift(data.Daily, now)
+	if not ready then
+		Net.Notify(player, `Your next gift is ready in {Config.FormatDuration(wait)}.`)
+		return
+	end
+
+	-- All checks passed (no yields since reading the data, so it can't be claimed twice).
+	data.Daily.Last = now
+	data.Daily.Streak = day
+	data.Coins += reward
+	PlayerData.AddStat(data, "DailyGifts", 1)
+	PlayerData.Push(player)
+	Net.Cue(player, "Daily", { Amount = reward, Day = day })
+end
+
+function GiftService.Init()
+	Net.ClaimDaily.OnServerEvent:Connect(GiftService.Claim)
+end
+
+return GiftService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="30">
         <Properties>
           <string name="Name">Guard</string>
           <string name="Source"><![CDATA[--!strict
@@ -3330,7 +3495,7 @@ return Guard
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">IngredientService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3489,7 +3654,7 @@ return IngredientService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">Kit</string>
           <string name="Source"><![CDATA[--!strict
@@ -3777,7 +3942,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">MarketBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -4411,7 +4576,7 @@ return MarketBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">Net</string>
           <string name="Source"><![CDATA[--!strict
@@ -4453,6 +4618,7 @@ Net.PlayEffect = remote("RemoteEvent", "PlayEffect") :: RemoteEvent -- (customer
 Net.RequestUpgrade = remote("RemoteEvent", "RequestUpgrade") :: RemoteEvent -- (upgradeId)
 Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipeId)
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
+Net.ClaimDaily = remote("RemoteEvent", "ClaimDaily") :: RemoteEvent -- () the daily gift
 
 -- "news" = something another player did; "heart" = a cheer
 export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
@@ -4471,7 +4637,7 @@ function Net.NotifyOthers(except: Player, text: string, kind: NotifyKind?)
 end
 
 -- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade",
--- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's).
+-- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's), "Daily" (gift claimed).
 function Net.Cue(player: Player, cue: string, data: { [string]: any }?)
 	Net.CueRemote:FireClient(player, cue, data or {})
 end
@@ -4480,7 +4646,7 @@ return Net
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--!strict
@@ -4507,7 +4673,7 @@ export type Data = Config.State
 -- Changing STORE_NAME starts everyone from scratch. Change SCHEMA_VERSION (and add a
 -- step to `migrate`) when the shape of saved data changes instead.
 local STORE_NAME = "PlayerData"
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 -- true = Studio play tests never touch real saves, even with API access on.
 local USE_MOCK_IN_STUDIO = false
 
@@ -4519,6 +4685,7 @@ local TEMPLATE: Data = {
 	Upgrades = {},
 	Discovered = {},
 	Stats = {},
+	Daily = { Last = 0, Streak = 0 },
 }
 
 -- The parts of a ProfileStore profile this module uses.
@@ -4571,6 +4738,11 @@ local function migrate(data: Data)
 		-- 0 -> 1: first saved version, nothing to convert.
 		version = 1
 	end
+	if version < 2 then
+		-- 1 -> 2: the daily gift. Reconcile already added Daily from the template; a
+		-- returning player starts a fresh streak with a gift ready.
+		version = 2
+	end
 	data.SchemaVersion = version
 end
 
@@ -4600,6 +4772,12 @@ local function sanitize(data: Data)
 		end
 	end
 	data.Stats = stats
+	local daily: any = data.Daily
+	local last = if typeof(daily) == "table" and isNumber(daily.Last) then math.max(0, math.floor(daily.Last)) else 0
+	local streak = if typeof(daily) == "table" and isNumber(daily.Streak)
+		then math.clamp(math.floor(daily.Streak), 0, 100000)
+		else 0
+	data.Daily = { Last = last, Streak = streak }
 end
 
 ------------------------------------------------------------------
@@ -4690,7 +4868,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">PlotService</string>
           <string name="Source"><![CDATA[--!strict
@@ -4882,7 +5060,7 @@ return PlotService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">ProfileStore</string>
           <string name="Source">--[[
@@ -7130,7 +7308,7 @@ end)
 return ProfileStore</string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">ShopBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -8113,7 +8291,7 @@ return ShopBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">SocialService</string>
           <string name="Source"><![CDATA[--!strict
@@ -8572,7 +8750,7 @@ return SocialService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">UpgradeService</string>
           <string name="Source"><![CDATA[--!strict
@@ -8669,7 +8847,7 @@ return UpgradeService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">WorldService</string>
           <string name="Source"><![CDATA[--!strict
@@ -8769,15 +8947,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="41">
+  <Item class="StarterPlayer" referent="42">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="42">
+    <Item class="StarterPlayerScripts" referent="43">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="43">
+      <Item class="LocalScript" referent="44">
         <Properties>
           <string name="Name">ClientMain</string>
           <string name="Source"><![CDATA[--!strict
@@ -8818,6 +8996,7 @@ local PlayEffect = Remotes:WaitForChild("PlayEffect") :: RemoteEvent
 local RequestUpgrade = Remotes:WaitForChild("RequestUpgrade") :: RemoteEvent
 local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
+local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -8888,6 +9067,32 @@ end
 Hud.OnUpgradesPressed = toggleUpgrades
 Hud.OnRecipesPressed = toggleRecipes
 Hud.OnMutePressed = toggleMute
+Hud.OnGiftPressed = function()
+	local s = state
+	if not s then
+		return
+	end
+	local ready, _, _, wait = Config.GetDailyGift(s.Daily, workspace:GetServerTimeNow())
+	if ready then
+		Sfx.Play("Click")
+		ClaimDaily:FireServer()
+	else
+		Sfx.Play("Error")
+		Hud.Toast(`Your next gift is ready in {Config.FormatDuration(wait)}.`, "info")
+	end
+end
+
+-- Keep the gift button's badge and countdown current.
+task.spawn(function()
+	while true do
+		local s = state
+		if s then
+			local ready, _, _, wait = Config.GetDailyGift(s.Daily, workspace:GetServerTimeNow())
+			Hud.SetGift(ready, if ready then "GIFT" else Config.FormatDuration(wait))
+		end
+		task.wait(1)
+	end
+end)
 UpgradesPanel.OnClose = function()
 	setPanel(nil)
 end
@@ -9273,6 +9478,9 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "CheerSent" then
 		Sfx.Play("Cheer", 1.15)
 		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
+	elseif cue == "Daily" then
+		Sfx.Play("Discover")
+		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)
 	elseif cue == "Upgrade" then
 		Sfx.Play("Upgrade")
 		local upgrade = Config.Upgrades[data.Upgrade]
@@ -9310,7 +9518,7 @@ task.spawn(function()
 end)
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">Ambience</string>
             <string name="Source"><![CDATA[--!strict
@@ -9385,7 +9593,7 @@ return Ambience
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">CauldronFx</string>
             <string name="Source"><![CDATA[--!strict
@@ -9599,7 +9807,7 @@ return CauldronFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">CauldronMenu</string>
             <string name="Source"><![CDATA[--!strict
@@ -9875,7 +10083,7 @@ return CauldronMenu
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">CustomerAnimator</string>
             <string name="Source"><![CDATA[--!strict
@@ -10089,7 +10297,7 @@ return CustomerAnimator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -10174,7 +10382,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -10198,6 +10406,7 @@ local Hud = {}
 Hud.OnUpgradesPressed = nil :: (() -> ())?
 Hud.OnRecipesPressed = nil :: (() -> ())?
 Hud.OnMutePressed = nil :: (() -> ())?
+Hud.OnGiftPressed = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
@@ -10217,6 +10426,9 @@ local potionChips: Frame
 local upgradesBadge: Frame
 local recipesBadge: Frame
 local muteFace: TextButton
+local giftHolder: Frame
+local giftFace: TextButton
+local giftBadge: Frame
 local toastList: Frame
 local celebration: Frame
 
@@ -10445,7 +10657,7 @@ function Hud.Init(parent: Frame)
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -22, 0.42, 0),
-		Size = UDim2.fromOffset(156, 204),
+		Size = UDim2.fromOffset(156, 266),
 		BackgroundTransparency = 1,
 		Parent = root,
 	}, {
@@ -10455,6 +10667,24 @@ function Hud.Init(parent: Frame)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
+	local gift, giftButtonFace = Ui.button({
+		Name = "GiftButton",
+		Text = "GIFT",
+		Color = P.Gold,
+		Shade = Color3.fromRGB(190, 140, 30),
+		Size = UDim2.fromOffset(120, 52),
+		TextSize = 20,
+		Parent = column,
+	})
+	gift.LayoutOrder = 0
+	giftHolder = gift
+	giftFace = giftButtonFace
+	giftBadge = badge(gift, "!", P.Danger)
+	giftFace.Activated:Connect(function()
+		if Hud.OnGiftPressed then
+			Hud.OnGiftPressed()
+		end
+	end)
 	local upgrades, upgradesFace = Ui.button({
 		Name = "UpgradesButton",
 		Text = "UPGRADES",
@@ -10653,6 +10883,17 @@ function Hud.SetSaveMode(mode: string?)
 	saveChip.Visible = mode ~= nil and mode ~= "Access"
 end
 
+-- The daily gift button: bright with a badge when ready, else the time left.
+function Hud.SetGift(ready: boolean, label: string)
+	giftFace.Text = label
+	giftBadge.Visible = ready
+	Ui.setButtonColor(
+		giftHolder,
+		if ready then P.Gold else P.ButtonOff,
+		if ready then Color3.fromRGB(190, 140, 30) else P.ButtonOffDark
+	)
+end
+
 function Hud.SetMuted(muted: boolean)
 	muteFace.Text = if muted then "SOUND OFF" else "SOUND ON"
 end
@@ -10736,7 +10977,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -10796,7 +11037,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -11040,7 +11281,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -11255,7 +11496,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -11480,7 +11721,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">Townsfolk</string>
             <string name="Source"><![CDATA[--!strict
@@ -11749,7 +11990,7 @@ return Townsfolk
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -12087,7 +12328,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -12103,6 +12344,8 @@ local P = Config.Palette
 export type State = Config.State
 
 type Card = {
+	Frame: Frame,
+	Order: number,
 	Level: TextLabel,
 	Summary: TextLabel,
 	Pips: { Frame },
@@ -12235,7 +12478,15 @@ function UpgradesPanel.Init(root: Frame)
 				UpgradesPanel.OnBuy(upgradeId)
 			end
 		end)
-		cards[upgradeId] = { Level = levelLabel, Summary = summary, Pips = pips, Buy = buy, BuyFace = buyFace }
+		cards[upgradeId] = {
+			Frame = card,
+			Order = order,
+			Level = levelLabel,
+			Summary = summary,
+			Pips = pips,
+			Buy = buy,
+			BuyFace = buyFace,
+		}
 	end
 end
 
@@ -12252,6 +12503,8 @@ function UpgradesPanel.SetState(state: State)
 		local now = if entry then entry.Summary else upgrade.BaseSummary
 		card.Summary.Text = if nextEntry then `{now}  ->  {nextEntry.Summary}` else now
 
+		-- finished upgrades sink to the bottom, so what you can still buy is always on top
+		card.Frame.LayoutOrder = card.Order + (if nextEntry then 0 else 100)
 		if not nextEntry then
 			card.BuyFace.Text = "MAXED"
 			Ui.setButtonColor(card.Buy, P.Gold, Color3.fromRGB(190, 140, 30))
@@ -12296,7 +12549,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="57">
+  <Item class="Workspace" referent="58">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

@@ -29,6 +29,7 @@ type Slot = {
 	Model: Model?,
 	Wants: string,
 	Vip: boolean,
+	WaitingSince: number, -- server time they reached the counter
 }
 type Entry = { Owner: Player, Slots: { Slot } }
 
@@ -56,10 +57,33 @@ local function spotFor(plot: Plot, index: number, count: number): CFrame
 	return plot.CounterFront.CFrame * CFrame.new(offset, 0, 0)
 end
 
+local function shelfFull(data: PlayerData.Data): boolean
+	return Config.PotionTotal(data.Potions) >= Config.GetMaxPotions(data.Upgrades)
+end
+
 -- Which potion the next customer asks for.
 local function pickWants(data: PlayerData.Data, taken: { [string]: boolean }): string
 	if (data.Stats.PotionsSold or 0) == 0 and not taken.GiantHead then
 		return "GiantHead" -- the very first customer asks for the first recipe
+	end
+	if shelfFull(data) then
+		-- nothing more can be brewed: ask for something on the shelf, so the shop never gets stuck
+		local onShelf = {}
+		for _, id in Config.RecipeOrder do
+			if (data.Potions[id] or 0) > 0 and not taken[id] then
+				table.insert(onShelf, id)
+			end
+		end
+		if #onShelf == 0 then
+			for _, id in Config.RecipeOrder do
+				if (data.Potions[id] or 0) > 0 then
+					table.insert(onShelf, id)
+				end
+			end
+		end
+		if #onShelf > 0 then
+			return onShelf[rng:NextInteger(1, #onShelf)]
+		end
 	end
 	local unlocked, inStock = {}, {}
 	for _, id in Config.RecipeOrder do
@@ -215,6 +239,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 			return
 		end
 		slot.Phase = "Waiting"
+		slot.WaitingSince = now()
 		setPhase(model, "Waiting", 0)
 		local torso = model.PrimaryPart
 		if torso then
@@ -243,7 +268,8 @@ end
 
 local function addSlot(plot: Plot, entry: Entry)
 	local index = #entry.Slots + 1
-	local slot: Slot = { Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false }
+	local slot: Slot =
+		{ Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false, WaitingSince = 0 }
 	table.insert(entry.Slots, slot)
 	scheduleSpawn(plot, slot, T.FirstSpawnDelay + (index - 1) * 2.5)
 end
@@ -308,5 +334,51 @@ end
 function CustomerService.OnChanged(listener: (Plot) -> ())
 	table.insert(listeners, listener)
 end
+
+-- A customer who waited too long (or can't be served: the shelf is full and their potion
+-- isn't on it) gives up and walks away, and a new one comes.
+local function giveUp(plot: Plot, slot: Slot, model: Model, words: string)
+	local prompt = model:FindFirstChild("SellPrompt", true)
+	if prompt then
+		prompt:Destroy()
+	end
+	local text = model:FindFirstChild("Text", true)
+	if text and text:IsA("TextLabel") then
+		text.Text = words
+	end
+	leave(plot, slot, model)
+end
+
+local function checkPatience()
+	local t = now()
+	for plot, entry in byPlot do
+		local data = PlayerData.Get(entry.Owner)
+		for _, slot in entry.Slots do
+			local model = slot.Model
+			if slot.Phase == "Waiting" and model and data then
+				local waited = t - slot.WaitingSince
+				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) == 0
+				if stuck and waited >= T.StuckPatience then
+					giveUp(plot, slot, model, "Oh, you're all out!")
+				elseif waited >= T.Patience then
+					giveUp(plot, slot, model, "Maybe next time!")
+				end
+			end
+		end
+	end
+end
+
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local ok, err = pcall(function(): any
+			checkPatience()
+			return nil
+		end)
+		if not ok then
+			warn("[CustomerService] patience check failed:", err)
+		end
+	end
+end)
 
 return CustomerService

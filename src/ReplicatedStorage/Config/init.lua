@@ -28,7 +28,11 @@ export type State = {
 	Upgrades: { [string]: number },
 	Discovered: { [string]: boolean },
 	Stats: { [string]: number },
+	Daily: DailyState,
 }
+
+-- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.
+export type DailyState = { Last: number, Streak: number }
 
 type Levels = { [string]: number }?
 
@@ -219,6 +223,32 @@ function Config.PotionTotal(potions: { [string]: number }): number
 end
 
 -- 1234567 -> "1,234,567"
+-- The daily gift right now: can it be claimed, which day of the streak it is (or will be),
+-- its coins, and the seconds until it's ready (0 = ready). `now` is Unix time:
+-- os.time() on the server, workspace:GetServerTimeNow() on clients.
+function Config.GetDailyGift(daily: DailyState?, now: number): (boolean, number, number, number)
+	local D = Tuning.Daily
+	local last = if daily then daily.Last else 0
+	local streak = if daily then daily.Streak else 0
+	local since = now - last
+	local ready = last <= 0 or since >= D.CooldownHours * 3600
+	local day = if last > 0 and since < D.StreakHours * 3600 then streak + 1 else 1
+	local reward = D.Rewards[math.clamp(day, 1, #D.Rewards)]
+	local wait = if ready then 0 else math.ceil(D.CooldownHours * 3600 - since)
+	return ready, day, reward, wait
+end
+
+-- "5h 20m", "12m", "40s".
+function Config.FormatDuration(seconds: number): string
+	local s = math.max(0, math.floor(seconds))
+	if s >= 3600 then
+		return `{math.floor(s / 3600)}h {math.floor((s % 3600) / 60)}m`
+	elseif s >= 60 then
+		return `{math.floor(s / 60)}m`
+	end
+	return `{s}s`
+end
+
 function Config.FormatNumber(value: number): string
 	local text = tostring(math.floor(math.abs(value)))
 	local formatted = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()

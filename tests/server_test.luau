@@ -324,6 +324,62 @@ do
 	print(`  upgraded world dumped ({#upgradedParts} parts), owner plot {plotName}`)
 end
 
+print("== customers give up ==")
+local Config = Engine.loaded(game:GetService("ReplicatedStorage").Config)
+local function waitingCustomer(except)
+	for _, c in plot:GetChildren() do
+		if c.Name == "Customer" and c ~= except and c:GetAttribute("Phase") == "Waiting" then
+			return c
+		end
+	end
+	return nil
+end
+local stuckOne = waitFor(12, function()
+	return waitingCustomer()
+end)
+check("a customer is waiting", stuckOne ~= nil)
+if stuckOne then
+	local wants = stuckOne:GetAttribute("Wants")
+	local other = if wants == "Tiny" then "Rainbow" else "Tiny"
+	local stock = table.clone(data.Potions)
+	local before = {}
+	for _, c in plot:GetChildren() do
+		before[c] = true
+	end
+	data.Potions = { [other] = Config.GetMaxPotions(data.Upgrades) }
+	PlayerData.Push(player)
+	local gone = waitFor(10, function()
+		return stuckOne:GetAttribute("Phase") == "Leaving"
+	end)
+	check("shelf full without their potion: they give up", gone)
+	local said = stuckOne:FindFirstChild("Text", true)
+	check("...and say so", said and said.Text == "Oh, you're all out!", said and said.Text)
+	local fresh = waitFor(12, function()
+		for _, c in plot:GetChildren() do
+			if c.Name == "Customer" and not before[c] then -- came after the shelf filled up
+				return c
+			end
+		end
+		return nil
+	end)
+	check("the next customer wants what's on the shelf", fresh and fresh:GetAttribute("Wants") == other, fresh and fresh:GetAttribute("Wants"))
+	data.Potions = stock
+	PlayerData.Push(player)
+end
+-- patience runs out even when nothing is wrong
+local patience = Config.Tuning.Customers.Patience
+Config.Tuning.Customers.Patience = 2
+local tired = waitFor(12, function()
+	local c = waitingCustomer()
+	return c and c:GetAttribute("Phase") == "Waiting" and c
+end)
+local left = tired and waitFor(6, function()
+	return tired:GetAttribute("Phase") == "Leaving"
+end)
+check("customers stop waiting after a while", left)
+check("...with a friendly goodbye", tired and tired:FindFirstChild("Text", true).Text == "Maybe next time!")
+Config.Tuning.Customers.Patience = patience
+
 print("== social ==")
 local SocialService = Engine.loaded(modules.SocialService)
 local function notesTo(who)
@@ -432,6 +488,31 @@ SocialService.RedrawBoard()
 check("board drops players who left", not rowsFolder.Row2.Visible and rowsFolder.Row1.PlayerName.Text == "Tester")
 check("left shop's stand resets", friendPlot.CheerStand.Hitbox.CheerPrompt.ObjectText == "Empty shop")
 
+print("== daily gift ==")
+local GiftService = Engine.loaded(modules.GiftService)
+local ClaimDaily = game:GetService("ReplicatedStorage").Remotes.ClaimDaily
+local realNow = GiftService.Now
+local giftStart = data.Coins
+local function claim(hoursLater)
+	GiftService.Now = function()
+		return realNow() + hoursLater * 3600
+	end
+	task.wait(1.05) -- the claim remote's cooldown
+	Engine.signal(ClaimDaily, "OnServerEvent"):Fire(player)
+	task.wait(0.15)
+end
+check("new players start with no streak", data.Daily and data.Daily.Last == 0 and data.Daily.Streak == 0)
+claim(0)
+check("first gift: day 1, +30", data.Coins == giftStart + 30 and data.Daily.Streak == 1, `{data.Coins - giftStart} day {data.Daily.Streak}`)
+check("gift celebrated", cuesTo(player, "Daily") == 1)
+claim(1)
+check("can't claim twice in a day", data.Coins == giftStart + 30)
+claim(21)
+check("next day: day 2, +50", data.Coins == giftStart + 80 and data.Daily.Streak == 2, `{data.Coins - giftStart} day {data.Daily.Streak}`)
+claim(21 + 20 + 60)
+check("missing days resets the streak", data.Coins == giftStart + 110 and data.Daily.Streak == 1, `{data.Coins - giftStart} day {data.Daily.Streak}`)
+GiftService.Now = realNow
+
 print("== brew a specific recipe ==")
 data.Ingredients.Starflower = 1
 data.Ingredients.Glowshroom = 1
@@ -469,6 +550,7 @@ if data2 then
 	check("coins restored", data2.Coins == savedCoins, `{data2.Coins} vs {savedCoins}`)
 	check("upgrades restored", data2.Upgrades.CozyDecor == 3)
 	check("discoveries restored", data2.Discovered.GiantHead == true)
+	check("daily streak restored", data2.Daily.Streak == 1 and data2.Daily.Last > 0)
 	local plot2 = market:FindFirstChild(player2:GetAttribute("PlotName"))
 	task.wait(0.3)
 	check("upgrades shown again", plot2 and plot2:FindFirstChild("DecorGold") ~= nil)

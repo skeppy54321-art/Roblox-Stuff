@@ -411,6 +411,24 @@ check("bubble popped and landed", workspace:FindFirstChild("SoapBubble") == nil 
 check("ghost solid again", models.Ghost.Torso.Transparency == 0 and landed("Ghost"))
 check("rocket came back down", workspace:FindFirstChild("Parachute") == nil and landed("Rocket"))
 
+print("== daily gift ==")
+local giftFace = find(uiRoot, "SideButtons.GiftButton.Face")
+check("gift ready for a new player", giftFace.Text == "GIFT" and giftFace.Parent.Badge.Visible)
+Engine.signal(giftFace, "Activated"):Fire()
+local celebrated = waitFor(3, function()
+	for _, d in uiRoot.Celebration:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "DAILY GIFT!" then
+			return uiRoot.Celebration.Visible
+		end
+	end
+	return false
+end)
+check("gift claimed and celebrated", celebrated)
+local counting = waitFor(3, function()
+	return giftFace.Text:find("h") ~= nil and not giftFace.Parent.Badge.Visible
+end)
+check("gift button counts down to the next one", counting, giftFace.Text)
+
 print("")
 print(`== RESULT: {passed} passed, {failed} failed, {#Engine.problems} problems, {#Engine.warnings} warnings ==`)
 for _, p in Engine.problems do

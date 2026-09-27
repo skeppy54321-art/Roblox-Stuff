@@ -11,6 +11,8 @@ local P = Config.Palette
 export type State = Config.State
 
 type Card = {
+	Frame: Frame,
+	Order: number,
 	Level: TextLabel,
 	Summary: TextLabel,
 	Pips: { Frame },
@@ -143,7 +145,15 @@ function UpgradesPanel.Init(root: Frame)
 				UpgradesPanel.OnBuy(upgradeId)
 			end
 		end)
-		cards[upgradeId] = { Level = levelLabel, Summary = summary, Pips = pips, Buy = buy, BuyFace = buyFace }
+		cards[upgradeId] = {
+			Frame = card,
+			Order = order,
+			Level = levelLabel,
+			Summary = summary,
+			Pips = pips,
+			Buy = buy,
+			BuyFace = buyFace,
+		}
 	end
 end
 
@@ -160,6 +170,8 @@ function UpgradesPanel.SetState(state: State)
 		local now = if entry then entry.Summary else upgrade.BaseSummary
 		card.Summary.Text = if nextEntry then `{now}  ->  {nextEntry.Summary}` else now
 
+		-- finished upgrades sink to the bottom, so what you can still buy is always on top
+		card.Frame.LayoutOrder = card.Order + (if nextEntry then 0 else 100)
 		if not nextEntry then
 			card.BuyFace.Text = "MAXED"
 			Ui.setButtonColor(card.Buy, P.Gold, Color3.fromRGB(190, 140, 30))

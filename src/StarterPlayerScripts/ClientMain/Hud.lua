@@ -19,6 +19,7 @@ local Hud = {}
 Hud.OnUpgradesPressed = nil :: (() -> ())?
 Hud.OnRecipesPressed = nil :: (() -> ())?
 Hud.OnMutePressed = nil :: (() -> ())?
+Hud.OnGiftPressed = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
@@ -38,6 +39,9 @@ local potionChips: Frame
 local upgradesBadge: Frame
 local recipesBadge: Frame
 local muteFace: TextButton
+local giftHolder: Frame
+local giftFace: TextButton
+local giftBadge: Frame
 local toastList: Frame
 local celebration: Frame
 
@@ -266,7 +270,7 @@ function Hud.Init(parent: Frame)
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -22, 0.42, 0),
-		Size = UDim2.fromOffset(156, 204),
+		Size = UDim2.fromOffset(156, 266),
 		BackgroundTransparency = 1,
 		Parent = root,
 	}, {
@@ -276,6 +280,24 @@ function Hud.Init(parent: Frame)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
+	local gift, giftButtonFace = Ui.button({
+		Name = "GiftButton",
+		Text = "GIFT",
+		Color = P.Gold,
+		Shade = Color3.fromRGB(190, 140, 30),
+		Size = UDim2.fromOffset(120, 52),
+		TextSize = 20,
+		Parent = column,
+	})
+	gift.LayoutOrder = 0
+	giftHolder = gift
+	giftFace = giftButtonFace
+	giftBadge = badge(gift, "!", P.Danger)
+	giftFace.Activated:Connect(function()
+		if Hud.OnGiftPressed then
+			Hud.OnGiftPressed()
+		end
+	end)
 	local upgrades, upgradesFace = Ui.button({
 		Name = "UpgradesButton",
 		Text = "UPGRADES",
@@ -472,6 +494,17 @@ end
 
 function Hud.SetSaveMode(mode: string?)
 	saveChip.Visible = mode ~= nil and mode ~= "Access"
+end
+
+-- The daily gift button: bright with a badge when ready, else the time left.
+function Hud.SetGift(ready: boolean, label: string)
+	giftFace.Text = label
+	giftBadge.Visible = ready
+	Ui.setButtonColor(
+		giftHolder,
+		if ready then P.Gold else P.ButtonOff,
+		if ready then Color3.fromRGB(190, 140, 30) else P.ButtonOffDark
+	)
 end
 
 function Hud.SetMuted(muted: boolean)

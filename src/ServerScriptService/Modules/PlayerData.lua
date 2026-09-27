@@ -22,7 +22,7 @@ export type Data = Config.State
 -- Changing STORE_NAME starts everyone from scratch. Change SCHEMA_VERSION (and add a
 -- step to `migrate`) when the shape of saved data changes instead.
 local STORE_NAME = "PlayerData"
-local SCHEMA_VERSION = 1
+local SCHEMA_VERSION = 2
 -- true = Studio play tests never touch real saves, even with API access on.
 local USE_MOCK_IN_STUDIO = false
 
@@ -34,6 +34,7 @@ local TEMPLATE: Data = {
 	Upgrades = {},
 	Discovered = {},
 	Stats = {},
+	Daily = { Last = 0, Streak = 0 },
 }
 
 -- The parts of a ProfileStore profile this module uses.
@@ -86,6 +87,11 @@ local function migrate(data: Data)
 		-- 0 -> 1: first saved version, nothing to convert.
 		version = 1
 	end
+	if version < 2 then
+		-- 1 -> 2: the daily gift. Reconcile already added Daily from the template; a
+		-- returning player starts a fresh streak with a gift ready.
+		version = 2
+	end
 	data.SchemaVersion = version
 end
 
@@ -115,6 +121,12 @@ local function sanitize(data: Data)
 		end
 	end
 	data.Stats = stats
+	local daily: any = data.Daily
+	local last = if typeof(daily) == "table" and isNumber(daily.Last) then math.max(0, math.floor(daily.Last)) else 0
+	local streak = if typeof(daily) == "table" and isNumber(daily.Streak)
+		then math.clamp(math.floor(daily.Streak), 0, 100000)
+		else 0
+	data.Daily = { Last = last, Streak = streak }
 end
 
 ------------------------------------------------------------------

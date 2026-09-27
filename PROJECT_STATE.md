@@ -46,7 +46,7 @@ ServerScriptService
   Main (Script)
   Modules (Folder): Net, PlayerData, ProfileStore, Guard, Kit, ShopBuilder, CustomerBuilder, MarketBuilder,
                     WorldService, PlotService, IngredientService, BrewService, CustomerService, UpgradeService,
-                    SocialService
+                    SocialService, GiftService
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
     children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
@@ -68,7 +68,7 @@ StarterPlayer > StarterPlayerScripts
 * Brew at your cauldron. Standing at it opens the **cauldron menu**: every unlocked potion, what you're missing, which one a customer wants. Tap a card (or press 1-9), or press the cauldron to brew the suggested potion. Press again while brewing to stir (faster). The liquid turns the potion's color.
 * When a potion is done, a bottle of it pops out of the cauldron with a sparkle, and your potions stand on the counter as glowing bottles (everyone can see your stock).
 * First time you brew a recipe: "NEW RECIPE!" celebration plus a bonus of its sell price.
-* Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
+* Customers walk from the plaza to your counter and ask for one specific potion (the first one always asks for a Giant Head Potion). They wait up to 45 seconds; if your shelf is full and their potion isn't on it, they give up after a few seconds ("Oh, you're all out!") and the next customer asks for something you have, so the shop can never get stuck. Sell it: coins, they lift the bottle and drink it, a funny effect everyone can see, they walk away, the next one comes. About 12% of customers after your 5th sale are **VIPs** (gold crown) who pay double.
 
 **12 potions and their effects** (every customer drinks the potion first)
 
@@ -115,9 +115,12 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 * **Cheer stand:** a pink heart at the front of every shop. At someone else's shop, press it to cheer: hearts burst out for everyone, the owner gets a pink toast, and the shop's cheer count goes up (saved). One cheer per shop per visit. No coins involved.
 * **Market Stars board** in the plaza (across from the welcome sign): everyone in the server ranked by coins earned, with recipes found and cheers.
 
+**Daily gift**
+* A GIFT button (top of the right-hand column) with a badge when it's ready: once every 20 hours, 30 / 50 / 80 / 120 / 160 / 220 / 300 coins for day 1–7 of a streak (later days repeat 300). Come back within 48 hours to keep the streak. The server's clock decides; the button counts down to the next one.
+
 **Saving** (Milestone 3)
 * ProfileStore: session locking (no duping across servers), autosave, final save on leave and on shutdown.
-* Versioned data (`SchemaVersion`), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
+* Versioned data (`SchemaVersion`, now 2: the daily gift), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
 * Can't load → you're kicked with a friendly "please rejoin" (so nobody plays unsaved). Loaded on another server → kicked from the old one.
 * Leaving mid-brew keeps the potion (it finishes instantly) instead of losing the ingredients.
 

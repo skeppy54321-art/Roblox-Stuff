@@ -37,6 +37,7 @@ Net.PlayEffect = remote("RemoteEvent", "PlayEffect") :: RemoteEvent -- (customer
 Net.RequestUpgrade = remote("RemoteEvent", "RequestUpgrade") :: RemoteEvent -- (upgradeId)
 Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipeId)
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
+Net.ClaimDaily = remote("RemoteEvent", "ClaimDaily") :: RemoteEvent -- () the daily gift
 
 -- "news" = something another player did; "heart" = a cheer
 export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
@@ -55,7 +56,7 @@ function Net.NotifyOthers(except: Player, text: string, kind: NotifyKind?)
 end
 
 -- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade",
--- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's).
+-- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's), "Daily" (gift claimed).
 function Net.Cue(player: Player, cue: string, data: { [string]: any }?)
 	Net.CueRemote:FireClient(player, cue, data or {})
 end

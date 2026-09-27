@@ -36,6 +36,7 @@ local PlayEffect = Remotes:WaitForChild("PlayEffect") :: RemoteEvent
 local RequestUpgrade = Remotes:WaitForChild("RequestUpgrade") :: RemoteEvent
 local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
+local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -106,6 +107,32 @@ end
 Hud.OnUpgradesPressed = toggleUpgrades
 Hud.OnRecipesPressed = toggleRecipes
 Hud.OnMutePressed = toggleMute
+Hud.OnGiftPressed = function()
+	local s = state
+	if not s then
+		return
+	end
+	local ready, _, _, wait = Config.GetDailyGift(s.Daily, workspace:GetServerTimeNow())
+	if ready then
+		Sfx.Play("Click")
+		ClaimDaily:FireServer()
+	else
+		Sfx.Play("Error")
+		Hud.Toast(`Your next gift is ready in {Config.FormatDuration(wait)}.`, "info")
+	end
+end
+
+-- Keep the gift button's badge and countdown current.
+task.spawn(function()
+	while true do
+		local s = state
+		if s then
+			local ready, _, _, wait = Config.GetDailyGift(s.Daily, workspace:GetServerTimeNow())
+			Hud.SetGift(ready, if ready then "GIFT" else Config.FormatDuration(wait))
+		end
+		task.wait(1)
+	end
+end)
 UpgradesPanel.OnClose = function()
 	setPanel(nil)
 end
@@ -491,6 +518,9 @@ Cue.OnClientEvent:Connect(function(cue, data)
 	elseif cue == "CheerSent" then
 		Sfx.Play("Cheer", 1.15)
 		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
+	elseif cue == "Daily" then
+		Sfx.Play("Discover")
+		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)
 	elseif cue == "Upgrade" then
 		Sfx.Play("Upgrade")
 		local upgrade = Config.Upgrades[data.Upgrade]
