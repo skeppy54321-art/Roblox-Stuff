@@ -28,6 +28,7 @@ local GoalMarker = require(script:WaitForChild("GoalMarker"))
 local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
 local DayCycle = require(script:WaitForChild("DayCycle"))
+local Butterflies = require(script:WaitForChild("Butterflies"))
 local Townsfolk = require(script:WaitForChild("Townsfolk"))
 local Familiars = require(script:WaitForChild("Familiars"))
 local Juice = require(script:WaitForChild("Juice"))
@@ -71,8 +72,9 @@ Popups.Init(playerGui)
 GoalMarker.Init(playerGui)
 CustomerAnimator.Init()
 Ambience.Init(market)
-do -- the evening sky is only a look: a failure here must never stop the game
+do -- the evening sky and the butterflies are only looks: a failure must never stop the game
 	local ok, err = pcall(function(): any
+		Butterflies.Init()
 		DayCycle.Init(market)
 		return nil
 	end)

@@ -60,7 +60,7 @@ StarterPlayer > StarterPlayerScripts
 * 6 shops in a ring around a cobblestone plaza. Each shop has its own awning color, a sign with the owner's name, a timber back wall with a tiled roof, bottle shelves, lanterns, barrels and a rug.
 * Plaza: tiered marble fountain topped by a giant glowing potion that slowly cycles through every potion color, lamp posts joined by string lights, benches you can sit on, a "Potion Market" sign, the Market Stars board, fireflies.
 * Six townsfolk stroll around the fountain, stop to admire it and window-shop at the stalls (players' shops first), sometimes saying something nice. The server builds them once; every client walks its own copy (no network cost).
-* Around it: trees between the shops, a forest ring, rolling hills on the horizon.
+* Around it: trees between the shops, a forest ring, wildflower patches and mossy rocks in the meadow, rolling hills on the horizon. Butterflies flutter around the plaza in golden hour and fly off at dusk (client only).
 * Golden-hour lighting: low warm sun, haze, sunset clouds, bloom on neon, gentle color grading. Fires and lanterns flicker.
 * **Evening cycle** (every 8 minutes): golden hour drifts into a pink sunset and a purple dusk. The first stars come out, lanterns, fires and the fountain potion glow brighter, and three times as many fireflies drift over the plaza; then the sun comes back. Every player sees the same sky (it follows the server clock) and it costs no network. Looks and timing are in `Config/World.lua` (`DayCycle`); `Enabled = false` keeps golden hour all the time.
 

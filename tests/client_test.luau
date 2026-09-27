@@ -266,6 +266,25 @@ do
 	local lantern = workspace.Market:FindFirstChild("Lantern", true)
 	local lanternLight = lantern and lantern.Glass:FindFirstChildOfClass("PointLight")
 	local realNow = DayCycle.Now
+	-- butterflies by day
+	local Butterflies = Engine.loaded(clientMain.Butterflies)
+	local flutterers = Butterflies.Get()
+	local function allHidden(hidden)
+		for _, b in flutterers do
+			if (b.Body.Transparency == 1) ~= hidden then
+				return false
+			end
+		end
+		return #flutterers > 0
+	end
+	local wasAt = flutterers[1] and flutterers[1].Body.CFrame.Position
+	task.wait(0.4)
+	check("butterflies flutter around the plaza by day", #flutterers == 8 and allHidden(false) and (flutterers[1].Body.CFrame.Position - wasAt).Magnitude > 0.01)
+	local nearest = math.huge
+	for _, b in flutterers do
+		nearest = math.min(nearest, Vector3.new(b.Body.CFrame.Position.X, 0, b.Body.CFrame.Position.Z).Magnitude)
+	end
+	check("...and keep clear of the fountain", nearest > 9, nearest)
 	DayCycle.Now = function()
 		return cycle.Seconds * 0.75 -- the middle of dusk
 	end
@@ -276,6 +295,9 @@ do
 	local flies = workspace.Market.Town.Fireflies.Fireflies
 	check("dusk: more fireflies", flies.Rate == 8 * dusk.Fireflies, flies.Rate)
 	check("dusk: lanterns glow brighter", Ambience.LightScale == dusk.Lanterns and lanternLight and lanternLight.Brightness > 1.4 * 1.15, lanternLight and lanternLight.Brightness)
+	check("dusk: the butterflies fly off", waitFor(5, function()
+		return allHidden(true)
+	end))
 	local between = DayCycle.LookAt(0.5).ClockTime
 	check("the evening comes gradually", between > golden.ClockTime and between < dusk.ClockTime, between)
 	DayCycle.Now = function()
@@ -286,6 +308,9 @@ do
 	check("then golden hour again", math.abs(Lighting.ClockTime - golden.ClockTime) < 1e-4 and flies.Rate == 8, Lighting.ClockTime)
 	check("golden hour is the server's look", golden.ClockTime == World.Lighting.ClockTime and math.abs(Lighting.Brightness - World.Lighting.Brightness) < 1e-4, Lighting.Brightness)
 	check("lanterns back to normal", lanternLight and lanternLight.Brightness <= 1.4 * 1.15 + 1e-6, lanternLight and lanternLight.Brightness)
+	check("the butterflies come back", waitFor(5, function()
+		return allHidden(false)
+	end))
 	DayCycle.Now = realNow
 end
 

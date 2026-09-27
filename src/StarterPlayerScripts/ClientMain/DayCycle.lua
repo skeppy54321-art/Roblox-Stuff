@@ -1,8 +1,9 @@
 --!strict
 -- DayCycle (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.DayCycle
 -- The market's evening: golden hour slowly turns into a pink sunset and a purple dusk
--- (the first stars come out, lanterns glow brighter, more fireflies over the plaza), then
--- the sun comes back. The looks and timing live in Config.World.DayCycle.
+-- (the first stars come out, lanterns glow brighter, the butterflies fly off and more
+-- fireflies come out over the plaza), then the sun comes back. The looks and timing live
+-- in Config.World.DayCycle.
 --
 -- Client only: the server's Lighting (WorldService) is the golden-hour look, and this
 -- changes it locally, so it costs no network. Every client follows the server clock, so
@@ -13,6 +14,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 local Ambience = require(script.Parent:WaitForChild("Ambience"))
+local Butterflies = require(script.Parent:WaitForChild("Butterflies"))
 
 local CYCLE = Config.World.DayCycle
 local UPDATE_EVERY = 0.2 -- seconds
@@ -51,6 +53,7 @@ local function blend(a: SkyLook, b: SkyLook, t: number): SkyLook
 		Tint = a.Tint:Lerp(b.Tint, t),
 		Lanterns = n(a.Lanterns, b.Lanterns),
 		Fireflies = n(a.Fireflies, b.Fireflies),
+		Butterflies = n(a.Butterflies, b.Butterflies),
 	}
 end
 
@@ -98,6 +101,7 @@ function DayCycle.Apply(phase: number)
 		clouds.Color = look.CloudColor
 	end
 	Ambience.LightScale = look.Lanterns
+	Butterflies.Amount = look.Butterflies
 	local emitter = fireflies
 	if emitter then
 		emitter.Rate = fireflyRate * look.Fireflies

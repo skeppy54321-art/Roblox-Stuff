@@ -473,6 +473,75 @@ local function buildNature(market: Model, rng: Random)
 			end
 		end
 	end
+	-- wildflower patches (one color each, on a leafy mat) around the shops
+	local wildColors = {
+		Color3.fromRGB(255, 140, 190),
+		Color3.fromRGB(255, 245, 250),
+		Color3.fromRGB(255, 215, 80),
+		Color3.fromRGB(190, 150, 255),
+		Color3.fromRGB(140, 200, 255),
+	}
+	placed, tries = 0, 0
+	while placed < 26 and tries < 400 do
+		tries += 1
+		local center =
+			polar(rng:NextNumber(0, math.pi * 2), rng:NextNumber(W.PlazaRadius + 8, W.PlotRingRadius + 60), 0)
+		if isClear(center, 3) then
+			placed += 1
+			Kit.Cylinder(
+				nature,
+				"Clover",
+				0.2,
+				rng:NextNumber(3, 4),
+				CFrame.new(center + Vector3.new(0, 0.1, 0)),
+				Kit.Vary(P.LeafLight:Lerp(P.LeafDark, 0.35), rng),
+				Enum.Material.Grass,
+				{ CastShadow = false }
+			)
+			local color = wildColors[rng:NextInteger(1, #wildColors)]
+			for _ = 1, rng:NextInteger(6, 9) do
+				local offset =
+					Vector3.new(rng:NextNumber(-1.6, 1.6), rng:NextNumber(0.35, 0.6), rng:NextNumber(-1.6, 1.6))
+				Kit.Ball(
+					nature,
+					"Wildflower",
+					rng:NextNumber(0.5, 0.75),
+					center + offset,
+					Kit.Vary(color, rng, 0.06),
+					Enum.Material.SmoothPlastic,
+					{ CastShadow = false }
+				)
+			end
+		end
+	end
+	-- a few mossy rocks, half sunk into the grass
+	placed, tries = 0, 0
+	while placed < 10 and tries < 200 do
+		tries += 1
+		local center =
+			polar(rng:NextNumber(0, math.pi * 2), rng:NextNumber(W.PlotRingRadius + 20, W.PlotRingRadius + 70), 0)
+		if isClear(center, 4) then
+			placed += 1
+			local size = rng:NextNumber(1.6, 3)
+			Kit.Ball(
+				nature,
+				"Rock",
+				size,
+				center + Vector3.new(0, size * 0.2, 0),
+				Kit.Vary(P.Stone, rng),
+				Enum.Material.Slate,
+				{ CanCollide = true, CanQuery = true }
+			)
+			Kit.Ball(
+				nature,
+				"Rock",
+				size * 0.55,
+				center + Vector3.new(size * 0.55, size * 0.1, size * 0.3),
+				Kit.Vary(P.DarkStone, rng),
+				Enum.Material.Slate
+			)
+		end
+	end
 	-- rolling hills on the horizon
 	for i = 1, 14 do
 		local angle = (i / 14) * math.pi * 2 + rng:NextNumber(-0.1, 0.1)

@@ -68,6 +68,7 @@ export type SkyLook = {
 	Tint: Color3,
 	Lanterns: number, -- lantern, fire and fountain lights, times their normal brightness
 	Fireflies: number, -- fireflies over the plaza, times the normal number
+	Butterflies: number, -- share of the butterflies out (they fly off at dusk)
 }
 
 -- The golden-hour look above, as a SkyLook.
@@ -85,6 +86,7 @@ local golden: SkyLook = {
 	Tint = World.ColorCorrection.TintColor,
 	Lanterns = 1,
 	Fireflies = 1,
+	Butterflies = 1,
 }
 
 -- The sun touches the rooftops: deep orange haze, pink clouds.
@@ -102,6 +104,7 @@ local sunset: SkyLook = {
 	Tint = rgb(255, 238, 232),
 	Lanterns = 1.3,
 	Fireflies = 1.5,
+	Butterflies = 0.5,
 }
 
 -- Just after sunset: a purple sky with the first stars, lanterns and potions glowing.
@@ -120,6 +123,7 @@ local dusk: SkyLook = {
 	Tint = rgb(244, 236, 255),
 	Lanterns = 1.8,
 	Fireflies = 3,
+	Butterflies = 0,
 }
 
 -- The evening cycle (client only: ClientMain.DayCycle). The market spends most of its time
