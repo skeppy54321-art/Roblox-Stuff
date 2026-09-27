@@ -266,6 +266,10 @@ check("tapping the card started brewing", plot.Cauldron:GetAttribute("BrewRecipe
 task.wait(0.3)
 check("menu hides while brewing", menu.Visible == false)
 check("brew bar shows", playerGui.BrewBar.Enabled == true)
+local blub = waitFor(2, function()
+	return plot.Cauldron.Hitbox:FindFirstChild("Blub")
+end)
+check("the cauldron blubs while brewing", blub ~= nil)
 local done = waitFor(8, function()
 	return uiRoot.Celebration.Visible
 end)

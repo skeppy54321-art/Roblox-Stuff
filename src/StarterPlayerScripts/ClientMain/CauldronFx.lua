@@ -22,6 +22,7 @@ local watched: Model? = nil
 local watchConnection: RBXScriptConnection? = nil
 local lastEndTime = 0
 local bubbling = false
+local nextBlub = 0
 
 local function brewInfo(cauldron: Model): (number, number, string)
 	local endTime = cauldron:GetAttribute("BrewEndTime")
@@ -79,13 +80,21 @@ function CauldronFx.Init(playerGui: PlayerGui)
 				nameLabel.Text = recipe.DisplayName
 			end
 		end
+		local hitbox = cauldron:FindFirstChild("Hitbox")
 		if isBrewing ~= bubbling then
 			bubbling = isBrewing
-			local hitbox = cauldron:FindFirstChild("Hitbox")
 			if isBrewing and hitbox and hitbox:IsA("BasePart") then
 				Sfx.StartLoop("Cauldron", "Bubbling", hitbox)
 			else
 				Sfx.StopLoop("Cauldron")
+			end
+		end
+		-- no bubbling loop picked yet: a soft "blub" now and then instead
+		if isBrewing and Config.Sounds.Bubbling.Id == "" and hitbox and hitbox:IsA("BasePart") then
+			local t = os.clock()
+			if t >= nextBlub then
+				nextBlub = t + 0.45 + math.random() * 0.4
+				Sfx.PlayAt("Blub", hitbox, 0.85 + math.random() * 0.35)
 			end
 		end
 	end)

@@ -57,6 +57,7 @@ local Sounds: { [string]: SoundDef } = {
 	Plop = sound(SPLASH, 0.35, 1.5, "water plop"),
 	Stir = sound(SPLASH, 0.25, 2.1, "water swirl"),
 	Bubbling = sound("", 0.25, 1, "cauldron bubbling loop"),
+	Blub = sound(SPLASH, 0.12, 2.8, "single bubble blub"), -- played now and then while brewing if Bubbling has no id
 	PotionReady = sound(TICK, 0.6, 1, "magic chime", { Id = CHIME, MaxSeconds = 2.5 }),
 	Discover = sound(TICK, 0.5, 1, "magic sparkle reveal", { Id = CELEBRATE, MaxSeconds = 4, Duck = true }),
 	Coins = sound(TICK, 0.45, 1.5, "coins cash register", { Id = CHIME, MaxSeconds = 1.5 }),
