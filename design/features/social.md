@@ -9,7 +9,7 @@ Status: draft (built overnight, not yet reviewed)
   * On your own shop and on empty shops: no prompt, just the heart and the count.
   * On someone else's shop: a "Cheer" prompt. Pressing it: hearts burst from the stand (everyone sees them), the owner's cheer count goes up by one and they get a pink "Sam cheered for your shop!" toast with a chime; you get "You cheered for Alex's shop!".
   * One cheer per visitor per shop per visit (server session). A second press says "You already cheered for Alex's shop!". Cheers are saved (`Stats.Cheers`).
-* **Market Stars board:** a wooden notice board in the plaza, opposite the welcome sign. Title "Market Stars", then one row per shop owner in this server, best first by coins earned (all time): rank badge (gold / silver / bronze for the top three), name, coins earned, recipes found (x/7), cheers.
+* **Market Stars board:** a wooden notice board in the plaza, opposite the welcome sign. Title "Market Stars", then one row per shop owner in this server, best first by coins earned (all time): rank badge (gold / silver / bronze for the top three), name, coins earned, recipes found (x/12), cheers.
   * Empty state: "Open a shop to be a star!"
   * Refreshes a couple of seconds after any change.
 * **Mobile:** nothing new on screen except toasts; the prompt uses the game's custom prompt style.

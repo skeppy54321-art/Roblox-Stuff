@@ -40,7 +40,8 @@ The place file already has **StreamingEnabled off** and **Lighting > Technology 
 ```
 ReplicatedStorage
   Config (ModuleScript = Config/init.lua)  children: Tuning, Ingredients, Recipes, Upgrades, Palette, Sounds, World
-  Effects (ModuleScript = Effects/init.lua) children: BigHead, Rainbow, Tiny, Floaty, Twirl, Frosty, Froggy
+  Effects (ModuleScript = Effects/init.lua) children: BigHead, Rainbow, Tiny, Floaty, Twirl, Frosty, Froggy,
+                                            FireBreath, Dance, Bubble, Ghost, Rocket
 ServerScriptService
   Main (Script)
   Modules (Folder): Net, PlayerData, ProfileStore, Guard, Kit, ShopBuilder, CustomerBuilder, MarketBuilder,

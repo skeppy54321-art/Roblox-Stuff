@@ -28,7 +28,7 @@ the potion), and rejoins to check the save round-trip through ProfileStore's moc
 screen: HUD, scaling, sounds (preload, broken-asset fallback, music ducking), goal banner +
 arrow, custom prompts (cheer prompt only on other players' shops), popups, the cauldron menu
 (tapping a card brews), celebrations, social toasts, keyboard shortcuts, buying from the
-Upgrades panel, and all seven potion effects on real customer models.
+Upgrades panel, and all twelve potion effects on real customer models (drinking first).
 
 ## 3D preview of the world
 
