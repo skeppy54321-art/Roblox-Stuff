@@ -1,0 +1,16 @@
+# Roblox place files (build output / local saves)
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.lock
+
+# Rojo / tooling
+sourcemap.json
+/Packages
+/tools/bin
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
