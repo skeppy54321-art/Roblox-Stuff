@@ -2394,6 +2394,7 @@ end
 -- Starts every server module and handles players joining/leaving.
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Modules = script.Parent:WaitForChild("Modules")
 local Net = require(Modules:WaitForChild("Net")) -- creates the Remotes folder first
@@ -2433,6 +2434,18 @@ CustomerService.OnChanged(function(plot)
 		BrewService.Refresh(owner)
 	end
 end)
+
+-- Testing aid: in Studio play tests only, the client's "+10K" button gives coins so the
+-- late game (familiars, rebirth) can be tried quickly. Live servers ignore it completely.
+if RunService:IsStudio() then
+	Net.StudioCoins.OnServerEvent:Connect(function(player: Player)
+		local data = PlayerData.Get(player)
+		if data and Guard.Cooldown(player, "StudioCoins", 0.5) then
+			data.Coins += 10000
+			PlayerData.Push(player)
+		end
+	end)
+end
 
 Net.GetState.OnServerInvoke = function(player: Player)
 	if not Guard.Cooldown(player, "GetState", 0.2) then
@@ -4762,6 +4775,7 @@ Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipe
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
 Net.ClaimDaily = remote("RemoteEvent", "ClaimDaily") :: RemoteEvent -- () the daily gift
 Net.RequestRebirth = remote("RemoteEvent", "RequestRebirth") :: RemoteEvent -- () start the shop over for a bonus
+Net.StudioCoins = remote("RemoteEvent", "StudioCoins") :: RemoteEvent -- () Studio play tests only: +10,000 coins
 
 -- "news" = something another player did; "heart" = a cheer
 export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
@@ -9229,6 +9243,7 @@ local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
 local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
 local RequestRebirth = Remotes:WaitForChild("RequestRebirth") :: RemoteEvent
+local StudioCoins = Remotes:WaitForChild("StudioCoins") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -9339,6 +9354,13 @@ UpgradesPanel.OnClose = function()
 end
 RecipeBook.OnClose = function()
 	setPanel(nil)
+end
+if RunService:IsStudio() then -- testing aid; the server ignores it outside Studio too
+	Hud.ShowStudioButton()
+	Hud.OnStudioCoins = function()
+		Sfx.Play("Coins")
+		StudioCoins:FireServer()
+	end
 end
 UpgradesPanel.OnRebirth = function()
 	Sfx.Play("Click")
@@ -11065,6 +11087,7 @@ Hud.OnUpgradesPressed = nil :: (() -> ())?
 Hud.OnRecipesPressed = nil :: (() -> ())?
 Hud.OnMutePressed = nil :: (() -> ())?
 Hud.OnGiftPressed = nil :: (() -> ())?
+Hud.OnStudioCoins = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
@@ -11609,6 +11632,26 @@ function Hud.FlyCoins(from: Vector2, amount: number)
 	if ok then
 		Hud.FlyCoinsBetween(from - origin, target - origin, amount)
 	end
+end
+
+-- Studio play tests only: a small "+10K" button under the basket for trying the late game.
+function Hud.ShowStudioButton()
+	local button, face = Ui.button({
+		Name = "StudioCoins",
+		Text = "+10K (Studio)",
+		Color = Color3.fromRGB(240, 140, 50),
+		Shade = Color3.fromRGB(180, 90, 30),
+		Size = UDim2.fromOffset(150, 40),
+		Position = UDim2.new(0, 12, 1, -150),
+		TextSize = 16,
+		Parent = root,
+	})
+	button.ZIndex = 5
+	face.Activated:Connect(function()
+		if Hud.OnStudioCoins then
+			Hud.OnStudioCoins()
+		end
+	end)
 end
 
 -- The daily gift button: bright with a badge when ready, else the time left.

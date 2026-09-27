@@ -39,6 +39,7 @@ Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipe
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
 Net.ClaimDaily = remote("RemoteEvent", "ClaimDaily") :: RemoteEvent -- () the daily gift
 Net.RequestRebirth = remote("RemoteEvent", "RequestRebirth") :: RemoteEvent -- () start the shop over for a bonus
+Net.StudioCoins = remote("RemoteEvent", "StudioCoins") :: RemoteEvent -- () Studio play tests only: +10,000 coins
 
 -- "news" = something another player did; "heart" = a cheer
 export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"

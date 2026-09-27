@@ -3,6 +3,7 @@
 -- Starts every server module and handles players joining/leaving.
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local Modules = script.Parent:WaitForChild("Modules")
 local Net = require(Modules:WaitForChild("Net")) -- creates the Remotes folder first
@@ -42,6 +43,18 @@ CustomerService.OnChanged(function(plot)
 		BrewService.Refresh(owner)
 	end
 end)
+
+-- Testing aid: in Studio play tests only, the client's "+10K" button gives coins so the
+-- late game (familiars, rebirth) can be tried quickly. Live servers ignore it completely.
+if RunService:IsStudio() then
+	Net.StudioCoins.OnServerEvent:Connect(function(player: Player)
+		local data = PlayerData.Get(player)
+		if data and Guard.Cooldown(player, "StudioCoins", 0.5) then
+			data.Coins += 10000
+			PlayerData.Push(player)
+		end
+	end)
+end
 
 Net.GetState.OnServerInvoke = function(player: Player)
 	if not Guard.Cooldown(player, "GetState", 0.2) then

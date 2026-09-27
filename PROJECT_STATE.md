@@ -145,6 +145,10 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 11. **Test tab > Device > a phone.** Everything readable and tappable; the cauldron menu and buttons don't sit under the joystick or jump button. Tap a prompt to use it.
 12. **Saving** (published place + API access on): earn coins, stop, play again. Coins, potions, upgrades and discovered recipes come back.
 13. **Leave mid-brew**, rejoin: you have the potion.
+14. **GIFT** button (top right, with a "!"): tap it, "DAILY GIFT! Day 1: +30 coins". Tap again: it says when the next one is ready.
+15. **Late game fast:** in Studio there's an orange **+10K (Studio)** button (bottom left, never in the real game). Use it to buy the Ember and Cloud gardens (they grow up out of the ground), brew Fire Breath / Dance / Bubble / Ghost / Rocket and sell them, and buy a Magic Familiar (a cat floats behind you; the owl and dragon come next).
+16. **Rebirth:** with the Cloud Garden and 5,000+ coins, the Rebirth card is at the top of the Upgrades panel. Tap it twice: your shop starts over, the familiar stays, your coins now show "x1.25", the sign says "Rebirth 1", and sales pay 25% more.
+17. Watch the plaza for a minute: townsfolk stroll around, stop at the fountain and at shops, and sometimes say something.
 
 Send any red Output errors and what you did right before. Yellow `[Effects] ... errored` or `[ClientMain] custom prompts disabled` warnings are worth sending too.
 

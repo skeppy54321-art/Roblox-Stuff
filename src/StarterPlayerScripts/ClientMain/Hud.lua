@@ -20,6 +20,7 @@ Hud.OnUpgradesPressed = nil :: (() -> ())?
 Hud.OnRecipesPressed = nil :: (() -> ())?
 Hud.OnMutePressed = nil :: (() -> ())?
 Hud.OnGiftPressed = nil :: (() -> ())?
+Hud.OnStudioCoins = nil :: (() -> ())?
 
 local root: Frame
 local coinsPill: Frame
@@ -564,6 +565,26 @@ function Hud.FlyCoins(from: Vector2, amount: number)
 	if ok then
 		Hud.FlyCoinsBetween(from - origin, target - origin, amount)
 	end
+end
+
+-- Studio play tests only: a small "+10K" button under the basket for trying the late game.
+function Hud.ShowStudioButton()
+	local button, face = Ui.button({
+		Name = "StudioCoins",
+		Text = "+10K (Studio)",
+		Color = Color3.fromRGB(240, 140, 50),
+		Shade = Color3.fromRGB(180, 90, 30),
+		Size = UDim2.fromOffset(150, 40),
+		Position = UDim2.new(0, 12, 1, -150),
+		TextSize = 16,
+		Parent = root,
+	})
+	button.ZIndex = 5
+	face.Activated:Connect(function()
+		if Hud.OnStudioCoins then
+			Hud.OnStudioCoins()
+		end
+	end)
 end
 
 -- The daily gift button: bright with a badge when ready, else the time left.

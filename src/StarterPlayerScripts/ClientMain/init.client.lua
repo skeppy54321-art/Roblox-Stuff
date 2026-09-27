@@ -40,6 +40,7 @@ local RequestBrew = Remotes:WaitForChild("RequestBrew") :: RemoteEvent
 local GetState = Remotes:WaitForChild("GetState") :: RemoteFunction
 local ClaimDaily = Remotes:WaitForChild("ClaimDaily") :: RemoteEvent
 local RequestRebirth = Remotes:WaitForChild("RequestRebirth") :: RemoteEvent
+local StudioCoins = Remotes:WaitForChild("StudioCoins") :: RemoteEvent
 
 local P = Config.Palette
 
@@ -150,6 +151,13 @@ UpgradesPanel.OnClose = function()
 end
 RecipeBook.OnClose = function()
 	setPanel(nil)
+end
+if RunService:IsStudio() then -- testing aid; the server ignores it outside Studio too
+	Hud.ShowStudioButton()
+	Hud.OnStudioCoins = function()
+		Sfx.Play("Coins")
+		StudioCoins:FireServer()
+	end
 end
 UpgradesPanel.OnRebirth = function()
 	Sfx.Play("Click")

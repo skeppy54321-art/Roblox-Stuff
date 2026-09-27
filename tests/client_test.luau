@@ -513,6 +513,16 @@ local counting = waitFor(3, function()
 end)
 check("gift button counts down to the next one", counting, giftFace.Text)
 
+print("== studio coins ==")
+do
+	local studioFace = find(uiRoot, "StudioCoins.Face")
+	check("Studio shows the +10K test button", studioFace ~= nil)
+	local before = data.Coins
+	Engine.signal(studioFace, "Activated"):Fire()
+	task.wait(0.3)
+	check("+10K gives 10,000 coins in Studio", data.Coins == before + 10000, data.Coins - before)
+end
+
 print("== rebirth ==")
 do
 	local rebirthFace = find(uiRoot, "UpgradesPanel.Body.List.Rebirth.Buy.Face")
