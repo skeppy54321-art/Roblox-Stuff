@@ -89,6 +89,17 @@ check("6 plots built", #plots == 6, #plots)
 Engine.syncPositions(workspace)
 local town = market:FindFirstChild("Town")
 check("town built", town ~= nil)
+local folk = town and town:FindFirstChild("Townsfolk")
+check("6 townsfolk built", folk ~= nil and #folk:GetChildren() == 6, folk and #folk:GetChildren())
+if folk then
+	local quiet = true
+	for _, d in folk:GetDescendants() do
+		if d:IsA("BillboardGui") or d:IsA("ProximityPrompt") then
+			quiet = false
+		end
+	end
+	check("townsfolk have no bubbles or prompts", quiet)
+end
 check("spawn exists", workspace:FindFirstChild("MarketSpawn") ~= nil)
 local lighting = game:GetService("Lighting")
 check("atmosphere set", lighting:FindFirstChildOfClass("Atmosphere") ~= nil)

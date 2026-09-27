@@ -9,6 +9,7 @@ local World = {}
 -- Shops sit in a ring around the plaza, each facing the fountain.
 -- Set the experience's Max Players to PlotCount (Game Settings > Places) so everyone gets a shop.
 World.PlotCount = 6
+World.Townsfolk = 6 -- villagers strolling around the plaza (visual only)
 World.PlotSize = 30 -- square shop floor, in studs
 World.PlotRingRadius = 60 -- plaza center to each shop's center
 World.PlotAngleOffset = 0 -- turns the whole ring (radians)

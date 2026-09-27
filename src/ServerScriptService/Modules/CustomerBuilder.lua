@@ -21,6 +21,7 @@ export type Options = {
 	Vip: boolean,
 	WantsText: string,
 	WantsColor: Color3,
+	Bubble: boolean?, -- false = no speech bubble (townsfolk)
 }
 
 local CustomerBuilder = {}
@@ -303,7 +304,9 @@ function CustomerBuilder.Build(spot: CFrame, options: Options): Model
 	end
 	headGroup.WorldPivot = at(0, 4, 0)
 
-	buildBubble(head, options)
+	if options.Bubble ~= false then
+		buildBubble(head, options)
+	end
 
 	customer.PrimaryPart = torso
 	customer.WorldPivot = base -- feet on the spot, facing the same way as the body (toward the counter)

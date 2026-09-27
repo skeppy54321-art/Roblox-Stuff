@@ -50,7 +50,7 @@ ServerScriptService
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
     children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
-              GoalMarker, CustomerAnimator, Ambience
+              GoalMarker, CustomerAnimator, Ambience, Townsfolk
 ```
 `Remotes`, `Market` and `PlotStash` are created by code; don't make them.
 
@@ -58,7 +58,8 @@ StarterPlayer > StarterPlayerScripts
 
 **World** (all built by code, no free models)
 * 6 shops in a ring around a cobblestone plaza. Each shop has its own awning color, a sign with the owner's name, a timber back wall with a tiled roof, bottle shelves, lanterns, barrels and a rug.
-* Plaza: tiered marble fountain topped by a giant glowing potion that slowly cycles through every potion color, lamp posts joined by string lights, benches you can sit on, a "Potion Market" sign, fireflies.
+* Plaza: tiered marble fountain topped by a giant glowing potion that slowly cycles through every potion color, lamp posts joined by string lights, benches you can sit on, a "Potion Market" sign, the Market Stars board, fireflies.
+* Six townsfolk stroll around the fountain, stop to admire it and window-shop at the stalls (players' shops first), sometimes saying something nice. The server builds them once; every client walks its own copy (no network cost).
 * Around it: trees between the shops, a forest ring, rolling hills on the horizon.
 * Golden-hour lighting: low warm sun, haze, sunset clouds, bloom on neon, gentle color grading. Fires and lanterns flicker.
 

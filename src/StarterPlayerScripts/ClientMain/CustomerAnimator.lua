@@ -7,13 +7,24 @@
 
 local RunService = game:GetService("RunService")
 
-type Anim = {
+-- A posable body: every part's offset from the pivot, and which parts swing.
+-- Also used by Townsfolk (width subtyping: an Anim is a Rig with extra fields).
+export type Rig = {
 	Model: Model,
-	Rest: CFrame, -- the customer's pivot standing at the counter (as the server built it)
+	Rest: CFrame, -- the pivot the offsets were measured from
 	Parts: { BasePart },
 	Offsets: { CFrame }, -- each part relative to the pivot
 	Swing: { number }, -- 0 = still, 1 = left leg, 2 = right leg, 3 = left arm, 4 = right arm
 	Joints: { Vector3 }, -- hip / shoulder each swinging part turns around
+}
+
+type Anim = {
+	Model: Model,
+	Rest: CFrame, -- the customer's pivot standing at the counter (as the server built it)
+	Parts: { BasePart },
+	Offsets: { CFrame },
+	Swing: { number },
+	Joints: { Vector3 },
 	Phase: string,
 	Moved: boolean, -- parts are away from their rest pose
 	Seed: number,
@@ -30,7 +41,7 @@ local HIP_Y, SHOULDER_Y = 2.1, 3.9
 
 -- Records where every part sits relative to the rest pivot (again when leaving,
 -- so a giant head, a frog or a tiny customer walks away as it is).
-local function capture(anim: Anim)
+local function capture(anim: Rig)
 	local scale = anim.Model:GetScale()
 	local parts, offsets, swing, joints = {}, {}, {}, {}
 	for _, d in anim.Model:GetDescendants() do
@@ -48,7 +59,7 @@ local function capture(anim: Anim)
 	anim.Parts, anim.Offsets, anim.Swing, anim.Joints = parts, offsets, swing, joints
 end
 
-local function pose(anim: Anim, pivot: CFrame, stride: number)
+local function pose(anim: Rig, pivot: CFrame, stride: number)
 	local cframes = table.create(#anim.Parts)
 	for i, offset in anim.Offsets do
 		local kind = anim.Swing[i]
@@ -114,6 +125,18 @@ local function update(anim: Anim, now: number)
 		anim.Moved = true
 	end
 	-- "Reacting": the potion effect is in control; leave the parts alone.
+end
+
+-- A rig for any customer-built body (legs and arms swing with `stride`).
+function CustomerAnimator.NewRig(model: Model): Rig
+	local rig: Rig = { Model = model, Rest = model:GetPivot(), Parts = {}, Offsets = {}, Swing = {}, Joints = {} }
+	capture(rig)
+	return rig
+end
+
+-- Moves the whole rig to `pivot`, legs and arms swung by `stride` (radians, 0 = standing).
+function CustomerAnimator.PoseRig(rig: Rig, pivot: CFrame, stride: number)
+	pose(rig, pivot, stride)
 end
 
 -- Start animating a customer model (call as soon as it appears).

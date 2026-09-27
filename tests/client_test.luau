@@ -180,6 +180,37 @@ otherPlot:SetAttribute("OwnerUserId", 0)
 Engine.signal(otherPlot, "Attr:OwnerUserId"):Fire()
 check("cheer prompt hides when they leave", otherPlot.CheerStand.Hitbox.CheerPrompt.Enabled == false)
 
+print("== townsfolk ==")
+local folkFolder = workspace.Market.Town.Townsfolk
+local villagers = folkFolder:GetChildren()
+local startAt = {}
+for i, v in villagers do
+	startAt[i] = v.Torso.CFrame.Position
+end
+local closest, lowest, highest = math.huge, math.huge, -math.huge
+for _ = 1, 15 do
+	task.wait(0.2)
+	for _, v in villagers do
+		local p = v.Torso.CFrame.Position
+		closest = math.min(closest, Vector3.new(p.X, 0, p.Z).Magnitude)
+		lowest, highest = math.min(lowest, p.Y), math.max(highest, p.Y)
+	end
+end
+local moved = 0
+for i, v in villagers do
+	if (v.Torso.CFrame.Position - startAt[i]).Magnitude > 2 then
+		moved += 1
+	end
+end
+check("townsfolk are strolling", moved >= 3, moved)
+check("townsfolk keep out of the fountain", closest > 10.3, closest)
+check("townsfolk walk on the ground", lowest > 3.1 and highest < 3.5, `{lowest}..{highest}`)
+if process.args[2] then -- the plaza with its villagers, for tests/preview (view "town")
+	local parts, lights = Engine.dumpParts(workspace)
+	local views = { town = { pos = { 30, 14, -30 }, look = { 0, 3, 5 }, fov = 55 } }
+	fs.writeFile(process.args[2] .. "/parts_town.json", serde.encode("json", { parts = parts, lights = lights, views = views }))
+end
+
 print("== prompt UI ==")
 local PPS = game:GetService("ProximityPromptService")
 local prompt = plot.Sources.Moonberry.Hitbox.CollectPrompt

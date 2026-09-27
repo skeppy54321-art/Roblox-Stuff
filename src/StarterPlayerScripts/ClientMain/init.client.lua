@@ -27,6 +27,7 @@ local Popups = require(script:WaitForChild("Popups"))
 local GoalMarker = require(script:WaitForChild("GoalMarker"))
 local CustomerAnimator = require(script:WaitForChild("CustomerAnimator"))
 local Ambience = require(script:WaitForChild("Ambience"))
+local Townsfolk = require(script:WaitForChild("Townsfolk"))
 
 local StateUpdate = Remotes:WaitForChild("StateUpdate") :: RemoteEvent
 local Notify = Remotes:WaitForChild("Notify") :: RemoteEvent
@@ -63,6 +64,15 @@ Popups.Init(playerGui)
 GoalMarker.Init(playerGui)
 CustomerAnimator.Init()
 Ambience.Init(market)
+task.spawn(function() -- waits for the villagers to replicate; purely cosmetic, so never fatal
+	local ok, err = pcall(function(): any
+		Townsfolk.Init(market)
+		return nil
+	end)
+	if not ok then
+		warn(`[ClientMain] townsfolk disabled: {err}`)
+	end
+end)
 
 Effects.SetSoundPlayer(function(name, part)
 	if part then

@@ -6,6 +6,7 @@
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
+local CustomerBuilder = require(script.Parent:WaitForChild("CustomerBuilder"))
 
 local P = Config.Palette
 local W = Config.World
@@ -592,6 +593,17 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	fireflies.RotSpeed = NumberRange.new(-40, 40)
 	fireflies.Rate = 8
 	fireflies.Parent = fireflyBox
+
+	-- townsfolk: built once here, then every client walks them around (ClientMain.Townsfolk)
+	local folk = Kit.Folder(market, "Townsfolk")
+	for i = 1, W.Townsfolk do
+		local angle = (i / W.Townsfolk) * math.pi * 2 + 0.35
+		local spot = CFrame.lookAt(polar(angle, 20, 0.3), Vector3.new(0, 0.3, 0))
+		local villager =
+			CustomerBuilder.Build(spot, { Vip = false, WantsText = "", WantsColor = P.Gold, Bubble = false })
+		villager.Name = "Villager"
+		villager.Parent = folk
+	end
 
 	-- nature last (it checks what is already taken)
 	buildNature(market, rng)
