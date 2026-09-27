@@ -1,194 +1,406 @@
+--!strict
 -- ShopBuilder (ModuleScript) — ServerScriptService.Modules.ShopBuilder
--- Builds shop plots and customers out of simple parts, so no free models are needed.
+-- Builds one shop plot out of simple parts, so no free models are needed.
 -- Visual only: no game rules live here.
+--
+-- Plot space: the plot's CFrame sits on the ground at the plot's center.
+-- -Z is the front (counter side, facing the plaza), +Z is the back wall,
+-- and every `y` below is height above the wooden floor.
 
-local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
 
 local P = Config.Palette
+local CHARGE_SLOTS = Config.Tuning.Sources.ChargeSlots
+local WOOD = Enum.Material.Wood
+local NEON = Enum.Material.Neon
+
+export type PlotParts = {
+	Model: Model,
+	Sources: { [string]: Model }, -- ingredient id -> source (charges, hitbox, CollectPrompt)
+	Lots: { [string]: Model }, -- upgrade id -> "for sale" lot shown while that source is locked
+	Features: { [string]: Model }, -- extra visuals switched on by upgrades
+	SourcesFolder: Folder, -- where unlocked sources live
+	LotsFolder: Folder, -- where "for sale" lots live
+	Cauldron: Model,
+	Sign: BasePart,
+	CounterFront: BasePart,
+	SpawnPoint: BasePart,
+	GoldParts: { BasePart }, -- cauldron parts that turn gold with Cozy Decor level 3
+	FireParts: { BasePart }, -- flames that change color with Faster Brewing
+}
+
+type At = (x: number, y: number, z: number) -> CFrame
+
 local ShopBuilder = {}
 
-local UPRIGHT = CFrame.Angles(0, 0, math.rad(90)) -- turns a cylinder so it stands up
+-- Where each ingredient source sits (plot space x, z).
+ShopBuilder.SourceSpots = {
+	Moonberry = Vector3.new(-10.5, 0, 5),
+	Glowshroom = Vector3.new(10.5, 0, 5),
+	Starflower = Vector3.new(-10.5, 0, -3),
+	FrostCrystal = Vector3.new(10.5, 0, -3),
+} :: { [string]: Vector3 }
 
-local function part(parent: Instance, name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material?, props: { [string]: any }?): Part
-	local p = Instance.new("Part")
-	p.Name = name
-	p.Size = size
-	p.CFrame = cf
-	p.Color = color
-	p.Material = material or Enum.Material.SmoothPlastic
-	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	if props then
-		for key, value in props do
-			(p :: any)[key] = value
-		end
-	end
-	p.Parent = parent
-	return p
-end
+-- Customers line up in front of the counter, this far out (plot space z).
+ShopBuilder.CounterFrontZ = -11.5
 
-local function hitbox(parent: Instance, size: Vector3, cf: CFrame): Part
-	return part(parent, "Hitbox", size, cf, Color3.new(1, 1, 1), nil, {
+local function marker(parent: Instance, name: string, cf: CFrame): Part
+	return Kit.Part(parent, name, Vector3.one, cf, Color3.new(1, 1, 1), nil, {
 		Transparency = 1,
 		CanCollide = false,
-		CanTouch = false,
+		CanQuery = false,
+		CastShadow = false,
 	})
 end
 
-local function prompt(parent: Instance, name: string, actionText: string, objectText: string): ProximityPrompt
-	local pp = Instance.new("ProximityPrompt")
-	pp.Name = name
-	pp.ActionText = actionText
-	pp.ObjectText = objectText
-	pp.HoldDuration = 0
-	pp.MaxActivationDistance = Config.PromptDistance
-	pp.RequiresLineOfSight = false
-	pp.Parent = parent
-	return pp
+------------------------------------------------------------------
+-- Props
+------------------------------------------------------------------
+
+-- A potion bottle standing on `base` (a CFrame on the shelf's top surface).
+local function bottle(parent: Instance, base: CFrame, color: Color3, kind: number)
+	local glow = { Transparency = 0.1, CastShadow = false }
+	if kind == 1 then -- round flask
+		Kit.Ball(parent, "Bottle", 1, (base * CFrame.new(0, 0.5, 0)).Position, color, NEON, glow)
+		Kit.Cylinder(
+			parent,
+			"Neck",
+			0.45,
+			0.32,
+			base * CFrame.new(0, 1.12, 0),
+			color,
+			Enum.Material.Glass,
+			{ Transparency = 0.3 }
+		)
+		Kit.Cylinder(parent, "Cork", 0.25, 0.36, base * CFrame.new(0, 1.45, 0), P.LightWood, WOOD)
+	elseif kind == 2 then -- tall bottle
+		Kit.Cylinder(parent, "Bottle", 1.3, 0.75, base * CFrame.new(0, 0.65, 0), color, NEON, glow)
+		Kit.Cylinder(
+			parent,
+			"Neck",
+			0.4,
+			0.32,
+			base * CFrame.new(0, 1.5, 0),
+			color,
+			Enum.Material.Glass,
+			{ Transparency = 0.3 }
+		)
+		Kit.Cylinder(parent, "Cork", 0.22, 0.36, base * CFrame.new(0, 1.81, 0), P.LightWood, WOOD)
+	else -- square jar
+		Kit.Decor(parent, "Jar", Vector3.new(0.9, 0.85, 0.9), base * CFrame.new(0, 0.425, 0), color, NEON, glow)
+		Kit.Decor(parent, "Lid", Vector3.new(1, 0.16, 1), base * CFrame.new(0, 0.93, 0), P.DarkWood, WOOD)
+	end
 end
 
--- Builds one plot. `center` is on top of the baseplate (y = 0).
-function ShopBuilder.BuildPlot(index: number, center: Vector3, parent: Instance): Model
-	local origin = CFrame.new(center)
-	-- Local helper: x/z across the plot, y = height above the floor top.
-	local function at(x: number, y: number, z: number): CFrame
-		return origin * CFrame.new(x, 1 + y, z)
+-- A shelf plank on the back wall with a row of bottles.
+local function shelf(parent: Instance, at: At, y: number, rng: Random)
+	Kit.Part(parent, "Shelf", Vector3.new(16, 0.35, 1.5), at(0, y, 12.3), P.DarkWood, WOOD)
+	for _, x in { -7.5, 7.5 } do
+		Kit.Decor(parent, "Bracket", Vector3.new(0.3, 0.8, 1.2), at(x, y - 0.55, 12.4), P.DarkWood, WOOD)
 	end
-
-	local plot = Instance.new("Model")
-	plot.Name = "Plot" .. index
-	plot:SetAttribute("IsPlot", true)
-	plot:SetAttribute("OwnerUserId", 0)
-
-	local decor = Instance.new("Model")
-	decor.Name = "Decor"
-	decor.Parent = plot
-
-	-- Floor
-	part(decor, "Floor", Vector3.new(30, 1, 30), origin * CFrame.new(0, 0.5, 0), P.Floor, Enum.Material.WoodPlanks)
-
-	-- Counter (customers stand in front of it at z = -11.5)
-	part(decor, "Counter", Vector3.new(16, 3.5, 2.5), at(0, 1.75, -8), P.Wood, Enum.Material.Wood)
-	part(decor, "CounterTop", Vector3.new(16.6, 0.3, 3), at(0, 3.6, -8), P.DarkWood, Enum.Material.Wood)
-
-	-- Stall posts + striped awning
-	for _, x in { -8.2, 8.2 } do
-		part(decor, "Post", Vector3.new(0.8, 10, 0.8), at(x, 5, -8), P.DarkWood, Enum.Material.Wood)
+	for i, x in { -6, -3, 0, 3, 6 } do
+		local color = P.Bottles[rng:NextInteger(1, #P.Bottles)]
+		local base = at(x + rng:NextNumber(-0.5, 0.5), y + 0.175, 12.3)
+		bottle(parent, base, color, (i + rng:NextInteger(0, 2)) % 3 + 1)
 	end
-	local stripes = 8
-	local stripeWidth = 17.2 / stripes
-	for i = 1, stripes do
-		local x = -8.6 + stripeWidth * (i - 0.5)
-		local color = (i % 2 == 0) and P.AwningB or P.AwningA
-		part(decor, "Awning", Vector3.new(stripeWidth, 0.3, 5), at(x, 10.2, -8.5) * CFrame.Angles(math.rad(12), 0, 0), color, Enum.Material.Fabric)
+end
+
+local function barrel(parent: Instance, cf: CFrame)
+	Kit.Cylinder(parent, "Barrel", 2.6, 2.1, cf, P.Wood, WOOD, { CanCollide = true, CanQuery = true })
+	for _, y in { -0.8, 0.8 } do
+		Kit.Cylinder(parent, "Band", 0.22, 2.2, cf * CFrame.new(0, y, 0), P.Metal, Enum.Material.Metal)
 	end
+end
 
-	-- Sign above the awning (text faces outward and inward)
-	local sign = part(plot, "Sign", Vector3.new(11, 2.2, 0.4), at(0, 12, -8.2), P.DarkWood, Enum.Material.Wood)
-	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
-		local gui = Instance.new("SurfaceGui")
-		gui.Name = "SignGui" .. face.Name
-		gui.Face = face
-		gui.PixelsPerStud = 40
-		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		gui.Parent = sign
-		local label = Instance.new("TextLabel")
-		label.Name = "SignLabel"
-		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.FredokaOne
-		label.TextScaled = true
-		label.TextColor3 = P.Gold
-		label.Text = "Empty Shop"
-		label.Parent = gui
+-- Little flowers in a window box. `cf` = center of the box's bottom.
+local function flowerBox(parent: Instance, cf: CFrame, length: number, rng: Random)
+	Kit.Decor(parent, "FlowerBox", Vector3.new(1.1, 0.7, length), cf * CFrame.new(0, 0.35, 0), P.Wood, WOOD)
+	Kit.Decor(
+		parent,
+		"Leaves",
+		Vector3.new(0.9, 0.3, length - 0.2),
+		cf * CFrame.new(0, 0.8, 0),
+		P.LeafLight,
+		Enum.Material.Grass
+	)
+	local colors = {
+		Color3.fromRGB(255, 130, 180),
+		Color3.fromRGB(255, 240, 250),
+		Color3.fromRGB(255, 210, 90),
+		Color3.fromRGB(190, 140, 255),
+	}
+	local count = math.floor(length / 0.8)
+	for i = 1, count do
+		local z = -length / 2 + (i - 0.5) * (length / count)
+		local position = (cf * CFrame.new(rng:NextNumber(-0.2, 0.2), 1.05, z)).Position
+		Kit.Ball(parent, "Flower", 0.55, position, colors[rng:NextInteger(1, #colors)], Enum.Material.SmoothPlastic)
 	end
+end
 
-	-- Back wall with a shelf of glowing bottles
-	part(decor, "BackWall", Vector3.new(26, 8, 1), at(0, 4, 13), P.Wood, Enum.Material.Wood)
-	part(decor, "Shelf", Vector3.new(14, 0.4, 1.4), at(0, 4, 12.1), P.DarkWood, Enum.Material.Wood)
-	for i, x in { -5, -2.5, 0, 2.5, 5 } do
-		local color = P.Bottles[(i - 1) % #P.Bottles + 1]
-		part(decor, "Bottle", Vector3.new(1.4, 0.9, 0.9), at(x, 4.9, 12.1) * UPRIGHT, color, Enum.Material.Neon, {
-			Shape = Enum.PartType.Cylinder,
-			Transparency = 0.1,
-			CanCollide = false,
-		})
-		part(decor, "Cork", Vector3.new(0.4, 0.3, 0.4), at(x, 5.75, 12.1), P.DarkWood, Enum.Material.Wood, { CanCollide = false })
+------------------------------------------------------------------
+-- Ingredient sources (each has Charge1..ChargeN + Hitbox + CollectPrompt)
+------------------------------------------------------------------
+
+local function sourceModel(parent: Instance, ingredientId: string): Model
+	local model = Kit.Model(parent, ingredientId)
+	model:SetAttribute("Ingredient", ingredientId)
+	return model
+end
+
+local function collectPrompt(model: Model, size: Vector3, cf: CFrame, ingredientId: string)
+	local box = Kit.Hitbox(model, size, cf)
+	Kit.Prompt(box, "CollectPrompt", "Collect", Config.Ingredients[ingredientId].DisplayName)
+end
+
+-- Moonberry bush: three leafy balls, glowing purple berries = charges.
+local function buildMoonberry(parent: Instance, at: At): Model
+	local bush = sourceModel(parent, "Moonberry")
+	local c = ShopBuilder.SourceSpots.Moonberry
+	local function pos(x: number, y: number, z: number): Vector3
+		return at(c.X + x, y, c.Z + z).Position
 	end
-
-	-- Low side fences
-	for _, x in { -14.5, 14.5 } do
-		part(decor, "Fence", Vector3.new(1, 2, 22), at(x, 1, 2), P.Wood, Enum.Material.Wood)
+	Kit.Ball(bush, "Leaves", 4.2, pos(0, 1.9, 0.6), P.Leaf, Enum.Material.Grass, { CanCollide = true, CanQuery = true })
+	Kit.Ball(bush, "Leaves", 3.2, pos(1.2, 1.4, -0.8), P.LeafLight, Enum.Material.Grass)
+	Kit.Ball(bush, "Leaves", 3, pos(-1.1, 1.3, -0.9), P.LeafDark, Enum.Material.Grass)
+	local berries = {
+		Vector3.new(1.56, 2.84, -0.44),
+		Vector3.new(0.42, 3.67, -0.44),
+		Vector3.new(2.16, 1.72, -2.04),
+		Vector3.new(2.65, 1.88, -0.32),
+		Vector3.new(-0.95, 1.9, -2.27),
+	}
+	for i = 1, CHARGE_SLOTS do
+		local o = berries[i]
+		Kit.Ball(
+			bush,
+			"Charge" .. i,
+			0.9,
+			pos(o.X, o.Y, o.Z),
+			Config.Ingredients.Moonberry.Color,
+			NEON,
+			{ CastShadow = false }
+		)
 	end
+	collectPrompt(bush, Vector3.new(5.5, 4.5, 5.5), at(c.X, 2.2, c.Z), "Moonberry")
+	return bush
+end
 
-	-- Ingredient sources
-	local sources = Instance.new("Folder")
-	sources.Name = "Sources"
-	sources.Parent = plot
-
-	-- Moonberry bush (purple berries = charges)
-	local bush = Instance.new("Model")
-	bush.Name = "Moonberry"
-	bush:SetAttribute("Ingredient", "Moonberry")
-	bush.Parent = sources
-	part(bush, "Bush", Vector3.new(4, 4, 4), at(-9, 1.8, 6), P.Leaf, Enum.Material.Grass, { Shape = Enum.PartType.Ball })
-	local berryPositions = { Vector3.new(-10, 2.4, 4.3), Vector3.new(-8.2, 2.9, 4.4), Vector3.new(-9.1, 1.4, 4.1) }
-	for i, pos in berryPositions do
-		part(bush, "Charge" .. i, Vector3.new(0.9, 0.9, 0.9), at(pos.X, pos.Y, pos.Z), Config.Ingredients.Moonberry.Color, Enum.Material.Neon, {
-			Shape = Enum.PartType.Ball,
-			CanCollide = false,
-		})
+-- Glowshroom patch: mushrooms on a dirt mound; the glowing caps = charges.
+local function buildGlowshroom(parent: Instance, at: At): Model
+	local patch = sourceModel(parent, "Glowshroom")
+	local c = ShopBuilder.SourceSpots.Glowshroom
+	Kit.Cylinder(patch, "Dirt", 0.4, 5.2, at(c.X, 0.2, c.Z), P.Dirt, Enum.Material.Ground)
+	local shrooms = {
+		{ -1.3, -1.1, 1.2 },
+		{ 0.4, -1.5, 1.6 },
+		{ 1.4, 0.3, 1.1 },
+		{ -0.3, 0.9, 1.8 },
+		{ -1.7, 0.8, 0.9 },
+	}
+	local color = Config.Ingredients.Glowshroom.Color
+	for i = 1, CHARGE_SLOTS do
+		local x, z, h = c.X + shrooms[i][1], c.Z + shrooms[i][2], shrooms[i][3]
+		Kit.Cylinder(patch, "Stem", h, 0.45, at(x, 0.4 + h / 2, z), P.Stem)
+		local cap = Kit.Model(patch, "Charge" .. i)
+		Kit.Cylinder(cap, "Cap", 0.35, 1.7, at(x, 0.5 + h, z), color, NEON, { CastShadow = false })
+		Kit.Ball(cap, "Dome", 1.15, at(x, 0.85 + h, z).Position, color, NEON, { CastShadow = false })
 	end
-	local bushBox = hitbox(bush, Vector3.new(4.5, 4, 4.5), at(-9, 2, 6))
-	prompt(bushBox, "CollectPrompt", "Collect", "Moonberry")
+	collectPrompt(patch, Vector3.new(5.5, 3.5, 5.5), at(c.X, 1.75, c.Z), "Glowshroom")
+	return patch
+end
 
-	-- Glowshroom patch (glowing caps = charges)
-	local patch = Instance.new("Model")
-	patch.Name = "Glowshroom"
-	patch:SetAttribute("Ingredient", "Glowshroom")
-	patch.Parent = sources
-	part(patch, "Dirt", Vector3.new(4.5, 0.3, 4.5), at(9, 0.15, 6), P.Dirt, Enum.Material.Ground)
-	local shroomPositions = { Vector3.new(8, 0, 5), Vector3.new(10.2, 0, 6.3), Vector3.new(8.7, 0, 7.4) }
-	for i, pos in shroomPositions do
-		part(patch, "Stem", Vector3.new(1.4, 0.5, 0.5), at(pos.X, 1, pos.Z) * UPRIGHT, P.Stem, nil, {
-			Shape = Enum.PartType.Cylinder,
-			CanCollide = false,
-		})
-		part(patch, "Charge" .. i, Vector3.new(0.6, 1.8, 1.8), at(pos.X, 1.85, pos.Z) * UPRIGHT, Config.Ingredients.Glowshroom.Color, Enum.Material.Neon, {
-			Shape = Enum.PartType.Cylinder,
-			CanCollide = false,
-		})
+-- Starflower bed: a planter of sparkly star flowers; the flower heads = charges.
+local function buildStarflower(parent: Instance, at: At): Model
+	local bed = sourceModel(parent, "Starflower")
+	local c = ShopBuilder.SourceSpots.Starflower
+	Kit.Part(bed, "Planter", Vector3.new(5, 1, 4), at(c.X, 0.5, c.Z), P.Wood, WOOD)
+	Kit.Decor(bed, "Soil", Vector3.new(4.5, 0.1, 3.5), at(c.X, 1.02, c.Z), P.Dirt, Enum.Material.Ground)
+	local flowers = {
+		{ -1.5, -0.9, 1.3 },
+		{ 0, -1.1, 1.7 },
+		{ 1.5, -0.8, 1.2 },
+		{ -0.8, 0.9, 1.5 },
+		{ 1, 1, 1.4 },
+	}
+	local color = Config.Ingredients.Starflower.Color
+	for i = 1, CHARGE_SLOTS do
+		local x, z, h = c.X + flowers[i][1], c.Z + flowers[i][2], flowers[i][3]
+		Kit.Cylinder(bed, "Stem", h, 0.18, at(x, 1 + h / 2, z), P.LeafDark)
+		local head = Kit.Model(bed, "Charge" .. i)
+		for k = 0, 1 do
+			Kit.Decor(
+				head,
+				"Petal",
+				Vector3.new(1.4, 0.14, 0.36),
+				at(x, 1 + h, z) * CFrame.Angles(0, math.rad(45 + 90 * k), 0),
+				color,
+				NEON,
+				{ CastShadow = false }
+			)
+		end
+		Kit.Ball(
+			head,
+			"Center",
+			0.5,
+			at(x, 1.05 + h, z).Position,
+			Color3.fromRGB(255, 160, 60),
+			NEON,
+			{ CastShadow = false }
+		)
 	end
-	local patchBox = hitbox(patch, Vector3.new(4.5, 3, 4.5), at(9, 1.5, 6))
-	prompt(patchBox, "CollectPrompt", "Collect", "Glowshroom")
+	collectPrompt(bed, Vector3.new(5.5, 4, 4.5), at(c.X, 2, c.Z), "Starflower")
+	return bed
+end
 
-	-- Cauldron
-	local cauldron = Instance.new("Model")
-	cauldron.Name = "Cauldron"
+-- Frost grotto: icy crystals growing out of blue-grey rocks; the crystals = charges.
+local function buildFrostCrystal(parent: Instance, at: At): Model
+	local grotto = sourceModel(parent, "FrostCrystal")
+	local c = ShopBuilder.SourceSpots.FrostCrystal
+	local rock = Color3.fromRGB(122, 132, 152)
+	local bigRock = Kit.Part(
+		grotto,
+		"Rock",
+		Vector3.new(3.2, 1.6, 2.6),
+		at(c.X + 0.6, 0.8, c.Z + 0.5) * CFrame.Angles(0, 0.4, 0.15),
+		rock,
+		Enum.Material.Slate
+	)
+	Kit.Ball(
+		grotto,
+		"Rock",
+		2.4,
+		at(c.X - 0.9, 0.6, c.Z - 0.4).Position,
+		Color3.fromRGB(135, 145, 165),
+		Enum.Material.Slate
+	)
+	Kit.Ball(
+		grotto,
+		"Rock",
+		1.6,
+		at(c.X + 1.4, 0.4, c.Z - 1.3).Position,
+		Color3.fromRGB(110, 120, 140),
+		Enum.Material.Slate
+	)
+	local crystals = {
+		{ -1.2, 0.6, 2.6, 0.25, -0.2 },
+		{ 0.2, 1, 3.2, -0.1, 0.1 },
+		{ 1.4, 0.3, 2.2, 0.2, 0.3 },
+		{ -0.3, -0.9, 1.8, -0.3, -0.1 },
+		{ 1, -1.1, 1.5, 0.1, 0.35 },
+	}
+	local color = Config.Ingredients.FrostCrystal.Color
+	for i = 1, CHARGE_SLOTS do
+		local d = crystals[i]
+		local cf = at(c.X + d[1], 0.4 + d[3] / 2, c.Z + d[2]) * CFrame.Angles(d[4], math.rad(45), d[5])
+		local crystal = Kit.Model(grotto, "Charge" .. i)
+		Kit.Decor(
+			crystal,
+			"Crystal",
+			Vector3.new(0.75, d[3], 0.75),
+			cf,
+			color,
+			Enum.Material.Glass,
+			{ Transparency = 0.25 }
+		)
+		Kit.Decor(crystal, "Core", Vector3.new(0.32, d[3] * 0.8, 0.32), cf, color, NEON, { CastShadow = false })
+	end
+	Kit.Light(bigRock, color, 10, 0.8)
+	collectPrompt(grotto, Vector3.new(5, 4.5, 5), at(c.X, 2.2, c.Z), "FrostCrystal")
+	return grotto
+end
+
+-- "For sale" lot shown where a locked source will be planted.
+-- `faceX` = +1 turns the sign toward +X (the shop's middle), -1 toward -X.
+local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vector3, faceX: number): Model
+	local upgrade = Config.Upgrades[upgradeId]
+	local cost = upgrade.Levels[1].Cost
+	local lot = Kit.Model(parent, upgradeId .. "Lot")
+	lot:SetAttribute("Upgrade", upgradeId)
+	local dirt =
+		Kit.Decor(lot, "Dirt", Vector3.new(4.6, 0.1, 3.8), at(spot.X, 0.05, spot.Z), P.Dirt, Enum.Material.Ground)
+	Kit.Sparkles(dirt, upgrade.Color, 3)
+	-- little stakes at the corners
+	for _, corner in
+		{ Vector3.new(-2.2, 0, -1.8), Vector3.new(2.2, 0, -1.8), Vector3.new(-2.2, 0, 1.8), Vector3.new(2.2, 0, 1.8) }
+	do
+		Kit.Decor(
+			lot,
+			"Stake",
+			Vector3.new(0.25, 1, 0.25),
+			at(spot.X + corner.X, 0.5, spot.Z + corner.Z),
+			P.LightWood,
+			WOOD
+		)
+	end
+	local face = CFrame.Angles(0, math.rad(-90 * faceX), 0)
+	local base = at(spot.X, 0, spot.Z)
+	Kit.Decor(lot, "SignPost", Vector3.new(0.3, 2.8, 0.3), base * CFrame.new(0, 1.4, 0), P.DarkWood, WOOD)
+	local board =
+		Kit.Decor(lot, "SignBoard", Vector3.new(3.6, 1.9, 0.2), base * CFrame.new(0, 2.9, 0) * face, P.LightWood, WOOD)
+	local label = Kit.SurfaceText(board, Enum.NormalId.Front, `{upgrade.DisplayName}\n{cost} coins`, P.TextDark, 60)
+	label.Name = "LotLabel"
+	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
+	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
+	return lot
+end
+
+------------------------------------------------------------------
+-- Cauldron
+------------------------------------------------------------------
+
+local function buildCauldron(plot: Model, at: At, gold: { BasePart }, fire: { BasePart }): Model
+	local cauldron = Kit.Model(plot, "Cauldron")
 	cauldron:SetAttribute("BrewEndTime", 0)
 	cauldron:SetAttribute("BrewDuration", 0)
-	cauldron.Parent = plot
+	cauldron:SetAttribute("BrewRecipe", "")
+	cauldron:SetAttribute("SuggestedRecipe", "")
+	local cz = 1
+
 	for i = 1, 3 do
-		local angle = math.rad(120 * i)
-		part(cauldron, "Leg", Vector3.new(0.5, 0.8, 0.5), at(math.cos(angle) * 1.8, 0.4, 1 + math.sin(angle) * 1.8), P.Cauldron, Enum.Material.Metal)
+		local angle = math.rad(120 * i + 30)
+		local leg = Kit.Cylinder(
+			cauldron,
+			"Leg",
+			1.4,
+			0.5,
+			at(math.cos(angle) * 1.6, 0.7, cz + math.sin(angle) * 1.6),
+			P.Cauldron,
+			Enum.Material.Metal
+		)
+		table.insert(gold, leg)
 	end
-	local fire = part(cauldron, "Fire", Vector3.new(2.2, 0.6, 2.2), at(0, 0.4, 1), P.Fire, Enum.Material.Neon, { CanCollide = false })
-	local light = Instance.new("PointLight")
-	light.Name = "FireLight"
-	light.Color = P.Fire
-	light.Range = 12
-	light.Brightness = 2
-	light.Parent = fire
-	part(cauldron, "Pot", Vector3.new(3, 5, 5), at(0, 2.3, 1) * UPRIGHT, P.Cauldron, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
-	part(cauldron, "Rim", Vector3.new(0.4, 5.4, 5.4), at(0, 3.85, 1) * UPRIGHT, P.Cauldron, Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
-	part(cauldron, "Liquid", Vector3.new(0.2, 4.4, 4.4), at(0, 3.95, 1) * UPRIGHT, P.Liquid, Enum.Material.Neon, {
-		Shape = Enum.PartType.Cylinder,
-		CanCollide = false,
-	})
-	local bubblePart = part(cauldron, "BubblePart", Vector3.new(3.5, 0.1, 3.5), at(0, 4.1, 1), P.Liquid, nil, {
+	Kit.Rod(cauldron, "Log", at(-1.3, 0.25, cz - 0.6).Position, at(1.3, 0.25, cz + 0.6).Position, 0.5, P.Trunk, WOOD)
+	Kit.Rod(cauldron, "Log", at(-1.3, 0.25, cz + 0.6).Position, at(1.3, 0.25, cz - 0.6).Position, 0.5, P.Trunk, WOOD)
+	local flames = { { 0, 0.75, 0, 0.95 }, { 0.6, 0.55, 0.4, 0.7 }, { -0.55, 0.5, -0.35, 0.65 } }
+	for _, f in flames do
+		local flame =
+			Kit.Ball(cauldron, "Flame", f[4], at(f[1], f[2], cz + f[3]).Position, P.Fire, NEON, { CastShadow = false })
+		table.insert(fire, flame)
+	end
+	local fireLight = Kit.Light(fire[1], P.Fire, 12, 2)
+	fireLight.Name = "FireLight"
+
+	local belly = Kit.Ball(
+		cauldron,
+		"Belly",
+		4.4,
+		at(0, 2.6, cz).Position,
+		P.Cauldron,
+		Enum.Material.Metal,
+		{ CanCollide = true, CanQuery = true }
+	)
+	local neck = Kit.Cylinder(cauldron, "Neck", 0.9, 4, at(0, 4.45, cz), P.Cauldron, Enum.Material.Metal)
+	local rim = Kit.Cylinder(cauldron, "Rim", 0.35, 4.6, at(0, 4.95, cz), P.Cauldron, Enum.Material.Metal)
+	table.insert(gold, belly)
+	table.insert(gold, neck)
+	table.insert(gold, rim)
+	Kit.Cylinder(cauldron, "Liquid", 0.1, 3.8, at(0, 5.13, cz), P.Liquid, NEON, { CastShadow = false })
+
+	local bubblePart = Kit.Decor(cauldron, "BubblePart", Vector3.new(3.2, 0.1, 3.2), at(0, 5.2, cz), P.Liquid, nil, {
 		Transparency = 1,
-		CanCollide = false,
+		CastShadow = false,
 	})
 	local bubbles = Instance.new("ParticleEmitter")
 	bubbles.Name = "Bubbles"
@@ -205,92 +417,337 @@ function ShopBuilder.BuildPlot(index: number, center: Vector3, parent: Instance)
 	bubbles.EmissionDirection = Enum.NormalId.Top
 	bubbles.Rate = 3
 	bubbles.Parent = bubblePart
-	local cauldronBox = hitbox(cauldron, Vector3.new(5.5, 4.5, 5.5), at(0, 2.5, 1))
-	prompt(cauldronBox, "BrewPrompt", "Brew", Config.Recipes[Config.PrototypeRecipe].DisplayName)
-
-	-- Invisible markers
-	part(plot, "CustomerSpot", Vector3.new(1, 1, 1), at(0, 0, -11.5), Color3.new(1, 1, 1), nil, {
-		Transparency = 1,
-		CanCollide = false,
-		CanTouch = false,
-		CanQuery = false,
+	local steam = Instance.new("ParticleEmitter")
+	steam.Name = "Steam"
+	steam.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	steam.LightEmission = 0.2
+	steam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.7),
+		NumberSequenceKeypoint.new(1, 1),
 	})
-	part(plot, "SpawnPoint", Vector3.new(1, 1, 1), at(0, 0, 7), Color3.new(1, 1, 1), nil, {
-		Transparency = 1,
-		CanCollide = false,
-		CanTouch = false,
-		CanQuery = false,
+	steam.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.8),
+		NumberSequenceKeypoint.new(1, 2.4),
 	})
+	steam.Lifetime = NumberRange.new(1.5, 2.5)
+	steam.Speed = NumberRange.new(1.5, 2.5)
+	steam.SpreadAngle = Vector2.new(10, 10)
+	steam.EmissionDirection = Enum.NormalId.Top
+	steam.Rate = 2
+	steam.Parent = bubblePart
 
-	plot.PrimaryPart = decor:FindFirstChild("Floor") :: BasePart
-	plot.Parent = parent
-	return plot
+	Kit.Rod(
+		cauldron,
+		"Ladle",
+		at(0.6, 4.6, cz + 0.5).Position,
+		at(1.9, 7.2, cz + 1.5).Position,
+		0.25,
+		P.LightWood,
+		WOOD
+	)
+	Kit.Ball(cauldron, "LadleKnob", 0.45, at(1.9, 7.2, cz + 1.5).Position, P.DarkWood, WOOD)
+
+	local box = Kit.Hitbox(cauldron, Vector3.new(5.5, 5.5, 5.5), at(0, 2.75, cz))
+	Kit.Prompt(box, "BrewPrompt", "Brew", "Cauldron")
+	return cauldron
 end
 
--- Builds a simple blocky customer standing at `spot`, facing the counter.
-function ShopBuilder.BuildCustomer(spot: CFrame, wantsText: string): Model
-	local base = spot * CFrame.Angles(0, math.pi, 0) -- face +Z (toward the counter)
-	local function at(x: number, y: number, z: number): CFrame
-		return base * CFrame.new(x, y, z)
+------------------------------------------------------------------
+-- Upgrade visuals (built once, shown/hidden by PlotService)
+------------------------------------------------------------------
+
+local function buildDecorLights(plot: Model, at: At, rng: Random): Model
+	local group = Kit.Model(plot, "DecorLights")
+	-- string lights sagging along the front edge of the awning
+	local count = 12
+	local left, right = at(-8.6, 9, -11.6).Position, at(8.6, 9, -11.6).Position
+	local previous: Vector3? = nil
+	local bulbColors = { Color3.fromRGB(255, 210, 120), Color3.fromRGB(255, 150, 190), Color3.fromRGB(150, 220, 255) }
+	for i = 0, count do
+		local t = i / count
+		local point = left:Lerp(right, t) - Vector3.new(0, 0.9 * 4 * t * (1 - t), 0)
+		if previous then
+			Kit.Rod(group, "Wire", previous, point, 0.08, P.DarkWood)
+		end
+		if i > 0 and i < count then
+			Kit.Ball(
+				group,
+				"Bulb",
+				0.42,
+				point - Vector3.new(0, 0.25, 0),
+				bulbColors[i % #bulbColors + 1],
+				NEON,
+				{ CastShadow = false }
+			)
+		end
+		previous = point
 	end
-	local rng = Random.new()
-	local shirt = P.Shirts[rng:NextInteger(1, #P.Shirts)]
-	local skin = P.Skin[rng:NextInteger(1, #P.Skin)]
-	local hatColor = P.Bottles[rng:NextInteger(1, #P.Bottles)]
-	local noCollide = { CanCollide = false }
+	-- flower boxes on the side walls
+	for _, x in { -14.5, 14.5 } do
+		for _, z in { -4, 7 } do
+			flowerBox(group, at(x, 2.5, z), 4.5, rng)
+		end
+	end
+	return group
+end
 
-	local customer = Instance.new("Model")
-	customer.Name = "Customer"
-	customer.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+local function buildDecorBanners(plot: Model, at: At, theme: { Color3 }): Model
+	local group = Kit.Model(plot, "DecorBanners")
+	for _, x in { -7.2, 7.2 } do
+		Kit.Decor(group, "Banner", Vector3.new(1.6, 4.2, 0.12), at(x, 6.6, -8.9), theme[1], Enum.Material.Fabric)
+		Kit.Decor(group, "BannerTrim", Vector3.new(1.6, 0.3, 0.14), at(x, 4.6, -8.9), P.Gold, Enum.Material.Foil)
+		Kit.Ball(group, "Emblem", 0.7, at(x, 7.2, -9).Position, P.Gold, NEON, { CastShadow = false })
+	end
+	-- potted plants at the front corners
+	for _, x in { -12.8, 12.8 } do
+		Kit.Cylinder(
+			group,
+			"Pot",
+			1.4,
+			1.6,
+			at(x, 0.7, -12.8),
+			Color3.fromRGB(190, 100, 70),
+			Enum.Material.Plaster,
+			{ CanCollide = true, CanQuery = true }
+		)
+		Kit.Ball(group, "Plant", 2.2, at(x, 2.2, -12.8).Position, P.LeafLight, Enum.Material.Grass)
+		Kit.Ball(
+			group,
+			"Blossom",
+			0.6,
+			at(x + 0.5, 2.9, -13.4).Position,
+			Color3.fromRGB(255, 130, 180),
+			Enum.Material.SmoothPlastic
+		)
+	end
+	-- glowing backing behind the shop sign
+	Kit.Decor(group, "SignGlow", Vector3.new(12, 3.3, 0.1), at(0, 11.7, -7.8), P.Gold, NEON, { CastShadow = false })
+	return group
+end
 
-	part(customer, "LegL", Vector3.new(0.9, 2, 0.9), at(-0.5, 1, 0), P.DarkWood, nil, noCollide)
-	part(customer, "LegR", Vector3.new(0.9, 2, 0.9), at(0.5, 1, 0), P.DarkWood, nil, noCollide)
-	local torso = part(customer, "Torso", Vector3.new(2.2, 2, 1.1), at(0, 3, 0), shirt, nil, noCollide)
-	part(customer, "ArmL", Vector3.new(0.8, 2, 0.8), at(-1.55, 3, 0), shirt, nil, noCollide)
-	part(customer, "ArmR", Vector3.new(0.8, 2, 0.8), at(1.55, 3, 0), shirt, nil, noCollide)
+local function buildDecorGold(plot: Model, at: At): Model
+	local group = Kit.Model(plot, "DecorGold")
+	-- star on top of the sign beam
+	local star = Kit.Ball(group, "Star", 1, at(0, 14.2, -8).Position, P.Gold, NEON, { CastShadow = false })
+	for k = 0, 1 do
+		Kit.Decor(
+			group,
+			"StarPoint",
+			Vector3.new(2.2, 0.35, 0.2),
+			at(0, 14.2, -8) * CFrame.Angles(0, 0, math.rad(45 + 90 * k)),
+			P.Gold,
+			NEON,
+			{
+				CastShadow = false,
+			}
+		)
+	end
+	Kit.Sparkles(star, P.Gold, 4)
+	-- gold trim along the counter
+	Kit.Decor(group, "CounterTrim", Vector3.new(16.9, 0.2, 0.2), at(0, 3.5, -9.62), P.Gold, Enum.Material.Foil)
+	-- sparkles rising from the cauldron
+	local glitter = Kit.Decor(
+		group,
+		"Glitter",
+		Vector3.new(4, 0.2, 4),
+		at(0, 5.3, 1),
+		P.Gold,
+		nil,
+		{ Transparency = 1, CastShadow = false }
+	)
+	Kit.Sparkles(glitter, P.Gold, 6)
+	return group
+end
 
-	-- Head parts are grouped so effects can scale them together.
-	local headGroup = Instance.new("Model")
-	headGroup.Name = "HeadGroup"
-	headGroup.Parent = customer
-	local head = part(headGroup, "Head", Vector3.new(1.5, 1.5, 1.5), at(0, 4.75, 0), skin, nil, noCollide)
-	part(headGroup, "EyeL", Vector3.new(0.25, 0.35, 0.05), at(-0.35, 4.9, -0.77), Color3.new(0, 0, 0), nil, noCollide)
-	part(headGroup, "EyeR", Vector3.new(0.25, 0.35, 0.05), at(0.35, 4.9, -0.77), Color3.new(0, 0, 0), nil, noCollide)
-	part(headGroup, "Mouth", Vector3.new(0.6, 0.12, 0.05), at(0, 4.4, -0.77), Color3.new(0, 0, 0), nil, noCollide)
-	part(headGroup, "HatBrim", Vector3.new(1.8, 0.2, 1.8), at(0, 5.6, 0), hatColor, nil, noCollide)
-	part(headGroup, "HatTop", Vector3.new(1.1, 0.8, 1.1), at(0, 6.1, 0), hatColor, nil, noCollide)
-	headGroup.WorldPivot = at(0, 4, 0) -- bottom of the head, so it grows upward
+local function buildShelfLevel(plot: Model, at: At, name: string, y: number, rng: Random): Model
+	local group = Kit.Model(plot, name)
+	shelf(group, at, y, rng)
+	return group
+end
 
-	-- Speech bubble
-	local bubble = Instance.new("BillboardGui")
-	bubble.Name = "Bubble"
-	bubble.Size = UDim2.fromOffset(180, 46)
-	bubble.StudsOffset = Vector3.new(0, 3.4, 0)
-	bubble.MaxDistance = 70
-	bubble.Parent = head
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = P.PanelLight
-	label.TextColor3 = P.TextDark
-	label.Font = Enum.Font.FredokaOne
-	label.TextScaled = true
-	label.Text = wantsText
-	label.Parent = bubble
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
-	corner.Parent = label
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 6)
-	padding.PaddingRight = UDim.new(0, 6)
-	padding.PaddingTop = UDim.new(0, 4)
-	padding.PaddingBottom = UDim.new(0, 4)
-	padding.Parent = label
+------------------------------------------------------------------
+-- The whole plot
+------------------------------------------------------------------
 
-	prompt(torso, "SellPrompt", "Sell Potion", "Customer")
+function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance): PlotParts
+	local function at(x: number, y: number, z: number): CFrame
+		return origin * CFrame.new(x, 1 + y, z)
+	end
+	local rng = Random.new(index * 7919)
+	local theme = P.Awnings[(index - 1) % #P.Awnings + 1]
 
-	customer.PrimaryPart = torso
-	return customer
+	local plot = Kit.Model(nil, "Plot" .. index)
+	plot:SetAttribute("IsPlot", true)
+	plot:SetAttribute("OwnerUserId", 0)
+	plot:SetAttribute("PlotIndex", index)
+
+	local decor = Kit.Model(plot, "Decor")
+
+	-- Floor on a cobblestone foundation
+	Kit.Part(
+		decor,
+		"Foundation",
+		Vector3.new(31, 0.8, 31),
+		origin * CFrame.new(0, 0.4, 0),
+		P.DarkStone,
+		Enum.Material.Cobblestone
+	)
+	local floor = Kit.Part(
+		decor,
+		"Floor",
+		Vector3.new(29, 1, 29),
+		origin * CFrame.new(0, 0.5, 0),
+		P.Floor,
+		Enum.Material.WoodPlanks
+	)
+	Kit.Decor(decor, "Rug", Vector3.new(7.4, 0.06, 4.8), at(0, 0.03, 7), P.PanelLight, Enum.Material.Carpet)
+	Kit.Decor(decor, "RugInner", Vector3.new(6.4, 0.07, 3.8), at(0, 0.04, 7), theme[1], Enum.Material.Carpet)
+
+	-- Counter (customers stand in front of it)
+	Kit.Part(decor, "Counter", Vector3.new(16, 3.5, 2.5), at(0, 1.75, -8), P.Wood, WOOD)
+	Kit.Part(decor, "CounterTop", Vector3.new(16.8, 0.35, 3.2), at(0, 3.675, -8), P.DarkWood, WOOD)
+	for i = -3, 3 do
+		Kit.Decor(decor, "Slat", Vector3.new(0.35, 2.9, 0.2), at(i * 2.2, 1.75, -9.3), P.LightWood, WOOD)
+	end
+	bottle(decor, at(-6.8, 3.85, -8), P.Bottles[1], 1)
+	bottle(decor, at(6.6, 3.85, -8.2), P.Bottles[2], 2)
+
+	-- Stall posts, sign beam, striped awning with pom-pom trim
+	for _, x in { -8.4, 8.4 } do
+		Kit.Part(decor, "Post", Vector3.new(0.8, 13.5, 0.8), at(x, 6.75, -8), P.DarkWood, WOOD)
+		Kit.Decor(decor, "LanternArm", Vector3.new(0.2, 0.2, 0.9), at(x, 8.7, -8.8), P.Metal, Enum.Material.Metal)
+		Kit.Lantern(decor, at(x, 8.6, -9.15).Position, 0.9, 16)
+	end
+	Kit.Decor(decor, "SignBeam", Vector3.new(17.6, 0.6, 0.7), at(0, 13.2, -8), P.DarkWood, WOOD)
+	local stripes = 8
+	local width = 17.2
+	local stripeWidth = width / stripes
+	local tilt = CFrame.Angles(math.rad(-14), 0, 0)
+	for i = 1, stripes do
+		local x = -width / 2 + stripeWidth * (i - 0.5)
+		local color = if i % 2 == 0 then theme[2] else theme[1]
+		Kit.Decor(
+			decor,
+			"Awning",
+			Vector3.new(stripeWidth, 0.25, 5.4),
+			at(x, 10.2, -8.6) * tilt,
+			color,
+			Enum.Material.Fabric
+		)
+		Kit.Ball(
+			decor,
+			"Pompom",
+			0.6,
+			at(x, 9.35, -11.3).Position,
+			if i % 2 == 0 then theme[1] else theme[2],
+			Enum.Material.Fabric
+		)
+	end
+
+	-- Shop sign (PlotService writes the owner's name on it)
+	local sign =
+		Kit.Part(plot, "Sign", Vector3.new(11, 2.4, 0.4), at(0, 11.7, -8.1), P.DarkWood, WOOD, { CanCollide = false })
+	Kit.Decor(decor, "SignTrim", Vector3.new(11.4, 2.8, 0.3), at(0, 11.7, -8.1), P.Gold, Enum.Material.Foil)
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		Kit.SurfaceText(sign, face, "Empty Shop", P.Gold, 40)
+	end
+
+	-- Back wall: timber frame, plaster, a little tiled roof
+	Kit.Part(decor, "BackWall", Vector3.new(27, 9, 1), at(0, 4.5, 13.5), P.Plaster, Enum.Material.Plaster)
+	Kit.Decor(decor, "Beam", Vector3.new(27.4, 0.7, 1.2), at(0, 0.35, 13.5), P.DarkWood, WOOD)
+	Kit.Decor(decor, "TopBeam", Vector3.new(27.4, 1.6, 1.2), at(0, 9.7, 13.5), P.DarkWood, WOOD)
+	for _, x in { -13.3, -8.6, 8.6, 13.3 } do
+		Kit.Decor(decor, "Beam", Vector3.new(0.7, 9, 1.2), at(x, 4.5, 13.5), P.DarkWood, WOOD)
+	end
+	Kit.Decor(
+		decor,
+		"Roof",
+		Vector3.new(28.4, 0.45, 5.2),
+		at(0, 10.4, 13.2) * CFrame.Angles(math.rad(-25), 0, 0),
+		P.Roof,
+		Enum.Material.ClayRoofTiles
+	)
+	shelf(decor, at, 2.8, rng)
+
+	-- Low stone side walls with a wooden cap
+	for _, x in { -14.5, 14.5 } do
+		Kit.Part(decor, "SideWall", Vector3.new(1, 2.2, 22), at(x, 1.1, 2), P.Stone, Enum.Material.Cobblestone)
+		Kit.Decor(decor, "WallCap", Vector3.new(1.3, 0.3, 22.3), at(x, 2.35, 2), P.DarkWood, WOOD)
+	end
+
+	-- Barrels and crates in the back corners
+	barrel(decor, at(-12.3, 1.3, 11))
+	Kit.Part(
+		decor,
+		"Crate",
+		Vector3.new(2, 2, 2),
+		at(12.2, 1, 11) * CFrame.Angles(0, 0.3, 0),
+		P.LightWood,
+		Enum.Material.WoodPlanks
+	)
+	Kit.Part(
+		decor,
+		"Crate",
+		Vector3.new(1.3, 1.3, 1.3),
+		at(12.1, 2.65, 11.2) * CFrame.Angles(0, -0.4, 0),
+		P.LightWood,
+		Enum.Material.WoodPlanks
+	)
+
+	-- Ingredient sources
+	local sourcesFolder = Kit.Folder(plot, "Sources")
+	local sources: { [string]: Model } = {
+		Moonberry = buildMoonberry(sourcesFolder, at),
+		Glowshroom = buildGlowshroom(sourcesFolder, at),
+		Starflower = buildStarflower(sourcesFolder, at),
+		FrostCrystal = buildFrostCrystal(sourcesFolder, at),
+	}
+
+	-- "For sale" lots for the sources that start locked
+	local lotsFolder = Kit.Folder(plot, "Lots")
+	local lots: { [string]: Model } = {}
+	for ingredientId, spot in ShopBuilder.SourceSpots do
+		local upgradeId = Config.Ingredients[ingredientId].UnlockedBy
+		if upgradeId then
+			lots[upgradeId] = buildLot(lotsFolder, at, upgradeId, spot, if spot.X < 0 then 1 else -1)
+		end
+	end
+
+	-- Cauldron
+	local goldParts: { BasePart } = {}
+	local fireParts: { BasePart } = {}
+	local cauldron = buildCauldron(plot, at, goldParts, fireParts)
+
+	-- Upgrade visuals
+	local features: { [string]: Model } = {
+		DecorLights = buildDecorLights(plot, at, rng),
+		DecorBanners = buildDecorBanners(plot, at, theme),
+		DecorGold = buildDecorGold(plot, at),
+		Shelf2 = buildShelfLevel(plot, at, "Shelf2", 5.1, rng),
+		Shelf3 = buildShelfLevel(plot, at, "Shelf3", 7.4, rng),
+	}
+
+	-- Invisible markers
+	local counterFront = marker(plot, "CounterFront", at(0, 0, ShopBuilder.CounterFrontZ))
+	local spawnPoint = marker(plot, "SpawnPoint", at(0, 0, 7))
+
+	plot.PrimaryPart = floor
+	plot.Parent = parent
+
+	return {
+		Model = plot,
+		Sources = sources,
+		Lots = lots,
+		Features = features,
+		SourcesFolder = sourcesFolder,
+		LotsFolder = lotsFolder,
+		Cauldron = cauldron,
+		Sign = sign,
+		CounterFront = counterFront,
+		SpawnPoint = spawnPoint,
+		GoldParts = goldParts,
+		FireParts = fireParts,
+	}
 end
 
 return ShopBuilder

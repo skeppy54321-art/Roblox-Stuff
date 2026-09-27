@@ -3,16 +3,32 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Config": { "$path": "src/ReplicatedStorage/Config.lua" },
-      "Effects": { "$path": "src/ReplicatedStorage/Effects.lua" }
+      "$className": "ReplicatedStorage",
+      "Config": { "$path": "src/ReplicatedStorage/Config" },
+      "Effects": { "$path": "src/ReplicatedStorage/Effects" }
     },
     "ServerScriptService": {
+      "$className": "ServerScriptService",
       "Main": { "$path": "src/ServerScriptService/Main.server.lua" },
       "Modules": { "$path": "src/ServerScriptService/Modules" }
     },
     "StarterPlayer": {
+      "$className": "StarterPlayer",
       "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
         "ClientMain": { "$path": "src/StarterPlayerScripts/ClientMain" }
+      }
+    },
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    },
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Technology": "Future"
       }
     }
   }

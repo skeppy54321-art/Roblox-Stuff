@@ -1,6 +1,7 @@
+--!strict
 -- Guard (ModuleScript) — ServerScriptService.Modules.Guard
 -- Server-side checks every action runs before changing anything:
--- ownership, distance, and per-action cooldowns (rate limiting).
+-- ownership, distance, per-action cooldowns (rate limiting) and remote argument checks.
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
 
@@ -34,12 +35,17 @@ function Guard.Near(player: Player, part: BasePart?, maxDistance: number?): bool
 	if not root or not root:IsA("BasePart") then
 		return false
 	end
-	return (root.Position - part.Position).Magnitude <= (maxDistance or Config.InteractDistance)
+	return (root.Position - part.Position).Magnitude <= (maxDistance or Config.Tuning.InteractDistance)
 end
 
 -- Does this player own this plot?
 function Guard.Owns(player: Player, plot: Instance?): boolean
 	return plot ~= nil and plot:GetAttribute("OwnerUserId") == player.UserId
+end
+
+-- Is a remote argument one of the known ids in `map`? (Clients can send anything.)
+function Guard.IsId(value: unknown, map: { [string]: any }): boolean
+	return typeof(value) == "string" and #value <= 64 and map[value] ~= nil
 end
 
 function Guard.Clear(player: Player)

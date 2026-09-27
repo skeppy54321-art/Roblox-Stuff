@@ -14,3 +14,9 @@ sourcemap.json
 .DS_Store
 Thumbs.db
 .vscode/
+
+# selene generates this from the Roblox API (run: selene generate-roblox-std)
+roblox.yml
+
+# The built place is committed so it can be opened in Studio without Rojo
+!build/BrewAPotion.rbxlx
