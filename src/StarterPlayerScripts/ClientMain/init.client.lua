@@ -613,6 +613,17 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		local multiplier = tonumber(data.Multiplier) or 1
 		Hud.Celebrate("REBIRTH!", `Fresh start, now x{string.format("%g", multiplier)} coins forever!`, P.Gold)
 		setPanel(nil)
+		-- golden sparkles all over the shop as it starts over
+		local plot = myPlot()
+		local floor = if plot and plot:IsA("Model") then plot.PrimaryPart else nil
+		if floor then
+			local center = floor.CFrame
+			for _, offset in
+				{ Vector3.new(0, 4, 1), Vector3.new(-9, 3, 5), Vector3.new(9, 3, 5), Vector3.new(0, 5, -8) }
+			do
+				Juice.Sparkle((center * CFrame.new(offset)).Position, P.Gold, 35)
+			end
+		end
 	elseif cue == "Daily" then
 		Sfx.Play("Discover")
 		Hud.Celebrate("DAILY GIFT!", `Day {tonumber(data.Day) or 1}: +{tonumber(data.Amount) or 0} coins`, P.Gold)
