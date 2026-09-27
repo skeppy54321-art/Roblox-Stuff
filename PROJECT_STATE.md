@@ -129,7 +129,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 * Effects run on clients only (`Effects` module), never touch coins, and a broken effect only prints a warning.
 * Locked plants and not-yet-bought decor are built once and parked in `ServerStorage.PlotStash`; buying moves them into the shop.
 * One `PlayerData` module holds all data; nothing else touches ProfileStore.
-* Sounds: only a few built-in client sounds exist now, and Roblox asset IDs can't be verified from the coding environment, so `Config/Sounds.lua` has named slots with search words. Empty slots fall back to a built-in sound or stay silent.
+* Sounds: the only asset ids used are ones Roblox's own tutorials use (so they're public and free): a chime (potion ready, sales), a jingle (upgrades), a celebration sting (new recipe) and an upbeat music loop. Every other slot in `Config/Sounds.lua` has search words for the Toolbox and falls back to a built-in client sound or stays silent. The client preloads the ids and switches any that fail to load to the built-in sound. Long sounds fade out after `MaxSeconds`, and music ducks under fanfares.
 
 ## Economy (first pass, tune after playtesting)
 
@@ -144,6 +144,8 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 * **Lighting.Technology** is RobloxScriptSecurity and **Workspace.StreamingEnabled** is PluginSecurity for writing: scripts can't set them, so the place file does.
 * Custom prompts: `ProximityPrompt.Style = Custom` + `ProximityPromptService.PromptShown/PromptHidden`; touch/click calls `prompt:InputHoldBegin()` / `InputHoldEnd()`.
 * Client sounds that ship with every client (current manifest): `rbxasset://sounds/` `volume_slider.ogg`, `impact_water.mp3`, `action_jump.mp3`, `impact_explosion_03.mp3` (plus a few footstep sounds). The old ones (`button.wav`, `electronicpingshort.wav`, ...) are gone.
+* Audio ids from Roblox's tutorials (github.com/Roblox/creator-docs): `4110925712` "simple chime" (In-game sounds), `3422389728` "retro jingle" and `1841461968` "upbeat" looping music (Add 2D audio), `1846248593` "cheerful, celebratory" (Add 3D audio). Not listened to from here: swap any you don't like.
+* `ContentProvider:PreloadAsync(ids, callback(contentId, Enum.AssetFetchStatus))` accepts id strings; anything but `Success` means the asset didn't load.
 * **Prices:** `MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product / GamePass)`, read `PriceInRobux`. The old `GetProductInfo` is deprecated.
 * **Developer products:** grant only through `ProcessReceipt` (or `BindReceiptHandler`), key on `PurchaseId`, save the grant in the profile, return granted only after that. Never grant from `PromptProductPurchaseFinished`.
 * **Game passes:** `UserOwnsGamePassAsync(userId, passId)`.
@@ -151,8 +153,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 ## Unresolved bugs / known gaps
 
 * **Never played in Studio.** Expect a first round of small fixes (sizes, positions, colors, UI spacing).
-* No real sound effects yet: most slots in `Config/Sounds.lua` are empty or use a pitched built-in sound. Pick audio in the Toolbox and paste the ids.
-* No music (slot ready).
+* Only 4 real audio ids so far (chime, jingle, celebration, music), picked from Roblox's tutorials without hearing them. Effect sounds (ribbit, freeze, whoosh, inflate, shrink) and bubbling are still empty: pick audio in the Toolbox and paste the ids into `Config/Sounds.lua`.
 * Lighting and colors were chosen without seeing them rendered; tweak `Config/World.lua` and `Config/Palette.lua` to taste.
 * If Roblox ever changes a ball part's size when its shape is set, bushes and bottles may look slightly different (visual only).
 * More than 6 players in one server: extra players get "The market is full" (set server size to 6).
@@ -161,6 +162,6 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 
 1. **You:** open `build/BrewAPotion.rbxlx`, run the test checklist, send errors or "it works" (screenshots help a lot for the look).
 2. Fix what the playtest finds; tune lighting, colors and economy numbers.
-3. Real sound effects and music (pick ids in the Toolbox, paste into `Config/Sounds.lua`).
+3. Listen to the 4 chosen sounds and the music; fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
 4. Content after ~30 min: more ingredients and recipes, more decor, maybe a daily reward.
 5. Later: monetization (see the API notes above), leaderboards, trading between friends.

@@ -452,6 +452,18 @@ function Engine.install(game, options)
 		roblox.implementMethod("Sound", name, function() end)
 	end
 	roblox.implementMethod("SoundService", "PlayLocalSound", function() end)
+	-- Asset preloading: every id loads, except the ones listed in Engine.failedAssets
+	roblox.implementMethod("ContentProvider", "PreloadAsync", function(_, list, callback)
+		Engine.preloaded = Engine.preloaded or {}
+		for _, item in list do
+			local id = if typeof(item) == "string" then item else tostring(item)
+			table.insert(Engine.preloaded, id)
+			if callback then
+				local failed = Engine.failedAssets and Engine.failedAssets[id]
+				callback(id, if failed then roblox.Enum.AssetFetchStatus.Failure else roblox.Enum.AssetFetchStatus.Success)
+			end
+		end
+	end)
 	-- Input services
 	for _, name in { "InputBegan", "InputEnded", "InputChanged" } do
 		roblox.implementProperty("UserInputService", name, function(inst)

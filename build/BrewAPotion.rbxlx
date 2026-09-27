@@ -517,26 +517,51 @@ return Recipes
 -- Sounds (ModuleScript) — ReplicatedStorage.Config.Sounds
 -- Every sound the game plays, by name. Clients play them; the server only names them.
 --
--- `Id` is YOUR audio asset ("rbxassetid://123456"). Leave it "" until you pick one:
---   Studio > Toolbox > Audio, search the words in `Find`, copy the asset id.
--- While `Id` is "", the `Builtin` sound is used (these ship with every Roblox client,
--- so they always load). If both are "", the sound is skipped silently.
+-- `Id` is an audio asset ("rbxassetid://123456"). To use your own:
+--   Studio > Toolbox > Audio, search the words in `Find`, right-click > Copy Asset ID.
+-- If `Id` is "" (or fails to load), the `Builtin` sound is used instead: those ship
+-- with every Roblox client, so they always work. If both are "", the sound is skipped.
+--
+-- The ids below come from Roblox's own tutorials on create.roblox.com/docs, which
+-- use them as examples, so they're public and free to use in any experience:
+--   CHIME     "simple chime" for collectables (Audio > In-game sounds tutorial)
+--   JINGLE    "retro jingle" for a UI button (Audio > Add 2D audio tutorial)
+--   CELEBRATE "cheerful, celebratory" button sound (Audio > Add 3D audio tutorial)
+--   MUSIC     "upbeat" looping background track (Audio > Add 2D audio tutorial)
 
 export type SoundDef = {
 	Id: string,
 	Builtin: string,
 	Volume: number,
 	Speed: number, -- playback speed; above 1 = higher pitch
+	MaxSeconds: number, -- one-shot sounds fade out after this long (0 = play to the end)
+	Duck: boolean, -- turn the music down while this plays
 	Find: string, -- what to search for in the Toolbox
 }
+
+local CHIME = "rbxassetid://4110925712"
+local JINGLE = "rbxassetid://3422389728"
+local CELEBRATE = "rbxassetid://1846248593"
+local MUSIC = "rbxassetid://1841461968"
 
 local TICK = "rbxasset://sounds/volume_slider.ogg"
 local SPLASH = "rbxasset://sounds/impact_water.mp3"
 local JUMP = "rbxasset://sounds/action_jump.mp3"
 local BOOM = "rbxasset://sounds/impact_explosion_03.mp3"
 
-local function sound(builtin: string, volume: number, speed: number, find: string): SoundDef
-	return { Id = "", Builtin = builtin, Volume = volume, Speed = speed, Find = find }
+type Options = { Id: string?, MaxSeconds: number?, Duck: boolean? }
+
+local function sound(builtin: string, volume: number, speed: number, find: string, options: Options?): SoundDef
+	local o: Options = options or {}
+	return {
+		Id = o.Id or "",
+		Builtin = builtin,
+		Volume = volume,
+		Speed = speed,
+		MaxSeconds = o.MaxSeconds or 0,
+		Duck = o.Duck == true,
+		Find = find,
+	}
 end
 
 local Sounds: { [string]: SoundDef } = {
@@ -547,10 +572,10 @@ local Sounds: { [string]: SoundDef } = {
 	Plop = sound(SPLASH, 0.35, 1.5, "water plop"),
 	Stir = sound(SPLASH, 0.25, 2.1, "water swirl"),
 	Bubbling = sound("", 0.25, 1, "cauldron bubbling loop"),
-	PotionReady = sound(TICK, 0.55, 2, "magic chime"),
-	Discover = sound(TICK, 0.6, 2.4, "magic sparkle reveal"),
-	Coins = sound(TICK, 0.6, 2.6, "coins cash register"),
-	Upgrade = sound(SPLASH, 0.35, 0.8, "level up fanfare"),
+	PotionReady = sound(TICK, 0.6, 1, "magic chime", { Id = CHIME, MaxSeconds = 2.5 }),
+	Discover = sound(TICK, 0.5, 1, "magic sparkle reveal", { Id = CELEBRATE, MaxSeconds = 4, Duck = true }),
+	Coins = sound(TICK, 0.45, 1.5, "coins cash register", { Id = CHIME, MaxSeconds = 1.5 }),
+	Upgrade = sound(SPLASH, 0.45, 1, "level up fanfare", { Id = JINGLE, MaxSeconds = 3.5, Duck = true }),
 	Poof = sound(BOOM, 0.12, 2.6, "cartoon poof"),
 	Hop = sound(JUMP, 0.45, 1.3, "cartoon boing"),
 	Ribbit = sound("", 0.6, 1, "frog ribbit"),
@@ -558,7 +583,7 @@ local Sounds: { [string]: SoundDef } = {
 	Whoosh = sound("", 0.4, 1, "magic whoosh"),
 	Inflate = sound("", 0.5, 1, "balloon inflate"),
 	Shrink = sound("", 0.5, 1, "cartoon shrink"),
-	Music = sound("", 0.18, 1, "cozy fantasy village music"),
+	Music = sound("", 0.2, 1, "cozy fantasy village music", { Id = MUSIC }),
 }
 
 return Sounds
@@ -7211,6 +7236,7 @@ Effects.SetSoundPlayer(function(name, part)
 		Sfx.Play(name)
 	end
 end)
+Sfx.Preload()
 Sfx.StartMusic()
 
 local function setPanel(which: string?)
@@ -9410,25 +9436,41 @@ return RecipeBook
             <string name="Source"><![CDATA[--!strict
 -- Sfx (ModuleScript) — StarterPlayer.StarterPlayerScripts.ClientMain.Sfx
 -- Plays the sounds named in Config.Sounds on this client only.
--- A sound with no asset id and no built-in fallback is skipped silently.
+-- Asset ids are preloaded once; any that fail to load fall back to their built-in
+-- sound. A sound with nothing to play is skipped silently.
 
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
 local Sfx = {}
 
+local FADE = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local DUCK_LEVEL = 0.35 -- music volume multiplier while a fanfare plays
+
 local muted = false
 local music: Sound? = nil
 local loops: { [string]: Sound } = {}
+local failed: { [string]: boolean } = {}
+local duckUntil = 0
+
+local function pickId(name: string): string
+	local def = Config.Sounds[name]
+	if not def then
+		return ""
+	end
+	if def.Id ~= "" and not failed[def.Id] then
+		return def.Id
+	end
+	return def.Builtin
+end
 
 local function soundFor(name: string): Sound?
 	local def = Config.Sounds[name]
-	if not def then
-		return nil
-	end
-	local id = if def.Id ~= "" then def.Id else def.Builtin
-	if id == "" then
+	local id = pickId(name)
+	if not def or id == "" then
 		return nil
 	end
 	local sound = Instance.new("Sound")
@@ -9439,17 +9481,44 @@ local function soundFor(name: string): Sound?
 	return sound
 end
 
-local function playOnce(sound: Sound, parent: Instance)
+local function fadeOut(sound: Sound)
+	if not sound.Parent then
+		return
+	end
+	local tween = TweenService:Create(sound, FADE, { Volume = 0 })
+	tween.Completed:Once(function()
+		sound:Destroy()
+	end)
+	tween:Play()
+end
+
+-- Turns the music down for a moment so a fanfare can be heard.
+local function duck(seconds: number)
+	local current = music
+	if not current then
+		return
+	end
+	duckUntil = math.max(duckUntil, os.clock() + seconds)
+	TweenService:Create(current, FADE, { Volume = Config.Sounds.Music.Volume * DUCK_LEVEL }):Play()
+	task.delay(seconds, function()
+		if music == current and os.clock() >= duckUntil - 0.05 then
+			TweenService:Create(current, FADE, { Volume = Config.Sounds.Music.Volume }):Play()
+		end
+	end)
+end
+
+local function playOnce(name: string, sound: Sound, parent: Instance)
+	local def = Config.Sounds[name]
 	sound.Parent = parent
 	sound.Ended:Once(function()
 		sound:Destroy()
 	end)
 	sound:Play()
-	task.delay(10, function()
-		if sound.Parent then
-			sound:Destroy()
-		end
-	end)
+	local limit = if def and def.MaxSeconds > 0 then def.MaxSeconds else 10
+	task.delay(limit, fadeOut, sound)
+	if def and def.Duck then
+		duck(if def.MaxSeconds > 0 then def.MaxSeconds else 2)
+	end
 end
 
 -- A 2D sound: same volume wherever you are (your own actions, UI).
@@ -9460,7 +9529,7 @@ function Sfx.Play(name: string, pitch: number?)
 	local sound = soundFor(name)
 	if sound then
 		sound.PlaybackSpeed *= pitch or 1
-		playOnce(sound, SoundService)
+		playOnce(name, sound, SoundService)
 	end
 end
 
@@ -9474,7 +9543,7 @@ function Sfx.PlayAt(name: string, part: BasePart, pitch: number?)
 		sound.PlaybackSpeed *= pitch or 1
 		sound.RollOffMaxDistance = 90
 		sound.RollOffMinDistance = 8
-		playOnce(sound, part)
+		playOnce(name, sound, part)
 	end
 end
 
@@ -9503,9 +9572,9 @@ function Sfx.StopLoop(key: string)
 	end
 end
 
--- Background music, if Config.Sounds.Music has an asset id.
+-- Background music, if Config.Sounds.Music has something to play.
 function Sfx.StartMusic()
-	if music or Config.Sounds.Music.Id == "" then
+	if music then
 		return
 	end
 	local sound = soundFor("Music")
@@ -9517,6 +9586,47 @@ function Sfx.StartMusic()
 			sound:Play()
 		end
 	end
+end
+
+local function stopMusic()
+	if music then
+		music:Destroy()
+		music = nil
+	end
+end
+
+-- Loads every asset id up front. Ids that fail (deleted, private, blocked) are
+-- remembered so their built-in sound plays instead.
+function Sfx.Preload()
+	local ids: { string } = {}
+	local seen: { [string]: boolean } = {}
+	for _, def in Config.Sounds do
+		if def.Id ~= "" and not seen[def.Id] then
+			seen[def.Id] = true
+			table.insert(ids, def.Id)
+		end
+	end
+	if #ids == 0 then
+		return
+	end
+	task.spawn(function()
+		local ok, err = pcall(function()
+			ContentProvider:PreloadAsync(ids, function(contentId: string, status: Enum.AssetFetchStatus)
+				if status ~= Enum.AssetFetchStatus.Success then
+					failed[contentId] = true
+				end
+			end)
+		end)
+		if not ok then
+			warn("[Sfx] preload failed:", err)
+			return
+		end
+		local musicId = Config.Sounds.Music.Id
+		if music and musicId ~= "" and failed[musicId] then
+			stopMusic() -- the music never loaded; fall back to its built-in (if any)
+			Sfx.StartMusic()
+		end
+	end)
 end
 
 function Sfx.IsMuted(): boolean

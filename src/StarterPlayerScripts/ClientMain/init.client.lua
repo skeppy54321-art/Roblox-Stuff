@@ -71,6 +71,7 @@ Effects.SetSoundPlayer(function(name, part)
 		Sfx.Play(name)
 	end
 end)
+Sfx.Preload()
 Sfx.StartMusic()
 
 local function setPanel(which: string?)

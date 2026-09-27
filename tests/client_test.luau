@@ -106,6 +106,9 @@ check("player got a plot", plotName ~= nil)
 local plot = workspace.Market:FindFirstChild(plotName)
 
 print("== client boots ==")
+-- pretend one sound asset is broken, to check the built-in fallback
+local CHIME = "rbxassetid://4110925712"
+Engine.failedAssets = { [CHIME] = true }
 local clientMain = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("ClientMain")
 -- LocalScripts run from a copy in the player's PlayerScripts in Roblox; the source is the same
 Engine.run(clientMain)
@@ -123,6 +126,26 @@ check("phone UI scale ~0.7", scale and math.abs(scale.Scale - 0.696) < 0.02, sca
 check("brew bar billboard", playerGui:FindFirstChild("BrewBar") ~= nil)
 check("goal marker billboard", playerGui:FindFirstChild("GoalMarker") ~= nil)
 task.wait(0.6)
+
+print("== sounds ==")
+local SoundService = game:GetService("SoundService")
+local SoundsConfig = Engine.loaded(game:GetService("ReplicatedStorage").Config.Sounds)
+local preloaded = table.concat(Engine.preloaded or {}, " ")
+check("sound ids preloaded", preloaded:find(CHIME, 1, true) and preloaded:find(SoundsConfig.Music.Id, 1, true), preloaded)
+local musicSound = SoundService:FindFirstChild("Music")
+check("music playing, looped", musicSound and musicSound.Looped and musicSound.SoundId == SoundsConfig.Music.Id)
+local Sfx = Engine.loaded(clientMain.Sfx)
+Sfx.Play("PotionReady")
+local ready = SoundService:FindFirstChild("PotionReady")
+check("broken asset falls back to built-in", ready and ready.SoundId == SoundsConfig.PotionReady.Builtin, ready and ready.SoundId)
+Sfx.Play("Upgrade")
+local fanfare = SoundService:FindFirstChild("Upgrade")
+check("upgrade plays its asset", fanfare and fanfare.SoundId == SoundsConfig.Upgrade.Id, fanfare and fanfare.SoundId)
+task.wait(0.5)
+check("music ducks under a fanfare", musicSound and musicSound.Volume < SoundsConfig.Music.Volume, musicSound and musicSound.Volume)
+task.wait(SoundsConfig.Upgrade.MaxSeconds + 0.6)
+check("fanfare fades out and is removed", fanfare and fanfare.Parent == nil)
+check("music back to full volume", musicSound and math.abs(musicSound.Volume - SoundsConfig.Music.Volume) < 1e-3, musicSound and musicSound.Volume)
 local goalLabel = uiRoot.Goal:FindFirstChildOfClass("TextLabel")
 local function goalText()
 	for _, d in uiRoot.Goal:GetDescendants() do
@@ -214,8 +237,11 @@ end)
 check("customer waiting", customer ~= nil)
 if customer then
 	goTo(customer.Torso)
-	task.wait(0.2)
-	check("goal says sell", goalText():find("Sell") ~= nil, goalText())
+	-- the banner refreshes a few times a second, so give it a moment
+	local selling = waitFor(2, function()
+		return goalText():find("Sell") ~= nil
+	end)
+	check("goal says sell", selling, goalText())
 	Engine.signal(customer.Torso.SellPrompt, "Triggered"):Fire(player)
 	task.wait(2.5)
 	local head = customer.HeadGroup.Head
