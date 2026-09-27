@@ -21,7 +21,8 @@ roblox.yml
 # The built place is committed so it can be opened in Studio without Rojo
 !build/BrewAPotion.rbxlx
 
-# preview tool output
+# test + preview tool output
+/out
 tests/preview/node_modules
 tests/preview/*.json
 !tests/preview/package.json

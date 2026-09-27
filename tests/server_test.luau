@@ -294,6 +294,114 @@ do
 	print(`  upgraded world dumped ({#upgradedParts} parts), owner plot {plotName}`)
 end
 
+print("== social ==")
+local SocialService = Engine.loaded(modules.SocialService)
+local function notesTo(who)
+	local texts = {}
+	for _, entry in Engine.log do
+		if entry.remote == "Notify" and entry.player == who then
+			table.insert(texts, { text = entry.args[1], kind = entry.args[2] })
+		end
+	end
+	return texts
+end
+local function cuesTo(who, cueName)
+	local n = 0
+	for _, entry in Engine.log do
+		if entry.remote == "Cue" and entry.player == who and entry.args[1] == cueName then
+			n += 1
+		end
+	end
+	return n
+end
+local stats = player:FindFirstChild("leaderstats")
+check("leaderstats made", stats ~= nil and stats:FindFirstChild("Coins") ~= nil and stats:FindFirstChild("Sold") ~= nil)
+if stats then
+	check("leaderstats coins match", stats.Coins.Value == data.Coins, `{stats.Coins.Value} vs {data.Coins}`)
+	check("leaderstats sold match", stats.Sold.Value == (data.Stats.PotionsSold or 0), stats.Sold.Value)
+end
+
+local friend, friendRoot = newPlayer("Friend", 2002)
+local friendData = waitFor(10, function()
+	return PlayerData.Get(friend)
+end)
+check("second player loaded", friendData ~= nil)
+local friendPlot = market:FindFirstChild(friend:GetAttribute("PlotName") or "")
+check("second player got another shop", friendPlot ~= nil and friendPlot ~= plot)
+local myStand = plot.CheerStand
+check("cheer stand names the owner", myStand.Hitbox.CheerPrompt.ObjectText == "Tester's shop", myStand.Hitbox.CheerPrompt.ObjectText)
+check("empty shop's stand says so", market.Plot6.CheerStand.Hitbox.CheerPrompt.ObjectText == "Empty shop")
+
+-- the owner can't cheer their own shop
+goTo(myStand.Hitbox)
+trigger(myStand.Hitbox.CheerPrompt, player)
+check("can't cheer your own shop", (data.Stats.Cheers or 0) == 0, data.Stats.Cheers)
+-- too far away
+Engine.setCFrame(friendRoot, CFrame.new(0, 3, 0))
+trigger(myStand.Hitbox.CheerPrompt, friend)
+check("can't cheer from across the plaza", (data.Stats.Cheers or 0) == 0, data.Stats.Cheers)
+-- the friend walks over and cheers
+Engine.setCFrame(friendRoot, CFrame.new(myStand.Hitbox.CFrame.Position + Vector3.new(0, 0, 3)))
+task.wait(1.1) -- cheer cooldown
+Engine.signal(myStand.Hitbox.CheerPrompt, "Triggered"):Fire(friend)
+task.wait(0.1)
+check("cheer counted", (data.Stats.Cheers or 0) == 1, data.Stats.Cheers)
+check("hearts burst", myStand.Burst.Hearts.Enabled == true)
+check("stand shows the count", myStand.CountBoard:FindFirstChildWhichIsA("SurfaceGui", true).CountLabel.Text == "1 cheer")
+check("owner told", cuesTo(player, "Cheered") == 1)
+check("cheerer thanked", cuesTo(friend, "CheerSent") == 1)
+task.wait(0.6)
+check("hearts stop", myStand.Burst.Hearts.Enabled == false)
+task.wait(0.6)
+trigger(myStand.Hitbox.CheerPrompt, friend)
+check("only one cheer per visit", (data.Stats.Cheers or 0) == 1, data.Stats.Cheers)
+local friendNotes = notesTo(friend)
+check("second cheer explained", #friendNotes > 0 and friendNotes[#friendNotes].text:find("already") ~= nil)
+
+-- market news: the friend discovers a recipe, the tester hears about it
+friendData.Ingredients.Moonberry = 1
+friendData.Ingredients.Glowshroom = 1
+Engine.setCFrame(friendRoot, CFrame.new(friendPlot.Cauldron.Hitbox.CFrame.Position + Vector3.new(0, 0, 3)))
+Engine.signal(RequestBrew, "OnServerEvent"):Fire(friend, "GiantHead")
+local heard = waitFor(9, function()
+	for _, note in notesTo(player) do
+		if note.kind == "news" and note.text:find("Friend discovered the Giant Head Potion") then
+			return true
+		end
+	end
+	return false
+end)
+check("market news reaches others", heard)
+local selfNews = false
+for _, note in notesTo(friend) do
+	if note.kind == "news" then
+		selfNews = true
+	end
+end
+check("no news about yourself", not selfNews)
+
+-- Market Stars board
+SocialService.RedrawBoard()
+local rowsFolder = town.MarketStars.StarsBoard.StarsGui.Page.Rows
+check("board row 1 is the top earner", rowsFolder.Row1.Visible and rowsFolder.Row1.PlayerName.Text == "Tester", rowsFolder.Row1.PlayerName.Text)
+check("board row 2 is the friend", rowsFolder.Row2.Visible and rowsFolder.Row2.PlayerName.Text == "Friend", rowsFolder.Row2.PlayerName.Text)
+check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == "1/7", rowsFolder.Row2.RecipesValue.Text)
+check("board shows cheers", rowsFolder.Row1.CheersValue.Text == "1", rowsFolder.Row1.CheersValue.Text)
+check("unused rows hidden", not rowsFolder.Row3.Visible)
+check("empty note hidden", not rowsFolder.Empty.Visible)
+do -- for tests/preview/ui.html: the board is 11 x 7.2 studs at 50 pixels per stud
+	local gui = town.MarketStars.StarsBoard.StarsGui
+	fs.writeFile(OUT .. "/ui_board.json", serde.encode("json", { width = 550, height = 360, device = "surface", tree = Engine.dumpGui(gui) }))
+end
+
+-- the friend leaves
+Engine.signal(Players, "PlayerRemoving"):Fire(friend)
+task.wait(0.3)
+friend.Parent = nil
+SocialService.RedrawBoard()
+check("board drops players who left", not rowsFolder.Row2.Visible and rowsFolder.Row1.PlayerName.Text == "Tester")
+check("left shop's stand resets", friendPlot.CheerStand.Hitbox.CheerPrompt.ObjectText == "Empty shop")
+
 print("== brew a specific recipe ==")
 data.Ingredients.Starflower = 1
 data.Ingredients.Glowshroom = 1

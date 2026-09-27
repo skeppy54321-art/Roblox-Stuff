@@ -11,8 +11,8 @@ runtime errors and broken game logic before you ever open Studio.
 ```sh
 rojo build default.project.json -o build/BrewAPotion.rbxlx   # always test the current code
 mkdir -p out
-lune run tests/server_test.luau build/BrewAPotion.rbxlx out   # server: ~70 checks, ~40s
-lune run tests/client_test.luau build/BrewAPotion.rbxlx       # server + client "play solo": ~50 checks
+lune run tests/server_test.luau build/BrewAPotion.rbxlx out   # server: ~100 checks, ~50s
+lune run tests/client_test.luau build/BrewAPotion.rbxlx       # server + client "play solo": ~65 checks
 ```
 
 Both print `ok` / `FAIL` per check and exit non-zero on any failure, error or warning.
@@ -20,13 +20,15 @@ Both print `ok` / `FAIL` per check and exit non-zero on any failure, error or wa
 **Server test** boots `ServerScriptService.Main`, then a scripted player joins and: collects,
 brews, stirs, discovers a recipe, sells to the first customer (double press sells once), tries
 junk remote arguments, buys every upgrade (from the panel remote and the in-shop "for sale"
-sign), brews a specific recipe, leaves mid-brew (keeps the potion), and rejoins to check the
-save round-trip through ProfileStore's mock store.
+sign), then a second player joins: leaderstats, cheering (own shop, too far, once per visit),
+market news, the Market Stars board. Then it brews a specific recipe, leaves mid-brew (keeps
+the potion), and rejoins to check the save round-trip through ProfileStore's mock store.
 
 **Client test** runs the server and the real `ClientMain` LocalScript together on a phone-sized
-screen: HUD, scaling, goal banner + arrow, custom prompts, popups, the cauldron menu (tapping a
-card brews), celebrations, keyboard shortcuts, buying from the Upgrades panel, and all seven
-potion effects on real customer models.
+screen: HUD, scaling, sounds (preload, broken-asset fallback, music ducking), goal banner +
+arrow, custom prompts (cheer prompt only on other players' shops), popups, the cauldron menu
+(tapping a card brews), celebrations, social toasts, keyboard shortcuts, buying from the
+Upgrades panel, and all seven potion effects on real customer models.
 
 ## 3D preview of the world
 
@@ -41,6 +43,17 @@ node shoot.mjs shots overview plaza fountain front:parts_upgraded.json inside cu
 
 Views are defined at the top of `render.html`. It's an approximation (no Roblox materials,
 text or real lighting) that is good for checking layout, sizes and colors.
+
+## HUD and board previews
+
+`ui_snapshots.luau` dumps the HUD at a few moments, and `server_test.luau` dumps the Market
+Stars board (`out/ui_board.json`). `ui.html` draws those trees with Roblox-like layout rules:
+
+```sh
+lune run tests/ui_snapshots.luau build/BrewAPotion.rbxlx out 844 390 phone
+cp out/ui_*.json tests/preview/
+cd tests/preview && node shoot-ui.mjs shots - ui_phone_start.json ui_board.json
+```
 
 ## Differences from Roblox worth knowing
 

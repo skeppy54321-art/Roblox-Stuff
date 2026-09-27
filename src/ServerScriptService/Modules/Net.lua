@@ -4,6 +4,7 @@
 -- Client -> server remotes only ASK; the server checks everything before acting.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Net = {}
 
@@ -29,7 +30,7 @@ end
 
 -- server -> client
 Net.StateUpdate = remote("RemoteEvent", "StateUpdate") :: RemoteEvent -- (state) the player's full progress
-Net.NotifyRemote = remote("RemoteEvent", "Notify") :: RemoteEvent -- (text, kind) short message; kind = "info" | "good" | "bad"
+Net.NotifyRemote = remote("RemoteEvent", "Notify") :: RemoteEvent -- (text, kind) short message (see NotifyKind)
 Net.CueRemote = remote("RemoteEvent", "Cue") :: RemoteEvent -- (cue, data) feedback moment for sounds/popups
 Net.PlayEffect = remote("RemoteEvent", "PlayEffect") :: RemoteEvent -- (customer, effectName) to everyone
 -- client -> server
@@ -37,13 +38,24 @@ Net.RequestUpgrade = remote("RemoteEvent", "RequestUpgrade") :: RemoteEvent -- (
 Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipeId)
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
 
-export type NotifyKind = "info" | "good" | "bad"
+-- "news" = something another player did; "heart" = a cheer
+export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
 
 function Net.Notify(player: Player, text: string, kind: NotifyKind?)
 	Net.NotifyRemote:FireClient(player, text, kind or "info")
 end
 
--- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade".
+-- Tells everyone in the server except `except`.
+function Net.NotifyOthers(except: Player, text: string, kind: NotifyKind?)
+	for _, other in Players:GetPlayers() do
+		if other ~= except then
+			Net.NotifyRemote:FireClient(other, text, kind or "info")
+		end
+	end
+end
+
+-- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade",
+-- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's).
 function Net.Cue(player: Player, cue: string, data: { [string]: any }?)
 	Net.CueRemote:FireClient(player, cue, data or {})
 end

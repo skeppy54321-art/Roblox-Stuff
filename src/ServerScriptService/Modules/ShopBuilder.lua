@@ -25,6 +25,7 @@ export type PlotParts = {
 	LotsFolder: Folder, -- where "for sale" lots live
 	Cauldron: Model,
 	Sign: BasePart,
+	CheerStand: Model, -- visitors cheer for the owner here (Hitbox + CheerPrompt, Hearts, CountLabel)
 	CounterFront: BasePart,
 	SpawnPoint: BasePart,
 	GoldParts: { BasePart }, -- cauldron parts that turn gold with Cozy Decor level 3
@@ -344,6 +345,71 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
+end
+
+------------------------------------------------------------------
+-- Cheer stand (front right, outside the counter)
+------------------------------------------------------------------
+
+-- A flat heart facing the plaza: two round lobes and a diamond tip.
+local function heart(parent: Instance, cf: CFrame, size: number, color: Color3)
+	local facing = CFrame.Angles(math.rad(90), 0, 0) -- cylinders face along Z
+	local depth = 0.35 * size
+	for _, side in { -1, 1 } do
+		Kit.Cylinder(
+			parent,
+			"HeartLobe",
+			depth,
+			1.1 * size,
+			cf * CFrame.new(side * 0.32 * size, 0.18 * size, 0) * facing,
+			color,
+			NEON,
+			{
+				CastShadow = false,
+			}
+		)
+	end
+	Kit.Decor(
+		parent,
+		"HeartTip",
+		Vector3.new(0.95 * size, 0.95 * size, depth),
+		cf * CFrame.new(0, -0.2 * size, 0) * CFrame.Angles(0, 0, math.rad(45)),
+		color,
+		NEON,
+		{ CastShadow = false }
+	)
+end
+
+local function buildCheerStand(plot: Model, at: At): Model
+	local stand = Kit.Model(plot, "CheerStand")
+	local x, z = 10.6, -10.8
+	Kit.Part(stand, "Post", Vector3.new(0.35, 3.4, 0.35), at(x, 1.7, z), P.DarkWood, WOOD)
+	Kit.Decor(stand, "Foot", Vector3.new(1.2, 0.25, 1.2), at(x, 0.125, z), P.DarkWood, WOOD)
+	local board = Kit.Decor(stand, "CountBoard", Vector3.new(2.4, 0.9, 0.2), at(x, 2.1, z - 0.25), P.LightWood, WOOD)
+	local label = Kit.SurfaceText(board, Enum.NormalId.Front, "0 cheers", P.TextDark, 60)
+	label.Name = "CountLabel"
+	heart(stand, at(x, 3.95, z), 1.1, P.Heart)
+	-- hearts burst out of here (the server switches the emitter on for a moment)
+	local burst = Kit.Decor(stand, "Burst", Vector3.new(1, 1, 1), at(x, 3.95, z), P.Heart, nil, {
+		Transparency = 1,
+		CastShadow = false,
+	})
+	local hearts = Kit.Sparkles(burst, P.Heart, 45, "Hearts")
+	hearts.Enabled = false
+	hearts.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.2),
+		NumberSequenceKeypoint.new(0.4, 0.55),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	hearts.Speed = NumberRange.new(5, 9)
+	hearts.SpreadAngle = Vector2.new(40, 40)
+	hearts.EmissionDirection = Enum.NormalId.Top
+	hearts.Acceleration = Vector3.new(0, -6, 0)
+	hearts.Lifetime = NumberRange.new(0.9, 1.4)
+	local hitbox = Kit.Hitbox(stand, Vector3.new(2.6, 4.6, 2.6), at(x, 2.3, z))
+	local prompt = Kit.Prompt(hitbox, "CheerPrompt", "Cheer", "Shop")
+	prompt:SetAttribute("ForVisitors", true) -- clients show it on other players' shops only
+	return stand
 end
 
 ------------------------------------------------------------------
@@ -727,6 +793,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Shelf3 = buildShelfLevel(plot, at, "Shelf3", 7.4, rng),
 	}
 
+	local cheerStand = buildCheerStand(plot, at)
+
 	-- Invisible markers
 	local counterFront = marker(plot, "CounterFront", at(0, 0, ShopBuilder.CounterFrontZ))
 	local spawnPoint = marker(plot, "SpawnPoint", at(0, 0, 7))
@@ -743,6 +811,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		LotsFolder = lotsFolder,
 		Cauldron = cauldron,
 		Sign = sign,
+		CheerStand = cheerStand,
 		CounterFront = counterFront,
 		SpawnPoint = spawnPoint,
 		GoldParts = goldParts,

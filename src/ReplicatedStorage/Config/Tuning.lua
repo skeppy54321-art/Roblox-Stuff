@@ -47,4 +47,10 @@ Tuning.Customers = {
 -- The bouncing helper arrow shows until this many potions have been sold.
 Tuning.GuideUntilSales = 8
 
+Tuning.Social = {
+	CheerCooldown = 1, -- seconds between cheer presses (each shop can be cheered once per visit)
+	NewsGap = 3, -- at most one market news item per player this often
+	BoardRefreshSeconds = 2, -- the Market Stars board redraws this often when something changed
+}
+
 return Tuning

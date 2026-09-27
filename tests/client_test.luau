@@ -168,6 +168,16 @@ for _, p in workspace.Market:GetChildren() do
 	end
 end
 check("other shops' prompts hidden", otherPlot.Cauldron.Hitbox.BrewPrompt.Enabled == false)
+check("no cheer prompt on your own shop", plot.CheerStand.Hitbox.CheerPrompt.Enabled == false)
+check("no cheer prompt on empty shops", otherPlot.CheerStand.Hitbox.CheerPrompt.Enabled == false)
+-- someone else opens the shop next door (attribute changes don't fire by themselves here)
+otherPlot:SetAttribute("OwnerUserId", 4242)
+Engine.signal(otherPlot, "Attr:OwnerUserId"):Fire()
+check("cheer prompt shows on someone else's shop", otherPlot.CheerStand.Hitbox.CheerPrompt.Enabled == true)
+check("their other prompts stay hidden", otherPlot.Cauldron.Hitbox.BrewPrompt.Enabled == false)
+otherPlot:SetAttribute("OwnerUserId", 0)
+Engine.signal(otherPlot, "Attr:OwnerUserId"):Fire()
+check("cheer prompt hides when they leave", otherPlot.CheerStand.Hitbox.CheerPrompt.Enabled == false)
 
 print("== prompt UI ==")
 local PPS = game:GetService("ProximityPromptService")
@@ -285,6 +295,26 @@ end
 Engine.signal(UIS, "InputBegan"):Fire({ KeyCode = Enum.KeyCode.M, UserInputType = Enum.UserInputType.Keyboard }, false)
 task.wait(0.2)
 check("M mutes", find(uiRoot, "SideButtons.MuteButton.Face").Text == "SOUND OFF")
+
+print("== social toasts ==")
+local P = Engine.loaded(game:GetService("ReplicatedStorage").Config.Palette)
+local modulesFolder = game:GetService("ServerScriptService").Modules
+local NetModule = Engine.loaded(modulesFolder.Net)
+local function toastWith(textPart)
+	for _, t in uiRoot.Toasts:GetChildren() do
+		if t:IsA("TextLabel") and t.Text:find(textPart, 1, true) then
+			return t
+		end
+	end
+	return nil
+end
+NetModule.Notify(player, "Sam discovered the Froggy Potion!", "news")
+NetModule.Cue(player, "Cheered", { From = "Sam" })
+task.wait(0.2)
+local newsToast = toastWith("Sam discovered")
+check("news toast shown in violet", newsToast ~= nil and newsToast.BackgroundColor3 == P.News)
+local heartToast = toastWith("Sam cheered for your shop")
+check("cheer toast shown in pink", heartToast ~= nil and heartToast.BackgroundColor3 == P.Heart)
 
 print("== every potion effect ==")
 local CustomerBuilder = Engine.loaded(game:GetService("ServerScriptService").Modules.CustomerBuilder)

@@ -112,6 +112,8 @@ const views = Object.assign({
   right: { pos: [-3, 8, 66], look: [10.5, 2, 58], fov: 65 },
   top: { pos: [0.1, 70, 60], look: [0, 0, 60], fov: 45 },
   customer: { pos: [0, 6.5, 55], look: [0, 4.8, 48.5], fov: 60 },
+  stars: { pos: [2, 7, 2], look: [12, 5.5, 20.8], fov: 55 },
+  cheer: { pos: [17, 6.5, 38], look: [10.6, 3.5, 49.2], fov: 55 },
 }, data.views || {});
 const view = views[params.get('view') || 'overview'] || { pos: [0, 140, -170], look: [0, 0, 0], fov: 50 };
 const camera = new THREE.PerspectiveCamera(view.fov || 50, W / H, 0.5, 2000);

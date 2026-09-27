@@ -112,7 +112,8 @@ CauldronMenu.OnBrew = function(recipeId)
 end
 
 ------------------------------------------------------------------
--- Prompts: only YOUR shop's prompts show, all in the game's own style
+-- Prompts: YOUR shop's prompts show, plus the Cheer stand on other players'
+-- shops (prompts marked ForVisitors), all in the game's own style
 ------------------------------------------------------------------
 local function findPlot(inst: Instance): Instance?
 	local node = inst.Parent
@@ -128,7 +129,12 @@ end
 local function refreshPrompt(prompt: ProximityPrompt)
 	local plot = findPlot(prompt)
 	if plot then
-		prompt.Enabled = plot:GetAttribute("OwnerUserId") == player.UserId
+		local owner = plot:GetAttribute("OwnerUserId")
+		if prompt:GetAttribute("ForVisitors") then
+			prompt.Enabled = typeof(owner) == "number" and owner ~= 0 and owner ~= player.UserId
+		else
+			prompt.Enabled = owner == player.UserId
+		end
 	end
 end
 
@@ -427,6 +433,8 @@ Notify.OnClientEvent:Connect(function(text, kind)
 	Hud.Toast(text, k)
 	if k == "bad" then
 		Sfx.Play("Error")
+	elseif k == "news" then
+		Sfx.Play("News")
 	end
 end)
 
@@ -463,6 +471,12 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
 		end
+	elseif cue == "Cheered" then
+		Sfx.Play("Cheer")
+		Hud.Toast(`{tostring(data.From)} cheered for your shop!`, "heart")
+	elseif cue == "CheerSent" then
+		Sfx.Play("Cheer", 1.15)
+		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
 	elseif cue == "Upgrade" then
 		Sfx.Play("Upgrade")
 		local upgrade = Config.Upgrades[data.Upgrade]

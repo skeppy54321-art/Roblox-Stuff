@@ -61,6 +61,8 @@ local Sounds: { [string]: SoundDef } = {
 	Discover = sound(TICK, 0.5, 1, "magic sparkle reveal", { Id = CELEBRATE, MaxSeconds = 4, Duck = true }),
 	Coins = sound(TICK, 0.45, 1.5, "coins cash register", { Id = CHIME, MaxSeconds = 1.5 }),
 	Upgrade = sound(SPLASH, 0.45, 1, "level up fanfare", { Id = JINGLE, MaxSeconds = 3.5, Duck = true }),
+	Cheer = sound(TICK, 0.55, 1.25, "cheer sparkle", { Id = CHIME, MaxSeconds = 2 }),
+	News = sound(TICK, 0.3, 1.9, "soft notification"),
 	Poof = sound(BOOM, 0.12, 2.6, "cartoon poof"),
 	Hop = sound(JUMP, 0.45, 1.3, "cartoon boing"),
 	Ribbit = sound("", 0.6, 1, "frog ribbit"),

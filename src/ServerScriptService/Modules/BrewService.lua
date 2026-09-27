@@ -12,6 +12,7 @@ local Guard = require(Modules:WaitForChild("Guard"))
 local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 type Plot = PlotService.Plot
 type Data = PlayerData.Data
@@ -133,6 +134,7 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	PlayerData.Push(player)
 	if isNew then
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
+		SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
 	else
 		Net.Cue(player, "PotionReady", { Recipe = brew.Recipe })
 	end

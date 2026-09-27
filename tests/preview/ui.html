@@ -24,9 +24,11 @@ const data = await (await fetch(q.get('file'))).json();
 // Lune encodes empty tables as {}: make every child list an array
 (function fix(n) { n.k = Array.isArray(n.k) ? n.k : Object.values(n.k || {}); if (Array.isArray(n.p)) n.p = {}; n.k.forEach(fix); })(data.tree);
 const W = data.width, H = data.height;
-const device = q.get('device') || (W < 1000 ? 'phone' : 'desktop');
-// CoreUISafeInsets: the top bar, plus notch/home-bar areas on phones
-const inset = device === 'phone' ? { t: 58, l: 44, r: 44, b: 21 } : { t: 58, l: 0, r: 0, b: 0 };
+const device = q.get('device') || data.device || (W < 1000 ? 'phone' : 'desktop');
+// CoreUISafeInsets: the top bar, plus notch/home-bar areas on phones ("surface" = a SurfaceGui: none)
+const inset = device === 'phone' ? { t: 58, l: 44, r: 44, b: 21 }
+  : device === 'surface' ? { t: 0, l: 0, r: 0, b: 0 }
+  : { t: 58, l: 0, r: 0, b: 0 };
 const screen = document.getElementById('screen');
 screen.style.width = W + 'px'; screen.style.height = H + 'px';
 const bg = document.getElementById('bg');

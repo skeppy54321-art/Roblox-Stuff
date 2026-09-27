@@ -88,6 +88,11 @@ local Palette = {
 	ButtonOffDark = rgb(110, 105, 112),
 	Danger = rgb(235, 80, 90),
 	Good = rgb(90, 220, 120),
+
+	-- Social
+	Heart = rgb(255, 95, 150),
+	News = rgb(120, 80, 175),
+	Medals = { rgb(255, 200, 60), rgb(200, 210, 225), rgb(215, 140, 80) }, -- gold, silver, bronze
 }
 
 return Palette

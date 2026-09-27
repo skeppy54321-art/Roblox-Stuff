@@ -17,6 +17,7 @@ local P = Config.Palette
 local PlotService = {}
 
 local plots: { Plot } = {}
+local marketParts: MarketBuilder.MarketParts? = nil
 local plotByPlayer: { [Player]: Plot } = {}
 local stashes: { [Plot]: Folder } = {} -- hidden (not yet bought) parts of each plot, kept on the server only
 
@@ -44,7 +45,7 @@ function PlotService.Init()
 	stashRoot.Name = "PlotStash"
 	stashRoot.Parent = ServerStorage
 
-	MarketBuilder.Build(market)
+	marketParts = MarketBuilder.Build(market)
 	for i = 1, Config.World.PlotCount do
 		local plot = ShopBuilder.BuildPlot(i, Config.World.GetPlotCFrame(i), market)
 		local stash = Instance.new("Folder")
@@ -58,6 +59,12 @@ end
 
 function PlotService.GetPlots(): { Plot }
 	return plots
+end
+
+-- The plaza's parts (fountain statue, Market Stars board, spawn). Built by Init.
+function PlotService.GetMarket(): MarketBuilder.MarketParts
+	assert(marketParts, "PlotService.Init must run first")
+	return marketParts
 end
 
 function PlotService.GetPlot(player: Player): Plot?

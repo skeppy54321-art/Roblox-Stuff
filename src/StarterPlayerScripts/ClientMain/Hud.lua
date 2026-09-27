@@ -429,6 +429,8 @@ function Hud.Toast(text: string, kind: string?)
 	local color = if kind == "good"
 		then P.ButtonDark
 		elseif kind == "bad" then Color3.fromRGB(190, 60, 70)
+		elseif kind == "news" then P.News
+		elseif kind == "heart" then P.Heart
 		else P.PanelDark
 	local toasts = {}
 	for _, child in toastList:GetChildren() do

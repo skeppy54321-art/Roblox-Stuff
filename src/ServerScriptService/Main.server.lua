@@ -14,6 +14,7 @@ local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local BrewService = require(Modules:WaitForChild("BrewService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -21,10 +22,12 @@ local plots = PlotService.GetPlots()
 IngredientService.Init(plots)
 BrewService.Init(plots)
 UpgradeService.Init(plots)
+SocialService.Init(plots)
 
--- Keep the cauldron's suggested potion fresh.
-PlayerData.OnChanged(function(player)
+-- Keep the cauldron's suggested potion, the player list and the Market Stars board fresh.
+PlayerData.OnChanged(function(player, data)
 	BrewService.Refresh(player)
+	SocialService.Update(player, data)
 end)
 CustomerService.OnChanged(function(plot)
 	local owner = PlotService.GetOwner(plot)
@@ -55,6 +58,8 @@ local function onPlayerAdded(player: Player)
 		Net.Notify(player, "The market is full right now. Try another server!", "bad")
 	end
 
+	SocialService.PlayerJoined(player, data, plot)
+
 	player.CharacterAdded:Connect(function(character)
 		PlotService.MoveToPlot(player, character)
 	end)
@@ -72,6 +77,7 @@ local function onPlayerRemoving(player: Player)
 		BrewService.ResetCauldron(plot)
 		IngredientService.ApplyOwner(plot, nil, true)
 	end
+	SocialService.PlayerLeft(player, plot)
 	PlotService.Release(player) -- also resets the shop's visuals
 	PlayerData.Release(player) -- final save
 	Guard.Clear(player)

@@ -25,6 +25,7 @@ export type Upgrade = {
 	Levels: { UpgradeLevel },
 	Unlocks: string?,
 	Requires: string?,
+	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
 	Order: number,
 }
 
@@ -52,6 +53,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 60, Summary = "Starflowers planted" },
 		},
 		Unlocks = "Starflower",
+		Announce = "planted a Starflower Bed",
 		Order = 2,
 	},
 	Shelves = {
@@ -87,6 +89,7 @@ local Upgrades: { [string]: Upgrade } = {
 		Levels = {
 			{ Cost = 200, Summary = "2 customers at a time", CustomerSlots = 2 },
 		},
+		Announce = "opened a second counter spot",
 		Order = 5,
 	},
 	FrostGrotto = {
@@ -100,6 +103,7 @@ local Upgrades: { [string]: Upgrade } = {
 		},
 		Unlocks = "FrostCrystal",
 		Requires = "StarflowerBed",
+		Announce = "found a Frost Grotto",
 		Order = 6,
 	},
 	CozyDecor = {

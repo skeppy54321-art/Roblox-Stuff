@@ -392,6 +392,11 @@ local Palette = {
 	ButtonOffDark = rgb(110, 105, 112),
 	Danger = rgb(235, 80, 90),
 	Good = rgb(90, 220, 120),
+
+	-- Social
+	Heart = rgb(255, 95, 150),
+	News = rgb(120, 80, 175),
+	Medals = { rgb(255, 200, 60), rgb(200, 210, 225), rgb(215, 140, 80) }, -- gold, silver, bronze
 }
 
 return Palette
@@ -576,6 +581,8 @@ local Sounds: { [string]: SoundDef } = {
 	Discover = sound(TICK, 0.5, 1, "magic sparkle reveal", { Id = CELEBRATE, MaxSeconds = 4, Duck = true }),
 	Coins = sound(TICK, 0.45, 1.5, "coins cash register", { Id = CHIME, MaxSeconds = 1.5 }),
 	Upgrade = sound(SPLASH, 0.45, 1, "level up fanfare", { Id = JINGLE, MaxSeconds = 3.5, Duck = true }),
+	Cheer = sound(TICK, 0.55, 1.25, "cheer sparkle", { Id = CHIME, MaxSeconds = 2 }),
+	News = sound(TICK, 0.3, 1.9, "soft notification"),
 	Poof = sound(BOOM, 0.12, 2.6, "cartoon poof"),
 	Hop = sound(JUMP, 0.45, 1.3, "cartoon boing"),
 	Ribbit = sound("", 0.6, 1, "frog ribbit"),
@@ -642,6 +649,12 @@ Tuning.Customers = {
 -- The bouncing helper arrow shows until this many potions have been sold.
 Tuning.GuideUntilSales = 8
 
+Tuning.Social = {
+	CheerCooldown = 1, -- seconds between cheer presses (each shop can be cheered once per visit)
+	NewsGap = 3, -- at most one market news item per player this often
+	BoardRefreshSeconds = 2, -- the Market Stars board redraws this often when something changed
+}
+
 return Tuning
 ]]></string>
         </Properties>
@@ -676,6 +689,7 @@ export type Upgrade = {
 	Levels: { UpgradeLevel },
 	Unlocks: string?,
 	Requires: string?,
+	Announce: string?, -- told to the whole market when someone buys it: "<name> <Announce>!"
 	Order: number,
 }
 
@@ -703,6 +717,7 @@ local Upgrades: { [string]: Upgrade } = {
 			{ Cost = 60, Summary = "Starflowers planted" },
 		},
 		Unlocks = "Starflower",
+		Announce = "planted a Starflower Bed",
 		Order = 2,
 	},
 	Shelves = {
@@ -738,6 +753,7 @@ local Upgrades: { [string]: Upgrade } = {
 		Levels = {
 			{ Cost = 200, Summary = "2 customers at a time", CustomerSlots = 2 },
 		},
+		Announce = "opened a second counter spot",
 		Order = 5,
 	},
 	FrostGrotto = {
@@ -751,6 +767,7 @@ local Upgrades: { [string]: Upgrade } = {
 		},
 		Unlocks = "FrostCrystal",
 		Requires = "StarflowerBed",
+		Announce = "found a Frost Grotto",
 		Order = 6,
 	},
 	CozyDecor = {
@@ -1432,6 +1449,7 @@ local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local BrewService = require(Modules:WaitForChild("BrewService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -1439,10 +1457,12 @@ local plots = PlotService.GetPlots()
 IngredientService.Init(plots)
 BrewService.Init(plots)
 UpgradeService.Init(plots)
+SocialService.Init(plots)
 
--- Keep the cauldron's suggested potion fresh.
-PlayerData.OnChanged(function(player)
+-- Keep the cauldron's suggested potion, the player list and the Market Stars board fresh.
+PlayerData.OnChanged(function(player, data)
 	BrewService.Refresh(player)
+	SocialService.Update(player, data)
 end)
 CustomerService.OnChanged(function(plot)
 	local owner = PlotService.GetOwner(plot)
@@ -1473,6 +1493,8 @@ local function onPlayerAdded(player: Player)
 		Net.Notify(player, "The market is full right now. Try another server!", "bad")
 	end
 
+	SocialService.PlayerJoined(player, data, plot)
+
 	player.CharacterAdded:Connect(function(character)
 		PlotService.MoveToPlot(player, character)
 	end)
@@ -1490,6 +1512,7 @@ local function onPlayerRemoving(player: Player)
 		BrewService.ResetCauldron(plot)
 		IngredientService.ApplyOwner(plot, nil, true)
 	end
+	SocialService.PlayerLeft(player, plot)
 	PlotService.Release(player) -- also resets the shop's visuals
 	PlayerData.Release(player) -- final save
 	Guard.Clear(player)
@@ -1526,6 +1549,7 @@ local Guard = require(Modules:WaitForChild("Guard"))
 local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 type Plot = PlotService.Plot
 type Data = PlayerData.Data
@@ -1647,6 +1671,7 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	PlayerData.Push(player)
 	if isNew then
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates
+		SocialService.Announce(player, `{player.DisplayName} discovered the {recipe.DisplayName}!`)
 	else
 		Net.Cue(player, "PotionReady", { Recipe = brew.Recipe })
 	end
@@ -2970,6 +2995,7 @@ export type MarketParts = {
 	Model: Model,
 	Spawn: SpawnLocation,
 	Statue: BasePart, -- the giant glowing potion on the fountain (clients cycle its color)
+	Board: BasePart, -- the Market Stars board (SocialService draws on its front)
 }
 
 local function flat(
@@ -3472,6 +3498,40 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	Kit.SurfaceText(board, Enum.NormalId.Front, "Potion Market", P.Gold, 40)
 	Kit.SurfaceText(board, Enum.NormalId.Back, "Potion Market", P.Gold, 40)
 
+	-- Market Stars board, across the plaza from the welcome sign
+	local boardAngle = plotAngle(1) + math.pi / W.PlotCount
+	local boardCf = CFrame.lookAt(polar(boardAngle, 24, 0.3), Vector3.new(0, 0.3, 0))
+	local stars = Kit.Model(market, "MarketStars")
+	for _, x in { -5.9, 5.9 } do
+		Kit.Part(stars, "BoardPost", Vector3.new(0.7, 10.2, 0.7), boardCf * CFrame.new(x, 5.1, 0.1), P.DarkWood, WOOD)
+		Kit.Lantern(stars, (boardCf * CFrame.new(x, 9.9, -0.9)).Position, 0.8, 14)
+	end
+	Kit.Decor(stars, "BoardFrame", Vector3.new(11.8, 8, 0.4), boardCf * CFrame.new(0, 5.6, 0.15), P.DarkWood, WOOD)
+	local starsBoard = Kit.Part(
+		stars,
+		"StarsBoard",
+		Vector3.new(11, 7.2, 0.3),
+		boardCf * CFrame.new(0, 5.6, 0),
+		P.PanelLight,
+		Enum.Material.SmoothPlastic
+	)
+	Kit.Decor(
+		stars,
+		"BoardRoof",
+		Vector3.new(13, 0.35, 2.2),
+		boardCf * CFrame.new(0, 10.1, -0.2) * CFrame.Angles(math.rad(-12), 0, 0),
+		P.Roof,
+		Enum.Material.ClayRoofTiles
+	)
+	Kit.Decor(
+		stars,
+		"BoardArm",
+		Vector3.new(12.6, 0.3, 0.3),
+		boardCf * CFrame.new(0, 9.75, -0.9),
+		P.Metal,
+		Enum.Material.Metal
+	)
+
 	-- fireflies drifting over the plaza
 	local fireflyBox = Kit.Decor(
 		market,
@@ -3520,7 +3580,7 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	spawn.Parent = workspace
 
 	market.Parent = parent
-	return { Model = market, Spawn = spawn, Statue = statue }
+	return { Model = market, Spawn = spawn, Statue = statue, Board = starsBoard }
 end
 
 return MarketBuilder
@@ -3536,6 +3596,7 @@ return MarketBuilder
 -- Client -> server remotes only ASK; the server checks everything before acting.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
 local Net = {}
 
@@ -3561,7 +3622,7 @@ end
 
 -- server -> client
 Net.StateUpdate = remote("RemoteEvent", "StateUpdate") :: RemoteEvent -- (state) the player's full progress
-Net.NotifyRemote = remote("RemoteEvent", "Notify") :: RemoteEvent -- (text, kind) short message; kind = "info" | "good" | "bad"
+Net.NotifyRemote = remote("RemoteEvent", "Notify") :: RemoteEvent -- (text, kind) short message (see NotifyKind)
 Net.CueRemote = remote("RemoteEvent", "Cue") :: RemoteEvent -- (cue, data) feedback moment for sounds/popups
 Net.PlayEffect = remote("RemoteEvent", "PlayEffect") :: RemoteEvent -- (customer, effectName) to everyone
 -- client -> server
@@ -3569,13 +3630,24 @@ Net.RequestUpgrade = remote("RemoteEvent", "RequestUpgrade") :: RemoteEvent -- (
 Net.RequestBrew = remote("RemoteEvent", "RequestBrew") :: RemoteEvent -- (recipeId)
 Net.GetState = remote("RemoteFunction", "GetState") :: RemoteFunction -- () -> state or nil while loading
 
-export type NotifyKind = "info" | "good" | "bad"
+-- "news" = something another player did; "heart" = a cheer
+export type NotifyKind = "info" | "good" | "bad" | "news" | "heart"
 
 function Net.Notify(player: Player, text: string, kind: NotifyKind?)
 	Net.NotifyRemote:FireClient(player, text, kind or "info")
 end
 
--- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade".
+-- Tells everyone in the server except `except`.
+function Net.NotifyOthers(except: Player, text: string, kind: NotifyKind?)
+	for _, other in Players:GetPlayers() do
+		if other ~= except then
+			Net.NotifyRemote:FireClient(other, text, kind or "info")
+		end
+	end
+end
+
+-- Cues: "Collect", "BrewStart", "Stir", "PotionReady", "Discover", "Sale", "Upgrade",
+-- "Cheered" (someone cheered your shop), "CheerSent" (you cheered someone's).
 function Net.Cue(player: Player, cue: string, data: { [string]: any }?)
 	Net.CueRemote:FireClient(player, cue, data or {})
 end
@@ -3816,6 +3888,7 @@ local P = Config.Palette
 local PlotService = {}
 
 local plots: { Plot } = {}
+local marketParts: MarketBuilder.MarketParts? = nil
 local plotByPlayer: { [Player]: Plot } = {}
 local stashes: { [Plot]: Folder } = {} -- hidden (not yet bought) parts of each plot, kept on the server only
 
@@ -3843,7 +3916,7 @@ function PlotService.Init()
 	stashRoot.Name = "PlotStash"
 	stashRoot.Parent = ServerStorage
 
-	MarketBuilder.Build(market)
+	marketParts = MarketBuilder.Build(market)
 	for i = 1, Config.World.PlotCount do
 		local plot = ShopBuilder.BuildPlot(i, Config.World.GetPlotCFrame(i), market)
 		local stash = Instance.new("Folder")
@@ -3857,6 +3930,12 @@ end
 
 function PlotService.GetPlots(): { Plot }
 	return plots
+end
+
+-- The plaza's parts (fountain statue, Market Stars board, spawn). Built by Init.
+function PlotService.GetMarket(): MarketBuilder.MarketParts
+	assert(marketParts, "PlotService.Init must run first")
+	return marketParts
 end
 
 function PlotService.GetPlot(player: Player): Plot?
@@ -6230,6 +6309,7 @@ export type PlotParts = {
 	LotsFolder: Folder, -- where "for sale" lots live
 	Cauldron: Model,
 	Sign: BasePart,
+	CheerStand: Model, -- visitors cheer for the owner here (Hitbox + CheerPrompt, Hearts, CountLabel)
 	CounterFront: BasePart,
 	SpawnPoint: BasePart,
 	GoldParts: { BasePart }, -- cauldron parts that turn gold with Cozy Decor level 3
@@ -6549,6 +6629,71 @@ local function buildLot(parent: Instance, at: At, upgradeId: string, spot: Vecto
 	local box = Kit.Hitbox(lot, Vector3.new(4.6, 4.5, 3.8), at(spot.X, 2.25, spot.Z))
 	Kit.Prompt(box, "UnlockPrompt", "Unlock", `{upgrade.DisplayName} ({cost} coins)`)
 	return lot
+end
+
+------------------------------------------------------------------
+-- Cheer stand (front right, outside the counter)
+------------------------------------------------------------------
+
+-- A flat heart facing the plaza: two round lobes and a diamond tip.
+local function heart(parent: Instance, cf: CFrame, size: number, color: Color3)
+	local facing = CFrame.Angles(math.rad(90), 0, 0) -- cylinders face along Z
+	local depth = 0.35 * size
+	for _, side in { -1, 1 } do
+		Kit.Cylinder(
+			parent,
+			"HeartLobe",
+			depth,
+			1.1 * size,
+			cf * CFrame.new(side * 0.32 * size, 0.18 * size, 0) * facing,
+			color,
+			NEON,
+			{
+				CastShadow = false,
+			}
+		)
+	end
+	Kit.Decor(
+		parent,
+		"HeartTip",
+		Vector3.new(0.95 * size, 0.95 * size, depth),
+		cf * CFrame.new(0, -0.2 * size, 0) * CFrame.Angles(0, 0, math.rad(45)),
+		color,
+		NEON,
+		{ CastShadow = false }
+	)
+end
+
+local function buildCheerStand(plot: Model, at: At): Model
+	local stand = Kit.Model(plot, "CheerStand")
+	local x, z = 10.6, -10.8
+	Kit.Part(stand, "Post", Vector3.new(0.35, 3.4, 0.35), at(x, 1.7, z), P.DarkWood, WOOD)
+	Kit.Decor(stand, "Foot", Vector3.new(1.2, 0.25, 1.2), at(x, 0.125, z), P.DarkWood, WOOD)
+	local board = Kit.Decor(stand, "CountBoard", Vector3.new(2.4, 0.9, 0.2), at(x, 2.1, z - 0.25), P.LightWood, WOOD)
+	local label = Kit.SurfaceText(board, Enum.NormalId.Front, "0 cheers", P.TextDark, 60)
+	label.Name = "CountLabel"
+	heart(stand, at(x, 3.95, z), 1.1, P.Heart)
+	-- hearts burst out of here (the server switches the emitter on for a moment)
+	local burst = Kit.Decor(stand, "Burst", Vector3.new(1, 1, 1), at(x, 3.95, z), P.Heart, nil, {
+		Transparency = 1,
+		CastShadow = false,
+	})
+	local hearts = Kit.Sparkles(burst, P.Heart, 45, "Hearts")
+	hearts.Enabled = false
+	hearts.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.2),
+		NumberSequenceKeypoint.new(0.4, 0.55),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	hearts.Speed = NumberRange.new(5, 9)
+	hearts.SpreadAngle = Vector2.new(40, 40)
+	hearts.EmissionDirection = Enum.NormalId.Top
+	hearts.Acceleration = Vector3.new(0, -6, 0)
+	hearts.Lifetime = NumberRange.new(0.9, 1.4)
+	local hitbox = Kit.Hitbox(stand, Vector3.new(2.6, 4.6, 2.6), at(x, 2.3, z))
+	local prompt = Kit.Prompt(hitbox, "CheerPrompt", "Cheer", "Shop")
+	prompt:SetAttribute("ForVisitors", true) -- clients show it on other players' shops only
+	return stand
 end
 
 ------------------------------------------------------------------
@@ -6932,6 +7077,8 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		Shelf3 = buildShelfLevel(plot, at, "Shelf3", 7.4, rng),
 	}
 
+	local cheerStand = buildCheerStand(plot, at)
+
 	-- Invisible markers
 	local counterFront = marker(plot, "CounterFront", at(0, 0, ShopBuilder.CounterFrontZ))
 	local spawnPoint = marker(plot, "SpawnPoint", at(0, 0, 7))
@@ -6948,6 +7095,7 @@ function ShopBuilder.BuildPlot(index: number, origin: CFrame, parent: Instance):
 		LotsFolder = lotsFolder,
 		Cauldron = cauldron,
 		Sign = sign,
+		CheerStand = cheerStand,
 		CounterFront = counterFront,
 		SpawnPoint = spawnPoint,
 		GoldParts = goldParts,
@@ -6960,6 +7108,465 @@ return ShopBuilder
         </Properties>
       </Item>
       <Item class="ModuleScript" referent="33">
+        <Properties>
+          <string name="Name">SocialService</string>
+          <string name="Source"><![CDATA[--!strict
+-- SocialService (ModuleScript) — ServerScriptService.Modules.SocialService
+-- What players see of each other: Coins and Sold in the player list (leaderstats),
+-- market news, cheering for someone else's shop, and the Market Stars board in the
+-- plaza. Nothing here can change anyone's coins.
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+local Modules = script.Parent
+local PlayerData = require(Modules:WaitForChild("PlayerData"))
+local Guard = require(Modules:WaitForChild("Guard"))
+local Net = require(Modules:WaitForChild("Net"))
+local PlotService = require(Modules:WaitForChild("PlotService"))
+
+type Plot = PlotService.Plot
+type Data = PlayerData.Data
+
+local P = Config.Palette
+local S = Config.Tuning.Social
+local FONT = Enum.Font.FredokaOne
+
+local SocialService = {}
+
+local cheered: { [Player]: { [number]: boolean } } = {} -- visitor -> owner user ids cheered this visit
+local lastNews: { [Player]: number } = {}
+local boardDirty = true
+
+------------------------------------------------------------------
+-- Player list
+------------------------------------------------------------------
+
+local function intValue(parent: Instance, name: string): IntValue
+	local existing = parent:FindFirstChild(name)
+	if existing and existing:IsA("IntValue") then
+		return existing
+	end
+	local value = Instance.new("IntValue")
+	value.Name = name
+	value.Parent = parent
+	return value
+end
+
+local function updateLeaderstats(player: Player, data: Data)
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		local newFolder = Instance.new("Folder")
+		newFolder.Name = "leaderstats"
+		intValue(newFolder, "Coins")
+		intValue(newFolder, "Sold")
+		newFolder.Parent = player
+		folder = newFolder
+	end
+	assert(folder, "leaderstats")
+	intValue(folder, "Coins").Value = data.Coins
+	intValue(folder, "Sold").Value = data.Stats.PotionsSold or 0
+end
+
+------------------------------------------------------------------
+-- Cheers
+------------------------------------------------------------------
+
+local function cheerText(count: number): string
+	return if count == 1 then "1 cheer" else `{Config.FormatNumber(count)} cheers`
+end
+
+local function setCheerCount(plot: Plot, count: number)
+	local label = plot.CheerStand:FindFirstChild("CountLabel", true)
+	if label and label:IsA("TextLabel") then
+		label.Text = cheerText(count)
+	end
+end
+
+local function setCheerPrompt(plot: Plot, ownerName: string?)
+	local prompt = plot.CheerStand:FindFirstChild("CheerPrompt", true)
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.ObjectText = if ownerName then `{ownerName}'s shop` else "Empty shop"
+	end
+end
+
+local function burstHearts(plot: Plot)
+	local hearts = plot.CheerStand:FindFirstChild("Hearts", true)
+	if hearts and hearts:IsA("ParticleEmitter") then
+		hearts.Enabled = true -- a property change reaches every client, so everyone sees the burst
+		task.delay(0.45, function()
+			hearts.Enabled = false
+		end)
+	end
+end
+
+local function onCheer(visitor: Player, plot: Plot)
+	local owner = PlotService.GetOwner(plot)
+	if not owner or owner == visitor then
+		return
+	end
+	if not Guard.Cooldown(visitor, "Cheer", S.CheerCooldown) then
+		return
+	end
+	local hitbox = plot.CheerStand:FindFirstChild("Hitbox")
+	if not Guard.Near(visitor, if hitbox and hitbox:IsA("BasePart") then hitbox else nil) then
+		return
+	end
+	local done = cheered[visitor]
+	if done and done[owner.UserId] then
+		Net.Notify(visitor, `You already cheered for {owner.DisplayName}'s shop!`)
+		return
+	end
+	local data = PlayerData.Get(owner)
+	if not data then
+		return
+	end
+
+	-- All checks passed.
+	if not done then
+		done = {}
+		cheered[visitor] = done
+	end
+	assert(done, "cheered")
+	done[owner.UserId] = true
+	PlayerData.AddStat(data, "Cheers", 1)
+	setCheerCount(plot, data.Stats.Cheers or 0)
+	burstHearts(plot)
+	PlayerData.Push(owner)
+	Net.Cue(owner, "Cheered", { From = visitor.DisplayName })
+	Net.Cue(visitor, "CheerSent", { To = owner.DisplayName })
+end
+
+------------------------------------------------------------------
+-- Market news
+------------------------------------------------------------------
+
+-- Tells everyone else in the market about something `player` did.
+function SocialService.Announce(player: Player, text: string)
+	local now = os.clock()
+	if now - (lastNews[player] or -math.huge) < S.NewsGap then
+		return
+	end
+	lastNews[player] = now
+	Net.NotifyOthers(player, text, "news")
+end
+
+------------------------------------------------------------------
+-- Market Stars board
+------------------------------------------------------------------
+
+type Row = {
+	Frame: Frame,
+	Badge: Frame,
+	Rank: TextLabel,
+	Name: TextLabel,
+	Coins: TextLabel,
+	Recipes: TextLabel,
+	Cheers: TextLabel,
+}
+
+-- The stat columns on each row: where they start and how wide they are (fractions of the board).
+local COLUMNS = {
+	{ X = 0.5, Width = 0.21, Heading = "coins earned" },
+	{ X = 0.72, Width = 0.14, Heading = "recipes" },
+	{ X = 0.87, Width = 0.13, Heading = "cheers" },
+}
+
+local rows: { Row } = {}
+local emptyLabel: TextLabel? = nil
+
+local function new(className: string, props: { [string]: any }): any
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+local function corner(parent: Instance, scale: number)
+	new("UICorner", { CornerRadius = UDim.new(scale, 0), Parent = parent })
+end
+
+local function text(parent: Instance, props: { [string]: any }): TextLabel
+	props.BackgroundTransparency = 1
+	props.Font = FONT
+	props.TextScaled = true
+	props.TextColor3 = props.TextColor3 or P.TextDark
+	props.Parent = parent
+	return new("TextLabel", props)
+end
+
+-- A small icon + number column in a row, starting `x` (scale) across, `width` wide.
+local function stat(parent: Instance, name: string, x: number, width: number, icon: Color3, round: boolean): TextLabel
+	local dot = new("Frame", {
+		Name = name .. "Icon",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.fromScale(x, 0.5),
+		Size = UDim2.fromOffset(18, 18),
+		BackgroundColor3 = icon,
+		BorderSizePixel = 0,
+		Parent = parent,
+	})
+	corner(dot, if round then 0.5 else 0.25)
+	return text(parent, {
+		Name = name .. "Value",
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(x, 24, 0.5, 0),
+		Size = UDim2.new(width, -24, 0.62, 0),
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+end
+
+local function buildBoard(board: BasePart)
+	local gui = new("SurfaceGui", {
+		Name = "StarsGui",
+		Face = Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = 50,
+		LightInfluence = 0,
+		Parent = board,
+	})
+	local page = new("Frame", {
+		Name = "Page",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = P.PanelLight,
+		BorderSizePixel = 0,
+		Parent = gui,
+	})
+	new("UIPadding", {
+		PaddingLeft = UDim.new(0, 18),
+		PaddingRight = UDim.new(0, 18),
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 12),
+		Parent = page,
+	})
+	local title = new("Frame", {
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 58),
+		BackgroundColor3 = P.PanelDark,
+		BorderSizePixel = 0,
+		Parent = page,
+	})
+	corner(title, 0.3)
+	text(title, {
+		Name = "Label",
+		Size = UDim2.fromScale(1, 0.78),
+		Position = UDim2.fromScale(0, 0.11),
+		Text = "Market Stars",
+		TextColor3 = P.Gold,
+	})
+	-- column headings
+	local heading = new("Frame", {
+		Name = "Heading",
+		Position = UDim2.fromOffset(0, 64),
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Parent = page,
+	})
+	for _, column in COLUMNS do
+		local label = text(heading, {
+			Position = UDim2.fromScale(column.X, 0),
+			Size = UDim2.fromScale(column.Width, 1),
+			Text = column.Heading,
+			TextColor3 = P.TextMuted,
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		label.TextScaled = false
+		label.TextSize = 15
+	end
+	local list = new("Frame", {
+		Name = "Rows",
+		Position = UDim2.fromOffset(0, 88),
+		Size = UDim2.new(1, 0, 1, -114),
+		BackgroundTransparency = 1,
+		Parent = page,
+	})
+	new("UIListLayout", {
+		Padding = UDim.new(0, 5),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = list,
+	})
+	for i = 1, Config.World.PlotCount do
+		local frame = new("Frame", {
+			Name = `Row{i}`,
+			LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 37),
+			BackgroundColor3 = if i % 2 == 1 then P.PanelCream else P.PanelLight,
+			BorderSizePixel = 0,
+			Visible = false,
+			Parent = list,
+		})
+		corner(frame, 0.3)
+		local medal = P.Medals[i]
+		local badge = new("Frame", {
+			Name = "Badge",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 4, 0.5, 0),
+			Size = UDim2.fromOffset(31, 31),
+			BackgroundColor3 = medal or P.PanelMid,
+			BorderSizePixel = 0,
+			Parent = frame,
+		})
+		corner(badge, 0.5)
+		local rank = text(badge, {
+			Name = "Rank",
+			Size = UDim2.fromScale(1, 0.72),
+			Position = UDim2.fromScale(0, 0.14),
+			Text = tostring(i),
+			TextColor3 = if medal then P.TextDark else P.TextLight,
+		})
+		local name = text(frame, {
+			Name = "PlayerName",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 44, 0.5, 0),
+			Size = UDim2.new(COLUMNS[1].X, -50, 0.66, 0),
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		table.insert(rows, {
+			Frame = frame,
+			Badge = badge,
+			Rank = rank,
+			Name = name,
+			Coins = stat(frame, "Coins", COLUMNS[1].X, COLUMNS[1].Width, P.Gold, true),
+			Recipes = stat(frame, "Recipes", COLUMNS[2].X, COLUMNS[2].Width, P.Bottles[5], false),
+			Cheers = stat(frame, "Cheers", COLUMNS[3].X, COLUMNS[3].Width, P.Heart, true),
+		})
+	end
+	local tip = text(page, {
+		Name = "Tip",
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.fromScale(0.5, 1),
+		Size = UDim2.new(1, 0, 0, 22),
+		Text = "Visit a friend's shop and press the pink heart to cheer!",
+		TextColor3 = P.TextMuted,
+	})
+	tip.TextScaled = false
+	tip.TextSize = 17
+	emptyLabel = text(list, {
+		Name = "Empty",
+		LayoutOrder = 99,
+		Size = UDim2.new(1, 0, 0, 34),
+		Text = "Open a shop to be a star!",
+		TextColor3 = P.TextMuted,
+	})
+end
+
+type Entry = { Name: string, Earned: number, Recipes: number, Cheers: number }
+
+local function redrawBoard()
+	local entries: { Entry } = {}
+	for _, plot in PlotService.GetPlots() do
+		local owner = PlotService.GetOwner(plot)
+		local data = if owner then PlayerData.Get(owner) else nil
+		if owner and data then
+			local recipes = 0
+			for _ in data.Discovered do
+				recipes += 1
+			end
+			table.insert(entries, {
+				Name = owner.DisplayName,
+				Earned = data.Stats.CoinsEarned or 0,
+				Recipes = recipes,
+				Cheers = data.Stats.Cheers or 0,
+			})
+		end
+	end
+	table.sort(entries, function(a, b)
+		if a.Earned ~= b.Earned then
+			return a.Earned > b.Earned
+		end
+		return a.Name < b.Name
+	end)
+	local total = #Config.RecipeOrder
+	for i, row in rows do
+		local entry = entries[i]
+		row.Frame.Visible = entry ~= nil
+		if entry then
+			row.Name.Text = entry.Name
+			row.Coins.Text = Config.FormatNumber(entry.Earned)
+			row.Recipes.Text = `{entry.Recipes}/{total}`
+			row.Cheers.Text = Config.FormatNumber(entry.Cheers)
+		end
+	end
+	local empty = emptyLabel
+	if empty then
+		empty.Visible = #entries == 0
+	end
+end
+
+------------------------------------------------------------------
+-- Lifecycle
+------------------------------------------------------------------
+
+function SocialService.Init(plots: { Plot })
+	for _, plot in plots do
+		setCheerCount(plot, 0)
+		setCheerPrompt(plot, nil)
+		local prompt = plot.CheerStand:FindFirstChild("CheerPrompt", true)
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Triggered:Connect(function(player)
+				onCheer(player, plot)
+			end)
+		end
+	end
+	buildBoard(PlotService.GetMarket().Board)
+	redrawBoard()
+	task.spawn(function()
+		while true do
+			task.wait(S.BoardRefreshSeconds)
+			if boardDirty then
+				boardDirty = false
+				local ok, err = pcall(function(): any
+					redrawBoard()
+					return nil
+				end)
+				if not ok then
+					warn("[SocialService] board redraw failed:", err)
+				end
+			end
+		end
+	end)
+end
+
+-- After the player's data loaded and they got a shop (plot may be nil if the market is full).
+function SocialService.PlayerJoined(player: Player, data: Data, plot: Plot?)
+	updateLeaderstats(player, data)
+	if plot then
+		setCheerCount(plot, data.Stats.Cheers or 0)
+		setCheerPrompt(plot, player.DisplayName)
+	end
+	boardDirty = true
+end
+
+-- Every time the player's data changes.
+function SocialService.Update(player: Player, data: Data)
+	updateLeaderstats(player, data)
+	boardDirty = true
+end
+
+-- Before the player's shop is released.
+function SocialService.PlayerLeft(player: Player, plot: Plot?)
+	if plot then
+		setCheerCount(plot, 0)
+		setCheerPrompt(plot, nil)
+	end
+	cheered[player] = nil
+	lastNews[player] = nil
+	boardDirty = true
+end
+
+-- For tests: redraw the board right now.
+function SocialService.RedrawBoard()
+	boardDirty = false
+	redrawBoard()
+end
+
+return SocialService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">UpgradeService</string>
           <string name="Source"><![CDATA[--!strict
@@ -6975,6 +7582,7 @@ local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 type Plot = PlotService.Plot
 
@@ -7028,6 +7636,9 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	end
 	PlayerData.Push(player)
 	Net.Cue(player, "Upgrade", { Upgrade = id, Level = level + 1 }) -- the client celebrates
+	if upgrade.Announce then
+		SocialService.Announce(player, `{player.DisplayName} {upgrade.Announce}!`)
+	end
 end
 
 function UpgradeService.Init(plots: { Plot })
@@ -7052,7 +7663,7 @@ return UpgradeService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">WorldService</string>
           <string name="Source"><![CDATA[--!strict
@@ -7152,15 +7763,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="35">
+  <Item class="StarterPlayer" referent="36">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="36">
+    <Item class="StarterPlayerScripts" referent="37">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="37">
+      <Item class="LocalScript" referent="38">
         <Properties>
           <string name="Name">ClientMain</string>
           <string name="Source"><![CDATA[--!strict
@@ -7277,7 +7888,8 @@ CauldronMenu.OnBrew = function(recipeId)
 end
 
 ------------------------------------------------------------------
--- Prompts: only YOUR shop's prompts show, all in the game's own style
+-- Prompts: YOUR shop's prompts show, plus the Cheer stand on other players'
+-- shops (prompts marked ForVisitors), all in the game's own style
 ------------------------------------------------------------------
 local function findPlot(inst: Instance): Instance?
 	local node = inst.Parent
@@ -7293,7 +7905,12 @@ end
 local function refreshPrompt(prompt: ProximityPrompt)
 	local plot = findPlot(prompt)
 	if plot then
-		prompt.Enabled = plot:GetAttribute("OwnerUserId") == player.UserId
+		local owner = plot:GetAttribute("OwnerUserId")
+		if prompt:GetAttribute("ForVisitors") then
+			prompt.Enabled = typeof(owner) == "number" and owner ~= 0 and owner ~= player.UserId
+		else
+			prompt.Enabled = owner == player.UserId
+		end
 	end
 end
 
@@ -7592,6 +8209,8 @@ Notify.OnClientEvent:Connect(function(text, kind)
 	Hud.Toast(text, k)
 	if k == "bad" then
 		Sfx.Play("Error")
+	elseif k == "news" then
+		Sfx.Play("News")
 	end
 end)
 
@@ -7628,6 +8247,12 @@ Cue.OnClientEvent:Connect(function(cue, data)
 			local text = if data.Vip then `VIP! +{data.Amount}` else `+{data.Amount}`
 			Popups.Show(data.Position + Vector3.new(0, 3, 0), text, P.Gold, true)
 		end
+	elseif cue == "Cheered" then
+		Sfx.Play("Cheer")
+		Hud.Toast(`{tostring(data.From)} cheered for your shop!`, "heart")
+	elseif cue == "CheerSent" then
+		Sfx.Play("Cheer", 1.15)
+		Hud.Toast(`You cheered for {tostring(data.To)}'s shop!`, "heart")
 	elseif cue == "Upgrade" then
 		Sfx.Play("Upgrade")
 		local upgrade = Config.Upgrades[data.Upgrade]
@@ -7665,7 +8290,7 @@ task.spawn(function()
 end)
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">Ambience</string>
             <string name="Source"><![CDATA[--!strict
@@ -7740,7 +8365,7 @@ return Ambience
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">CauldronFx</string>
             <string name="Source"><![CDATA[--!strict
@@ -7869,7 +8494,7 @@ return CauldronFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">CauldronMenu</string>
             <string name="Source"><![CDATA[--!strict
@@ -8129,7 +8754,7 @@ return CauldronMenu
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">CustomerAnimator</string>
             <string name="Source"><![CDATA[--!strict
@@ -8320,7 +8945,7 @@ return CustomerAnimator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -8405,7 +9030,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -8839,6 +9464,8 @@ function Hud.Toast(text: string, kind: string?)
 	local color = if kind == "good"
 		then P.ButtonDark
 		elseif kind == "bad" then Color3.fromRGB(190, 60, 70)
+		elseif kind == "news" then P.News
+		elseif kind == "heart" then P.Heart
 		else P.PanelDark
 	local toasts = {}
 	for _, child in toastList:GetChildren() do
@@ -8911,7 +9538,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -8971,7 +9598,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -9215,7 +9842,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -9430,7 +10057,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -9655,7 +10282,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -9993,7 +10620,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -10202,7 +10829,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="50">
+  <Item class="Workspace" referent="51">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

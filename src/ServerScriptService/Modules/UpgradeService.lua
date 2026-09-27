@@ -11,6 +11,7 @@ local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local IngredientService = require(Modules:WaitForChild("IngredientService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
+local SocialService = require(Modules:WaitForChild("SocialService"))
 
 type Plot = PlotService.Plot
 
@@ -64,6 +65,9 @@ function UpgradeService.Purchase(player: Player, upgradeId: unknown)
 	end
 	PlayerData.Push(player)
 	Net.Cue(player, "Upgrade", { Upgrade = id, Level = level + 1 }) -- the client celebrates
+	if upgrade.Announce then
+		SocialService.Announce(player, `{player.DisplayName} {upgrade.Announce}!`)
+	end
 end
 
 function UpgradeService.Init(plots: { Plot })

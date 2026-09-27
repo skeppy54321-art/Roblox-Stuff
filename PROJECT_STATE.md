@@ -12,6 +12,8 @@ This file is the source of truth for the project (the old chats weren't reachabl
 | Milestone 2: recipes, cauldron menu, effects | Written. **Not yet played in Studio** |
 | Milestone 3: saving (ProfileStore) | Written. **Not yet played in Studio** |
 | Cozy magic market look | Written. **Not yet played in Studio** |
+| Sounds + music | 4 real audio ids from Roblox's tutorials, built-in fallbacks. **Not yet heard** |
+| Social: leaderstats, market news, cheers, Market Stars board | Written. **Not yet played in Studio** |
 | Static checks | **Pass**: luau-lsp strict with Roblox API types, selene, StyLua, script-security scan against the API dump |
 | Place file | `build/BrewAPotion.rbxlx` (built by Rojo from `src/`) |
 | Saving | ProfileStore. Real saves only in a published place with API access on (see below) |
@@ -42,7 +44,8 @@ ReplicatedStorage
 ServerScriptService
   Main (Script)
   Modules (Folder): Net, PlayerData, ProfileStore, Guard, Kit, ShopBuilder, CustomerBuilder, MarketBuilder,
-                    WorldService, PlotService, IngredientService, BrewService, CustomerService, UpgradeService
+                    WorldService, PlotService, IngredientService, BrewService, CustomerService, UpgradeService,
+                    SocialService
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
     children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
@@ -96,6 +99,12 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 * Bouncing gold arrow over the next thing to do, for your first 8 sales.
 * Keys: U upgrades, R recipes, M mute, 1-9 brew, Esc close.
 
+**Social** (see `design/features/social.md`)
+* Player list shows everyone's **Coins** and **Sold**.
+* **Market news:** when someone discovers a recipe or buys a big upgrade (Starflower Bed, Second Counter Spot, Frost Grotto), everyone else gets a violet toast.
+* **Cheer stand:** a pink heart at the front of every shop. At someone else's shop, press it to cheer: hearts burst out for everyone, the owner gets a pink toast, and the shop's cheer count goes up (saved). One cheer per shop per visit. No coins involved.
+* **Market Stars board** in the plaza (across from the welcome sign): everyone in the server ranked by coins earned, with recipes found and cheers.
+
 **Saving** (Milestone 3)
 * ProfileStore: session locking (no duping across servers), autosave, final save on leave and on shutdown.
 * Versioned data (`SchemaVersion`), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
@@ -113,7 +122,7 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 7. Buy the Starflower Bed from its "for sale" sign in your shop: the sign disappears and starflowers appear. Floaty and Twirly show up in the menu.
 8. **Timing:** first sale should come within 60–90 seconds.
 9. **Spam test:** mash E on a customer with 1 potion. It must sell only once.
-10. **Test tab > Clients and Servers > 2 players.** Each gets their own shop. You can't use the other shop's prompts, but you can see their customers walk and react.
+10. **Test tab > Clients and Servers > 2 players.** Each gets their own shop. You can't use the other shop's prompts, but you can see their customers walk and react. Walk to the other shop's pink heart and press **Cheer**: hearts burst, the other window gets a pink toast, the count on the stand goes up. Pressing again says you already cheered. The Market Stars board lists both players; the player list shows Coins and Sold.
 11. **Test tab > Device > a phone.** Everything readable and tappable; the cauldron menu and buttons don't sit under the joystick or jump button. Tap a prompt to use it.
 12. **Saving** (published place + API access on): earn coins, stop, play again. Coins, potions, upgrades and discovered recipes come back.
 13. **Leave mid-brew**, rejoin: you have the potion.

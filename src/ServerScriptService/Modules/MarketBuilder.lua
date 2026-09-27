@@ -25,6 +25,7 @@ export type MarketParts = {
 	Model: Model,
 	Spawn: SpawnLocation,
 	Statue: BasePart, -- the giant glowing potion on the fountain (clients cycle its color)
+	Board: BasePart, -- the Market Stars board (SocialService draws on its front)
 }
 
 local function flat(
@@ -527,6 +528,40 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	Kit.SurfaceText(board, Enum.NormalId.Front, "Potion Market", P.Gold, 40)
 	Kit.SurfaceText(board, Enum.NormalId.Back, "Potion Market", P.Gold, 40)
 
+	-- Market Stars board, across the plaza from the welcome sign
+	local boardAngle = plotAngle(1) + math.pi / W.PlotCount
+	local boardCf = CFrame.lookAt(polar(boardAngle, 24, 0.3), Vector3.new(0, 0.3, 0))
+	local stars = Kit.Model(market, "MarketStars")
+	for _, x in { -5.9, 5.9 } do
+		Kit.Part(stars, "BoardPost", Vector3.new(0.7, 10.2, 0.7), boardCf * CFrame.new(x, 5.1, 0.1), P.DarkWood, WOOD)
+		Kit.Lantern(stars, (boardCf * CFrame.new(x, 9.9, -0.9)).Position, 0.8, 14)
+	end
+	Kit.Decor(stars, "BoardFrame", Vector3.new(11.8, 8, 0.4), boardCf * CFrame.new(0, 5.6, 0.15), P.DarkWood, WOOD)
+	local starsBoard = Kit.Part(
+		stars,
+		"StarsBoard",
+		Vector3.new(11, 7.2, 0.3),
+		boardCf * CFrame.new(0, 5.6, 0),
+		P.PanelLight,
+		Enum.Material.SmoothPlastic
+	)
+	Kit.Decor(
+		stars,
+		"BoardRoof",
+		Vector3.new(13, 0.35, 2.2),
+		boardCf * CFrame.new(0, 10.1, -0.2) * CFrame.Angles(math.rad(-12), 0, 0),
+		P.Roof,
+		Enum.Material.ClayRoofTiles
+	)
+	Kit.Decor(
+		stars,
+		"BoardArm",
+		Vector3.new(12.6, 0.3, 0.3),
+		boardCf * CFrame.new(0, 9.75, -0.9),
+		P.Metal,
+		Enum.Material.Metal
+	)
+
 	-- fireflies drifting over the plaza
 	local fireflyBox = Kit.Decor(
 		market,
@@ -575,7 +610,7 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	spawn.Parent = workspace
 
 	market.Parent = parent
-	return { Model = market, Spawn = spawn, Statue = statue }
+	return { Model = market, Spawn = spawn, Statue = statue, Board = starsBoard }
 end
 
 return MarketBuilder
