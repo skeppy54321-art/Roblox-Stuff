@@ -126,7 +126,7 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 
 ## Test checklist
 
-1. **Play solo.** Output: `[Brew a Potion] Server started` and a ProfileStore line. You appear in your shop facing the counter; the sign shows your name.
+1. **Play solo.** Output: `[Brew a Potion] Server started` and a ProfileStore line. You appear in your shop facing the purple Moonberry bush (after your first sale you'll face the counter instead), and the camera is behind you; the sign shows your name.
 2. The goal banner and gold arrow point at the purple bush. Collect a Moonberry, then a Glowshroom: "+1" popups, counts go up in the basket, berries/caps disappear and regrow.
 3. Stand at the cauldron: the menu pops up at the bottom. Tap Giant Head (or press E). The liquid turns pink, the bar fills. Press E again to stir: the bar jumps, bubbles splash.
 4. "NEW RECIPE!" banner and +10 bonus coins. A pink bottle jumps out of the cauldron and sparkles away; a pink bottle now stands on your counter. The first customer walks in from the plaza asking for a Giant Head Potion.

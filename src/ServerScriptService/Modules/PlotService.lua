@@ -170,8 +170,9 @@ function PlotService.ShowStock(plot: Plot, potions: { [string]: number }?)
 	end
 end
 
--- Moves the character into the player's shop, facing the counter.
-function PlotService.MoveToPlot(player: Player, character: Model)
+-- Moves the character into the player's shop, facing the counter (or `face`, a point to
+-- look at: new players face their first job, the Moonberry bush).
+function PlotService.MoveToPlot(player: Player, character: Model, face: Vector3?)
 	local plot = plotByPlayer[player]
 	if not plot then
 		return
@@ -179,7 +180,12 @@ function PlotService.MoveToPlot(player: Player, character: Model)
 	character:WaitForChild("HumanoidRootPart", 5)
 	task.wait(0.1) -- let the default spawn finish first
 	if character.Parent and plotByPlayer[player] == plot then
-		character:PivotTo(plot.SpawnPoint.CFrame + Vector3.new(0, 3, 0))
+		local at = plot.SpawnPoint.Position + Vector3.new(0, 3, 0)
+		local target = if face then Vector3.new(face.X, at.Y, face.Z) else nil
+		local pivot = if target and (target - at).Magnitude > 0.5
+			then CFrame.lookAt(at, target)
+			else plot.SpawnPoint.CFrame + Vector3.new(0, 3, 0)
+		character:PivotTo(pivot)
 	end
 end
 

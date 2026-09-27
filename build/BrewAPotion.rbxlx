@@ -2341,11 +2341,21 @@ local function onPlayerAdded(player: Player)
 
 	SocialService.PlayerJoined(player, data, plot)
 
+	-- new players face their first job (the Moonberry bush); everyone else faces the counter
+	local function facing(): Vector3?
+		local now = PlayerData.Get(player)
+		local bush = if plot then plot.Sources.Moonberry else nil
+		local hitbox = if bush then bush:FindFirstChild("Hitbox") else nil
+		if now and (now.Stats.PotionsSold or 0) == 0 and hitbox and hitbox:IsA("BasePart") then
+			return hitbox.Position
+		end
+		return nil
+	end
 	player.CharacterAdded:Connect(function(character)
-		PlotService.MoveToPlot(player, character)
+		PlotService.MoveToPlot(player, character, facing())
 	end)
 	if player.Character then
-		task.spawn(PlotService.MoveToPlot, player, player.Character)
+		task.spawn(PlotService.MoveToPlot, player, player.Character, facing())
 	end
 	PlayerData.Push(player)
 end
@@ -5045,8 +5055,9 @@ function PlotService.ShowStock(plot: Plot, potions: { [string]: number }?)
 	end
 end
 
--- Moves the character into the player's shop, facing the counter.
-function PlotService.MoveToPlot(player: Player, character: Model)
+-- Moves the character into the player's shop, facing the counter (or `face`, a point to
+-- look at: new players face their first job, the Moonberry bush).
+function PlotService.MoveToPlot(player: Player, character: Model, face: Vector3?)
 	local plot = plotByPlayer[player]
 	if not plot then
 		return
@@ -5054,7 +5065,12 @@ function PlotService.MoveToPlot(player: Player, character: Model)
 	character:WaitForChild("HumanoidRootPart", 5)
 	task.wait(0.1) -- let the default spawn finish first
 	if character.Parent and plotByPlayer[player] == plot then
-		character:PivotTo(plot.SpawnPoint.CFrame + Vector3.new(0, 3, 0))
+		local at = plot.SpawnPoint.Position + Vector3.new(0, 3, 0)
+		local target = if face then Vector3.new(face.X, at.Y, face.Z) else nil
+		local pivot = if target and (target - at).Magnitude > 0.5
+			then CFrame.lookAt(at, target)
+			else plot.SpawnPoint.CFrame + Vector3.new(0, 3, 0)
+		character:PivotTo(pivot)
 	end
 end
 
@@ -9251,6 +9267,38 @@ local function sourcePart(ingredientId: string): BasePart?
 	local plot = myPlot()
 	local sources = plot and plot:FindFirstChild("Sources")
 	return hitboxOf(sources and sources:FindFirstChild(ingredientId))
+end
+
+------------------------------------------------------------------
+-- Camera: once the server has moved you into your shop, look the way you're facing
+-- (you'd otherwise keep the view from the plaza spawn, maybe facing a wall)
+------------------------------------------------------------------
+local function settleCamera(character: Model)
+	local rootPart = character:WaitForChild("HumanoidRootPart", 10)
+	if not rootPart or not rootPart:IsA("BasePart") then
+		return
+	end
+	local deadline = os.clock() + 10
+	while os.clock() < deadline and character.Parent do
+		local plot = myPlot()
+		local spawnPoint = if plot then plot:FindFirstChild("SpawnPoint") else nil
+		if spawnPoint and spawnPoint:IsA("BasePart") and (rootPart.Position - spawnPoint.Position).Magnitude < 8 then
+			local camera = workspace.CurrentCamera
+			local look = Vector3.new(rootPart.CFrame.LookVector.X, 0, rootPart.CFrame.LookVector.Z)
+			if camera and look.Magnitude > 0.01 then
+				local focus = rootPart.Position + Vector3.new(0, 1.5, 0)
+				camera.CFrame = CFrame.lookAt(focus - look.Unit * 12 + Vector3.new(0, 5, 0), focus + look.Unit * 3)
+			end
+			return
+		end
+		task.wait(0.1)
+	end
+end
+player.CharacterAdded:Connect(function(character)
+	task.spawn(settleCamera, character)
+end)
+if player.Character then
+	task.spawn(settleCamera, player.Character)
 end
 
 -- Returns the goal text, and optionally a part to point the arrow at with a short label.

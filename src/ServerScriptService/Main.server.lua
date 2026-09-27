@@ -67,11 +67,21 @@ local function onPlayerAdded(player: Player)
 
 	SocialService.PlayerJoined(player, data, plot)
 
+	-- new players face their first job (the Moonberry bush); everyone else faces the counter
+	local function facing(): Vector3?
+		local now = PlayerData.Get(player)
+		local bush = if plot then plot.Sources.Moonberry else nil
+		local hitbox = if bush then bush:FindFirstChild("Hitbox") else nil
+		if now and (now.Stats.PotionsSold or 0) == 0 and hitbox and hitbox:IsA("BasePart") then
+			return hitbox.Position
+		end
+		return nil
+	end
 	player.CharacterAdded:Connect(function(character)
-		PlotService.MoveToPlot(player, character)
+		PlotService.MoveToPlot(player, character, facing())
 	end)
 	if player.Character then
-		task.spawn(PlotService.MoveToPlot, player, player.Character)
+		task.spawn(PlotService.MoveToPlot, player, player.Character, facing())
 	end
 	PlayerData.Push(player)
 end

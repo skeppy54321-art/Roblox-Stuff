@@ -180,6 +180,14 @@ otherPlot:SetAttribute("OwnerUserId", 0)
 Engine.signal(otherPlot, "Attr:OwnerUserId"):Fire()
 check("cheer prompt hides when they leave", otherPlot.CheerStand.Hitbox.CheerPrompt.Enabled == false)
 
+print("== first look ==")
+local rootLook = root.CFrame.LookVector
+local bushDir = (plot.Sources.Moonberry.Hitbox.CFrame.Position - root.CFrame.Position)
+bushDir = Vector3.new(bushDir.X, 0, bushDir.Z).Unit
+check("a new player faces the Moonberry bush", Vector3.new(rootLook.X, 0, rootLook.Z).Unit:Dot(bushDir) > 0.95, rootLook)
+local camLook = workspace.CurrentCamera.CFrame.LookVector
+check("the camera looks the same way", Vector3.new(camLook.X, 0, camLook.Z).Unit:Dot(bushDir) > 0.9, camLook)
+
 print("== townsfolk ==")
 local folkFolder = workspace.Market.Town.Townsfolk
 local villagers = folkFolder:GetChildren()

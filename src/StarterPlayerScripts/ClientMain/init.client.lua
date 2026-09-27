@@ -291,6 +291,38 @@ local function sourcePart(ingredientId: string): BasePart?
 	return hitboxOf(sources and sources:FindFirstChild(ingredientId))
 end
 
+------------------------------------------------------------------
+-- Camera: once the server has moved you into your shop, look the way you're facing
+-- (you'd otherwise keep the view from the plaza spawn, maybe facing a wall)
+------------------------------------------------------------------
+local function settleCamera(character: Model)
+	local rootPart = character:WaitForChild("HumanoidRootPart", 10)
+	if not rootPart or not rootPart:IsA("BasePart") then
+		return
+	end
+	local deadline = os.clock() + 10
+	while os.clock() < deadline and character.Parent do
+		local plot = myPlot()
+		local spawnPoint = if plot then plot:FindFirstChild("SpawnPoint") else nil
+		if spawnPoint and spawnPoint:IsA("BasePart") and (rootPart.Position - spawnPoint.Position).Magnitude < 8 then
+			local camera = workspace.CurrentCamera
+			local look = Vector3.new(rootPart.CFrame.LookVector.X, 0, rootPart.CFrame.LookVector.Z)
+			if camera and look.Magnitude > 0.01 then
+				local focus = rootPart.Position + Vector3.new(0, 1.5, 0)
+				camera.CFrame = CFrame.lookAt(focus - look.Unit * 12 + Vector3.new(0, 5, 0), focus + look.Unit * 3)
+			end
+			return
+		end
+		task.wait(0.1)
+	end
+end
+player.CharacterAdded:Connect(function(character)
+	task.spawn(settleCamera, character)
+end)
+if player.Character then
+	task.spawn(settleCamera, player.Character)
+end
+
 -- Returns the goal text, and optionally a part to point the arrow at with a short label.
 local function nextGoal(): (string, BasePart?, string?)
 	local s = state
