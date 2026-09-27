@@ -20,6 +20,7 @@ Hud.OnUpgradesPressed = nil :: (() -> ())?
 Hud.OnRecipesPressed = nil :: (() -> ())?
 Hud.OnMutePressed = nil :: (() -> ())?
 Hud.OnGiftPressed = nil :: (() -> ())?
+Hud.OnQuestsPressed = nil :: (() -> ())?
 Hud.OnStudioCoins = nil :: (() -> ())?
 
 local root: Frame
@@ -44,6 +45,8 @@ local muteFace: TextButton
 local giftHolder: Frame
 local giftFace: TextButton
 local giftBadge: Frame
+local questsHolder: Frame
+local questsBadge: Frame
 local toastList: Frame
 local celebration: Frame
 
@@ -286,8 +289,8 @@ function Hud.Init(parent: Frame)
 	local column = Ui.new("Frame", {
 		Name = "SideButtons",
 		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -22, 0.42, 0),
-		Size = UDim2.fromOffset(156, 266),
+		Position = UDim2.new(1, -22, 0.45, 0), -- (clear of the top bar and the jump button)
+		Size = UDim2.fromOffset(156, 312),
 		BackgroundTransparency = 1,
 		Parent = root,
 	}, {
@@ -345,16 +348,33 @@ function Hud.Init(parent: Frame)
 			Hud.OnRecipesPressed()
 		end
 	end)
+	local quests, questsFace = Ui.button({
+		Name = "QuestsButton",
+		Text = "QUESTS",
+		Color = Color3.fromRGB(240, 130, 60),
+		Shade = Color3.fromRGB(180, 85, 35),
+		Size = UDim2.fromOffset(156, 56),
+		Parent = column,
+	})
+	quests.LayoutOrder = 3
+	quests.Visible = false -- until the daily quests start (after the tutorial)
+	questsHolder = quests
+	questsBadge = badge(quests, "3", P.Danger)
+	questsFace.Activated:Connect(function()
+		if Hud.OnQuestsPressed then
+			Hud.OnQuestsPressed()
+		end
+	end)
 	local mute, face = Ui.button({
 		Name = "MuteButton",
 		Text = "SOUND ON",
 		Color = P.ButtonOff,
 		Shade = P.ButtonOffDark,
-		Size = UDim2.fromOffset(120, 52),
-		TextSize = 18,
+		Size = UDim2.fromOffset(120, 44),
+		TextSize = 16,
 		Parent = column,
 	})
-	mute.LayoutOrder = 3
+	mute.LayoutOrder = 4
 	muteFace = face
 	muteFace.Activated:Connect(function()
 		if Hud.OnMutePressed then
@@ -596,6 +616,16 @@ function Hud.SetGift(ready: boolean, label: string)
 		if ready then P.Gold else P.ButtonOff,
 		if ready then Color3.fromRGB(190, 140, 30) else P.ButtonOffDark
 	)
+end
+
+-- The quests button: shown once there are daily quests; the badge counts the ones left.
+function Hud.SetQuests(visible: boolean, left: number)
+	questsHolder.Visible = visible
+	questsBadge.Visible = visible and left > 0
+	local label = questsBadge:FindFirstChildOfClass("TextLabel")
+	if label then
+		label.Text = tostring(left)
+	end
 end
 
 function Hud.SetMuted(muted: boolean)

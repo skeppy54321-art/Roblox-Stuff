@@ -13,6 +13,7 @@ local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
+local QuestService = require(Modules:WaitForChild("QuestService"))
 
 type Plot = PlotService.Plot
 type Data = PlayerData.Data
@@ -131,6 +132,7 @@ local function finish(player: Player, brew: Brew, quiet: boolean)
 	if quiet then
 		return
 	end
+	QuestService.Progress(player, "Brew", 1)
 	PlayerData.Push(player)
 	if isNew then
 		Net.Cue(player, "Discover", { Recipe = brew.Recipe, Bonus = bonus }) -- the client celebrates

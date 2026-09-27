@@ -580,6 +580,58 @@ local counting = waitFor(3, function()
 end)
 check("gift button counts down to the next one", counting, giftFace.Text)
 
+print("== daily quests ==")
+do
+	local questsButton = find(uiRoot, "SideButtons.QuestsButton")
+	check("no quests during the tutorial", questsButton and not questsButton.Visible)
+	local QuestService = Engine.loaded(modulesFolder.QuestService)
+	data.Stats.PotionsSold = math.max(data.Stats.PotionsSold or 0, 8)
+	data.Quests = { Day = 0, List = {} }
+	QuestService.Ensure(player, data)
+	PlayerData.Push(player)
+	local shown = waitFor(3, function()
+		return questsButton.Visible and questsButton.Badge.Visible and questsButton.Badge:FindFirstChildOfClass("TextLabel").Text == "3"
+	end)
+	check("quests button with 3 to do", shown)
+	Engine.signal(questsButton.Face, "Activated"):Fire()
+	local panel = uiRoot:FindFirstChild("QuestsPanel")
+	local rowsShown = panel and waitFor(2, function()
+		return panel.Visible and panel.Body.List:FindFirstChild("Quest3") ~= nil
+	end)
+	check("quests panel lists them", rowsShown)
+	local first = panel and panel.Body.List:FindFirstChild("Quest1")
+	check("...with words, progress and coins", first and first.Title.Text ~= "" and first.Bar.Count.Text == `0/{data.Quests.List[1].Need}` and first.Reward.Amount.Text:sub(1, 1) == "+", first and first.Title.Text)
+	check("...and when the next ones come", panel and panel.Body.Footer.Text:find("New quests in") ~= nil, panel and panel.Body.Footer.Text)
+	-- finish the first one
+	local quest = data.Quests.List[1]
+	QuestService.Progress(player, quest.Kind, quest.Need, if quest.Recipe ~= "" then quest.Recipe else "GiantHead")
+	PlayerData.Push(player)
+	local celebratedQuest = waitFor(3, function()
+		for _, d in uiRoot.Celebration:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text == "QUEST DONE!" then
+				return uiRoot.Celebration.Visible
+			end
+		end
+		return false
+	end)
+	check("a finished quest is celebrated", celebratedQuest)
+	local updated = waitFor(3, function()
+		return first.Done.Visible and not first.Reward.Visible and questsButton.Badge:FindFirstChildOfClass("TextLabel").Text == "2"
+	end)
+	check("...marked done, 2 left on the badge", updated)
+	if process.args[2] then -- for tests/preview/ui.html (after the banner)
+		waitFor(5, function()
+			return not uiRoot.Celebration.Visible
+		end)
+		local out = { width = 844, height = 390, tree = Engine.dumpGui(hud) }
+		fs.writeFile(process.args[2] .. "/ui_phone_quests.json", serde.encode("json", out))
+	end
+	Engine.signal(panel.Close.Face, "Activated"):Fire()
+	check("quests panel closes", waitFor(2, function()
+		return not panel.Visible
+	end))
+end
+
 print("== shop colors ==")
 do
 	local card = find(uiRoot, "UpgradesPanel.Body.List.ShopColors")

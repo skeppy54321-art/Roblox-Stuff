@@ -496,6 +496,72 @@ do
 	PlayerData.Push(player)
 end
 
+print("== daily quests ==")
+do
+	local QuestService = Engine.loaded(modules.QuestService)
+	local realNow = QuestService.Now
+	local day = 20000
+	QuestService.Now = function()
+		return day * 86400 + 3600
+	end
+	local function questCues()
+		local n = 0
+		for _, entry in Engine.log do
+			if entry.remote == "Cue" and entry.player == player and entry.args[1] == "Quest" then
+				n += 1
+			end
+		end
+		return n
+	end
+	local soldBefore = data.Stats.PotionsSold
+	data.Stats.PotionsSold = math.max(soldBefore or 0, Config.Tuning.Quests.UnlockSales)
+	local newbie = { Stats = { PotionsSold = 3 }, Quests = { Day = 0, List = {} }, Upgrades = {} }
+	check("quests wait until the tutorial is done", not QuestService.Ensure(player, newbie) and #newbie.Quests.List == 0)
+	local ensured = QuestService.Ensure(player, data)
+	check("today's quests", ensured and data.Quests.Day == day and #data.Quests.List == 3, `{ensured} day {data.Quests.Day} vs {day}, {#data.Quests.List} quests, now {QuestService.Now()}`)
+	local kinds = {}
+	for _, quest in data.Quests.List do
+		kinds[quest.Kind .. quest.Recipe] = true
+	end
+	local distinct = 0
+	for _ in kinds do
+		distinct += 1
+	end
+	check("three different quests", distinct == 3, distinct)
+	local again = Config.MakeQuests(data, day, player.UserId)
+	check("the same day always gives the same quests", again[1].Kind == data.Quests.List[1].Kind and again[2].Need == data.Quests.List[2].Need and again[3].Reward == data.Quests.List[3].Reward)
+	check("no second set on the same day", not QuestService.Ensure(player, data))
+	check("every quest has words", Config.DescribeQuest(data.Quests.List[1]) ~= "Quest", Config.DescribeQuest(data.Quests.List[1]))
+	-- a known set, to check the counting
+	data.Quests.List = {
+		{ Kind = "Sell", Recipe = "", Need = 2, Have = 0, Reward = 50, Done = false },
+		{ Kind = "Collect", Recipe = "", Need = 1, Have = 0, Reward = 30, Done = false },
+		{ Kind = "Sell", Recipe = "Rainbow", Need = 1, Have = 0, Reward = 40, Done = false },
+	}
+	local coins = data.Coins
+	local cuesBefore = questCues()
+	QuestService.Progress(player, "Sell", 1, "GiantHead")
+	check("quests count up", data.Quests.List[1].Have == 1 and not data.Quests.List[1].Done and data.Quests.List[3].Have == 0)
+	QuestService.Progress(player, "Sell", 1, "Rainbow")
+	check("finished quests pay their coins", data.Quests.List[1].Done and data.Quests.List[3].Done and data.Coins == coins + 90, data.Coins - coins)
+	QuestService.Progress(player, "Sell", 5, "Rainbow")
+	check("...once", data.Coins == coins + 90 and data.Quests.List[1].Have == 2)
+	check("the client celebrates each one", questCues() == cuesBefore + 2, questCues() - cuesBefore)
+	-- collecting from a plant counts for a "Collect" quest
+	data.Ingredients.Moonberry = 0
+	goTo(plot.Sources.Moonberry.Hitbox)
+	task.wait(0.4)
+	Engine.signal(plot.Sources.Moonberry.Hitbox.CollectPrompt, "Triggered"):Fire(player)
+	task.wait(0.2)
+	check("collecting counts", data.Quests.List[2].Done and data.Coins == coins + 120, data.Quests.List[2].Have)
+	-- a new day, new quests
+	day += 1
+	check("new quests the next day", QuestService.Ensure(player, data) and data.Quests.Day == day and data.Quests.List[1].Have == 0 and not data.Quests.List[1].Done)
+	data.Stats.PotionsSold = soldBefore
+	PlayerData.Push(player)
+	QuestService.Now = realNow
+end
+
 print("== social ==")
 local SocialService = Engine.loaded(modules.SocialService)
 local function notesTo(who)

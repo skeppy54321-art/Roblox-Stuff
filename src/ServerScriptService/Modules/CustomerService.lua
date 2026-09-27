@@ -19,6 +19,7 @@ local Net = require(Modules:WaitForChild("Net"))
 local Kit = require(Modules:WaitForChild("Kit"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
 local CustomerBuilder = require(Modules:WaitForChild("CustomerBuilder"))
+local QuestService = require(Modules:WaitForChild("QuestService"))
 
 type Plot = PlotService.Plot
 type Phase = "Empty" | "Arriving" | "Waiting" | "Reacting" | "Leaving"
@@ -195,6 +196,17 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	end
 	if slot.Vip then
 		PlayerData.AddStat(data, "VipServed", 1)
+	end
+	QuestService.Progress(player, "Sell", amount, slot.Wants)
+	QuestService.Progress(player, "Earn", price + tip)
+	if tip > 0 then
+		QuestService.Progress(player, "Speedy", 1)
+	end
+	if slot.Vip then
+		QuestService.Progress(player, "Vip", 1)
+	end
+	if amount > 1 then
+		QuestService.Progress(player, "BigOrder", 1)
 	end
 
 	local prompt = model:FindFirstChild("SellPrompt", true)

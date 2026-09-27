@@ -18,6 +18,7 @@ local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
 local GiftService = require(Modules:WaitForChild("GiftService"))
 local FameService = require(Modules:WaitForChild("FameService"))
+local QuestService = require(Modules:WaitForChild("QuestService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -28,6 +29,7 @@ UpgradeService.Init(plots)
 SocialService.Init(plots)
 GiftService.Init()
 FameService.Init(PlotService.GetMarket().FameBoard)
+QuestService.Init()
 
 -- Keep the cauldron's suggested potion, the counter display, the player list and the
 -- Market Stars board fresh.
@@ -103,6 +105,7 @@ local function onPlayerAdded(player: Player)
 	if player.Character then
 		task.spawn(PlotService.MoveToPlot, player, player.Character, facing())
 	end
+	QuestService.Ensure(player, data) -- today's quests (once past the tutorial)
 	PlayerData.Push(player)
 end
 

@@ -20,6 +20,7 @@ local Sfx = require(script:WaitForChild("Sfx"))
 local Hud = require(script:WaitForChild("Hud"))
 local UpgradesPanel = require(script:WaitForChild("UpgradesPanel"))
 local RecipeBook = require(script:WaitForChild("RecipeBook"))
+local QuestsPanel = require(script:WaitForChild("QuestsPanel"))
 local CauldronMenu = require(script:WaitForChild("CauldronMenu"))
 local CauldronFx = require(script:WaitForChild("CauldronFx"))
 local PromptUi = require(script:WaitForChild("PromptUi"))
@@ -66,6 +67,7 @@ local root = Ui.scaledRoot(screen)
 Hud.Init(root)
 UpgradesPanel.Init(root)
 RecipeBook.Init(root)
+QuestsPanel.Init(root)
 CauldronMenu.Init(root)
 CauldronFx.Init(playerGui)
 Popups.Init(playerGui)
@@ -122,6 +124,7 @@ end
 local function setPanel(which: string?)
 	UpgradesPanel.SetOpen(which == "Upgrades")
 	RecipeBook.SetOpen(which == "Recipes")
+	QuestsPanel.SetOpen(which == "Quests")
 	if which then
 		Sfx.Play("Open")
 	end
@@ -133,6 +136,12 @@ end
 local function toggleRecipes()
 	setPanel(if RecipeBook.IsOpen() then nil else "Recipes")
 end
+local function toggleQuests()
+	local s = state
+	if s and #s.Quests.List > 0 then
+		setPanel(if QuestsPanel.IsOpen() then nil else "Quests")
+	end
+end
 local function toggleMute()
 	Sfx.SetMuted(not Sfx.IsMuted())
 	Hud.SetMuted(Sfx.IsMuted())
@@ -140,6 +149,7 @@ local function toggleMute()
 end
 Hud.OnUpgradesPressed = toggleUpgrades
 Hud.OnRecipesPressed = toggleRecipes
+Hud.OnQuestsPressed = toggleQuests
 Hud.OnMutePressed = toggleMute
 Hud.OnGiftPressed = function()
 	local s = state
@@ -156,14 +166,16 @@ Hud.OnGiftPressed = function()
 	end
 end
 
--- Keep the gift button's badge and countdown current.
+-- Keep the gift button's badge and countdown, and the quests' countdown, current.
 task.spawn(function()
 	while true do
 		local s = state
+		local now = workspace:GetServerTimeNow()
 		if s then
-			local ready, _, _, wait = Config.GetDailyGift(s.Daily, workspace:GetServerTimeNow())
+			local ready, _, _, wait = Config.GetDailyGift(s.Daily, now)
 			Hud.SetGift(ready, if ready then "GIFT" else Config.FormatDuration(wait))
 		end
+		QuestsPanel.Tick(now)
 		task.wait(1)
 	end
 end)
@@ -171,6 +183,9 @@ UpgradesPanel.OnClose = function()
 	setPanel(nil)
 end
 RecipeBook.OnClose = function()
+	setPanel(nil)
+end
+QuestsPanel.OnClose = function()
 	setPanel(nil)
 end
 if RunService:IsStudio() then -- testing aid; the server ignores it outside Studio too
@@ -580,6 +595,8 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		toggleUpgrades()
 	elseif key == Enum.KeyCode.R then
 		toggleRecipes()
+	elseif key == Enum.KeyCode.Q then
+		toggleQuests()
 	elseif key == Enum.KeyCode.M then
 		toggleMute()
 	elseif key == Enum.KeyCode.Escape or key == Enum.KeyCode.ButtonB then
@@ -600,6 +617,14 @@ local function applyState(newState: Config.State)
 	Hud.SetState(newState)
 	UpgradesPanel.SetState(newState)
 	RecipeBook.SetState(newState)
+	QuestsPanel.SetState(newState)
+	local questsLeft = 0
+	for _, quest in newState.Quests.List do
+		if not quest.Done then
+			questsLeft += 1
+		end
+	end
+	Hud.SetQuests(#newState.Quests.List > 0, questsLeft)
 	-- the swatch to outline: your pick, or your shop's own colors
 	local plot = myPlot()
 	local default = if plot then plot:GetAttribute("DefaultTheme") else nil
@@ -650,6 +675,16 @@ Cue.OnClientEvent:Connect(function(cue, data)
 		if recipe and hitbox then
 			Popups.Show(hitbox.Position + Vector3.new(0, 4, 0), `{recipe.DisplayName}!`, recipe.Color)
 		end
+	elseif cue == "Quest" then
+		Sfx.Play("Upgrade")
+		Hud.Celebrate(
+			"QUEST DONE!",
+			`{tostring(data.Text)}  +{Config.FormatNumber(tonumber(data.Reward) or 0)} coins`,
+			Color3.fromRGB(240, 130, 60)
+		)
+	elseif cue == "NewQuests" then
+		Sfx.Play("News")
+		Hud.Toast("New daily quests! Tap QUESTS to see them.", "good")
 	elseif cue == "Discover" then
 		Sfx.Play("Discover")
 		local recipe = Config.Recipes[data.Recipe]

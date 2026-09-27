@@ -128,12 +128,15 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 **Rebirth**
 * Once you've grown the Cloud Garden and have 5,000 coins (+5,000 more each time), the Rebirth card at the top of the Upgrades panel starts your shop over: coins, ingredients, potions and the useful upgrades reset; your familiar, Cozy Decor, recipes and stats stay. Every rebirth adds +25% coins to every sale for good (x1.25, x1.5, ...), shown under your coins and as "Rebirth N" on your sign. Tap twice to confirm. The first rebirth also unlocks the **Star Well** (rebuilt each run like the other plots), whose Stardust brews the 13th potion, Starlight; before that its card says "Needs a Rebirth" and the recipe book shows the potion locked. The goal banner suggests it once there's nothing useful left to buy.
 
+**Daily quests**
+* After your first 8 sales a QUESTS button appears (orange, right-hand column, badge = quests left; key Q). Three small goals a day, picked for your progress: sell N potions, sell 3 of one potion, brew N, collect N ingredients, get N speedy tips, serve VIPs, fill a big order, earn N coins from sales. Each pays its coins the moment it's done ("QUEST DONE!"). New quests every day at midnight UTC; the panel counts down to them. The server keeps score (`QuestService`).
+
 **Daily gift**
 * A GIFT button (top of the right-hand column) with a badge when it's ready: once every 20 hours, 30 / 50 / 80 / 120 / 160 / 220 / 300 coins for day 1–7 of a streak (later days repeat 300). Come back within 48 hours to keep the streak. The server's clock decides; the button counts down to the next one.
 
 **Saving** (Milestone 3)
 * ProfileStore: session locking (no duping across servers), autosave, final save on leave and on shutdown.
-* Versioned data (`SchemaVersion`, now 4: v2 added the daily gift, v3 rebirths, v4 shop colors), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
+* Versioned data (`SchemaVersion`, now 5: v2 added the daily gift, v3 rebirths, v4 shop colors, v5 daily quests), a migration step per version, and every loaded value is sanity-checked (unknown ids dropped, negatives and NaN fixed).
 * Can't load → you're kicked with a friendly "please rejoin" (so nobody plays unsaved). Loaded on another server → kicked from the old one.
 * Leaving mid-brew keeps the potion (it finishes instantly) instead of losing the ingredients.
 
@@ -158,6 +161,7 @@ The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`)
 17. Watch the plaza for a minute: townsfolk stroll around, stop at the fountain and at shops, and sometimes say something.
 18. **Big order** (after 20 sales, or use the +10K button and sell a while): a customer with a blue BIG ORDER tag asks for 3 of one potion. Selling with 2 on the shelf does nothing; with 3 they all go at once for 1.5x the price.
 19. **Evening:** stay for a few minutes (or set `DayCycle.Seconds = 60` in `Config/World.lua`): the sky turns pink, then purple with stars, lanterns glow brighter, more fireflies. Check that shops and customers are still easy to see at dusk (if not, raise `OutdoorAmbient` in the `dusk` look).
+20. **Quests:** after 8 sales the QUESTS button appears with a "3" badge. Open it (or press Q): three quests with progress bars and coin rewards. Finish one: "QUEST DONE!", coins added, the badge drops to 2.
 
 Send any red Output errors and what you did right before. Yellow `[Effects] ... errored` or `[ClientMain] custom prompts disabled` warnings are worth sending too.
 

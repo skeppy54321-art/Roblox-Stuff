@@ -31,10 +31,24 @@ export type State = {
 	Daily: DailyState,
 	Rebirths: number,
 	Theme: number, -- shop colors (index into Palette.Awnings); 0 = the shop's own colors
+	Quests: QuestState,
 }
 
 -- The daily gift: when it was last claimed (Unix seconds) and how many days in a row.
 export type DailyState = { Last: number, Streak: number }
+
+-- A daily quest: what to do (`Kind`, plus `Recipe` for a "Sell" quest about one potion;
+-- "" = any), how far along, and the coins it pays once done.
+export type Quest = {
+	Kind: string, -- "Sell", "Brew", "Collect", "Speedy", "Vip", "BigOrder" or "Earn"
+	Recipe: string,
+	Need: number,
+	Have: number,
+	Reward: number,
+	Done: boolean,
+}
+-- Today's quests. `Day` is Config.QuestDay of when they were made (0 = none yet).
+export type QuestState = { Day: number, List: { Quest } }
 
 type Levels = { [string]: number }?
 
@@ -231,7 +245,6 @@ function Config.PotionTotal(potions: { [string]: number }): number
 	return total
 end
 
--- 1234567 -> "1,234,567"
 -- The upgrade the goal banner should suggest buying now, or nil (keep playing / save up).
 -- Follows Tuning.UpgradePath; after it, the first affordable useful upgrade, and a
 -- cosmetic one only when no useful upgrade is left to work toward.
@@ -318,6 +331,101 @@ function Config.GetDailyGift(daily: DailyState?, now: number): (boolean, number,
 	return ready, day, reward, wait
 end
 
+------------------------------------------------------------------
+-- Daily quests
+------------------------------------------------------------------
+
+-- The quest day for Unix time `now`: new quests every day at midnight UTC.
+function Config.QuestDay(now: number): number
+	return math.floor(now / 86400)
+end
+
+-- Seconds until the next quests.
+function Config.QuestTimeLeft(now: number): number
+	return 86400 - now % 86400
+end
+
+local function questReward(coins: number): number
+	return math.max(25, math.floor(coins / 5 + 0.5) * 5)
+end
+
+-- Today's quests for a player: a few of these, picked for their progress (the priciest
+-- potion they can make sets the size). The same player and day always get the same ones.
+function Config.MakeQuests(state: State, day: number, userId: number): { Quest }
+	local Q = Tuning.Quests
+	local rng = Random.new(day * 1000003 + userId % 1000003)
+	local price = 10
+	local choices: { string } = {} -- potions for a "sell these" quest (not the very first)
+	for i, id in Config.RecipeOrder do
+		if Config.IsRecipeUnlocked(state.Upgrades, id) then
+			price = math.max(price, Recipes[id].SellPrice)
+			if i > 1 then
+				table.insert(choices, id)
+			end
+		end
+	end
+	local tier = if price <= 24 then 1 elseif price <= 70 then 2 else 3
+	local sold = state.Stats.PotionsSold or 0
+	local pool: { Quest } = {}
+	local function add(kind: string, need: number, reward: number, recipe: string?)
+		table.insert(pool, {
+			Kind = kind,
+			Recipe = recipe or "",
+			Need = need,
+			Have = 0,
+			Reward = questReward(reward),
+			Done = false,
+		})
+	end
+	add("Sell", Q.Sell[tier], price * 3)
+	add("Brew", Q.Brew[tier], price * 2.5)
+	add("Collect", Q.Collect[tier], price * 2)
+	add("Speedy", Q.Speedy[tier], price * 2.5)
+	add("Earn", questReward(price * 12), price * 2)
+	if #choices > 0 then
+		local id = choices[rng:NextInteger(1, #choices)]
+		add("Sell", 3, Recipes[id].SellPrice * 4, id)
+	end
+	if sold >= Tuning.Customers.VipMinSales then
+		add("Vip", 2, price * 3)
+	end
+	if sold >= Tuning.Customers.BigOrderMinSales then
+		add("BigOrder", 1, price * 3)
+	end
+	for i = #pool, 2, -1 do -- shuffle
+		local j = rng:NextInteger(1, i)
+		pool[i], pool[j] = pool[j], pool[i]
+	end
+	local list: { Quest } = {}
+	for i = 1, math.min(Q.Count, #pool) do
+		table.insert(list, pool[i])
+	end
+	return list
+end
+
+-- "Sell 3 Floaty Potions", "Get 5 speedy tips".
+function Config.DescribeQuest(quest: Quest): string
+	local n = quest.Need
+	local kind = quest.Kind
+	if kind == "Sell" then
+		local recipe = Recipes[quest.Recipe]
+		return if recipe then `Sell {n} {recipe.DisplayName}s` else `Sell {n} potions`
+	elseif kind == "Brew" then
+		return `Brew {n} potions`
+	elseif kind == "Collect" then
+		return `Collect {n} ingredients`
+	elseif kind == "Speedy" then
+		return `Get {n} speedy tips`
+	elseif kind == "Vip" then
+		return `Serve {n} VIPs`
+	elseif kind == "BigOrder" then
+		return if n == 1 then "Fill a big order" else `Fill {n} big orders`
+	elseif kind == "Earn" then
+		return `Earn {Config.FormatNumber(n)} coins from sales`
+	end
+	return "Quest"
+end
+
 -- "5h 20m", "12m", "40s".
 function Config.FormatDuration(seconds: number): string
 	local s = math.max(0, math.floor(seconds))
@@ -329,6 +437,7 @@ function Config.FormatDuration(seconds: number): string
 	return `{s}s`
 end
 
+-- 1234567 -> "1,234,567"
 function Config.FormatNumber(value: number): string
 	local text = tostring(math.floor(math.abs(value)))
 	local formatted = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()

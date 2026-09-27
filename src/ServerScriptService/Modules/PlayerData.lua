@@ -22,7 +22,7 @@ export type Data = Config.State
 -- Changing STORE_NAME starts everyone from scratch. Change SCHEMA_VERSION (and add a
 -- step to `migrate`) when the shape of saved data changes instead.
 local STORE_NAME = "PlayerData"
-local SCHEMA_VERSION = 4
+local SCHEMA_VERSION = 5
 -- true = Studio play tests never touch real saves, even with API access on.
 local USE_MOCK_IN_STUDIO = false
 
@@ -37,6 +37,7 @@ local TEMPLATE: Data = {
 	Daily = { Last = 0, Streak = 0 },
 	Rebirths = 0,
 	Theme = 0,
+	Quests = { Day = 0, List = {} },
 }
 
 -- The parts of a ProfileStore profile this module uses.
@@ -82,6 +83,40 @@ local function cleanCounts(map: unknown, known: { [string]: any }): { [string]: 
 	return clean
 end
 
+-- Keeps well-formed quests only (anything odd and the day's quests are made again).
+local QUEST_KINDS =
+	{ Sell = true, Brew = true, Collect = true, Speedy = true, Vip = true, BigOrder = true, Earn = true }
+local function cleanQuests(value: unknown): Config.QuestState
+	local raw: any = value
+	if typeof(raw) ~= "table" or not isNumber(raw.Day) or typeof(raw.List) ~= "table" then
+		return { Day = 0, List = {} }
+	end
+	local list: { Config.Quest } = {}
+	for _, q in raw.List :: { any } do
+		local ok = typeof(q) == "table"
+			and QUEST_KINDS[q.Kind] == true
+			and typeof(q.Recipe) == "string"
+			and (q.Recipe == "" or Config.Recipes[q.Recipe] ~= nil)
+			and isNumber(q.Need)
+			and isNumber(q.Have)
+			and isNumber(q.Reward)
+			and typeof(q.Done) == "boolean"
+		if not ok then
+			return { Day = 0, List = {} }
+		end
+		local need = math.max(1, math.floor(q.Need))
+		table.insert(list, {
+			Kind = q.Kind,
+			Recipe = q.Recipe,
+			Need = need,
+			Have = math.clamp(math.floor(q.Have), 0, need),
+			Reward = math.max(0, math.floor(q.Reward)),
+			Done = q.Done,
+		})
+	end
+	return { Day = math.floor(raw.Day), List = list }
+end
+
 -- Upgrades data from older versions. Each step handles exactly one version.
 local function migrate(data: Data)
 	local version = if isNumber(data.SchemaVersion) then data.SchemaVersion else 0
@@ -101,6 +136,10 @@ local function migrate(data: Data)
 	if version < 4 then
 		-- 3 -> 4: shop colors. Reconcile already added Theme = 0 (the shop's own colors).
 		version = 4
+	end
+	if version < 5 then
+		-- 4 -> 5: daily quests. Reconcile already added an empty list; today's come on join.
+		version = 5
 	end
 	data.SchemaVersion = version
 end
@@ -139,6 +178,7 @@ local function sanitize(data: Data)
 	data.Daily = { Last = last, Streak = streak }
 	data.Rebirths = if isNumber(data.Rebirths) then math.clamp(math.floor(data.Rebirths), 0, 1000) else 0
 	data.Theme = if isNumber(data.Theme) then math.clamp(math.floor(data.Theme), 0, #Config.Palette.Awnings) else 0
+	data.Quests = cleanQuests(data.Quests)
 end
 
 ------------------------------------------------------------------

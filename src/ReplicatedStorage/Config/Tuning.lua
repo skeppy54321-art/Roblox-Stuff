@@ -86,6 +86,18 @@ Tuning.Rebirth = {
 	Keep = { "CozyDecor", "Familiar" }, -- upgrades you keep (everything else starts over)
 }
 
+-- Daily quests (QuestService): a few small goals a day that pay coins when done. The
+-- tables are how many it takes at tier 1 / 2 / 3 (the priciest potion you can make:
+-- up to 24 coins, up to 70, more).
+Tuning.Quests = {
+	UnlockSales = 8, -- quests start after this many sales (the tutorial comes first)
+	Count = 3, -- quests a day
+	Sell = { 6, 10, 15 },
+	Brew = { 6, 10, 14 },
+	Collect = { 15, 25, 40 },
+	Speedy = { 3, 5, 6 },
+}
+
 Tuning.Daily = {
 	CooldownHours = 20, -- a new gift this long after the last one
 	StreakHours = 48, -- come back within this long to keep your streak going

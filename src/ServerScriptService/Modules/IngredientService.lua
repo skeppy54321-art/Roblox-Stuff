@@ -9,6 +9,7 @@ local PlayerData = require(Modules:WaitForChild("PlayerData"))
 local Guard = require(Modules:WaitForChild("Guard"))
 local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
+local QuestService = require(Modules:WaitForChild("QuestService"))
 
 type Plot = PlotService.Plot
 type SourceState = {
@@ -84,6 +85,7 @@ local function onCollect(player: Player, state: SourceState)
 	state.Charges -= 1
 	data.Ingredients[state.Ingredient] = have + 1
 	refresh(state)
+	QuestService.Progress(player, "Collect", 1)
 	PlayerData.Push(player)
 	Net.Cue(player, "Collect", { Ingredient = state.Ingredient, Position = state.Hitbox.Position })
 end
