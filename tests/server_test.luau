@@ -486,7 +486,7 @@ check("no news about yourself", not selfNews)
 
 -- Market Stars board
 SocialService.RedrawBoard()
-local rowsFolder = town.MarketStars.StarsBoard.StarsGui.Page.Rows
+local rowsFolder = town.MarketStars.StarsBoard.BoardGui.Page.Rows
 check("board row 1 is the top earner", rowsFolder.Row1.Visible and rowsFolder.Row1.PlayerName.Text == "Tester", rowsFolder.Row1.PlayerName.Text)
 check("board row 2 is the friend", rowsFolder.Row2.Visible and rowsFolder.Row2.PlayerName.Text == "Friend", rowsFolder.Row2.PlayerName.Text)
 check("board shows recipes found", rowsFolder.Row2.RecipesValue.Text == "1/12", rowsFolder.Row2.RecipesValue.Text)
@@ -494,7 +494,7 @@ check("board shows cheers", rowsFolder.Row1.CheersValue.Text == "1", rowsFolder.
 check("unused rows hidden", not rowsFolder.Row3.Visible)
 check("empty note hidden", not rowsFolder.Empty.Visible)
 do -- for tests/preview/ui.html: the board is 11 x 7.2 studs at 50 pixels per stud
-	local gui = town.MarketStars.StarsBoard.StarsGui
+	local gui = town.MarketStars.StarsBoard.BoardGui
 	fs.writeFile(OUT .. "/ui_board.json", serde.encode("json", { width = 550, height = 360, device = "surface", tree = Engine.dumpGui(gui) }))
 end
 
@@ -505,6 +505,37 @@ friend.Parent = nil
 SocialService.RedrawBoard()
 check("board drops players who left", not rowsFolder.Row2.Visible and rowsFolder.Row1.PlayerName.Text == "Tester")
 check("left shop's stand resets", friendPlot.CheerStand.Hitbox.CheerPrompt.ObjectText == "Empty shop")
+
+print("== hall of fame ==")
+do
+	local FameService = Engine.loaded(modules.FameService)
+	local fameRows = town.HallOfFame.FameBoard.BoardGui.Page.Rows
+	local store = Engine.orderedStores.HallOfFame_CoinsEarned_v1
+	check("friend's total saved when they left", store["2002"] ~= nil, store["2002"])
+	table.clear(store) -- start from an empty hall
+	FameService.Refresh()
+	check("hall of fame starts empty", fameRows.Note.Visible and fameRows.Note.Text:find("first") ~= nil, fameRows.Note.Text)
+	FameService.Save(player, data)
+	check("coins earned saved to the ordered store", store and store["1001"] == data.Stats.CoinsEarned, store and store["1001"])
+	store["999"] = 50000 -- someone from another server
+	FameService.Refresh()
+	check("top brewer first", fameRows.Row1.Visible and fameRows.Row1.PlayerName.Text == "User999" and fameRows.Row1.Coins.Text == "50,000", fameRows.Row1.PlayerName.Text)
+	check("online players listed by display name", fameRows.Row2.PlayerName.Text == "Tester", fameRows.Row2.PlayerName.Text)
+	check("note hidden once there are entries", not fameRows.Note.Visible)
+	do -- for tests/preview/ui.html: 11 x 8.6 studs at 50 pixels per stud
+		for i = 1, 6 do
+			store[tostring(3000 + i)] = 40000 - i * 5500
+		end
+		FameService.Refresh()
+		local gui = town.HallOfFame.FameBoard.BoardGui
+		fs.writeFile(OUT .. "/ui_fame.json", serde.encode("json", { width = 550, height = 430, device = "surface", tree = Engine.dumpGui(gui) }))
+	end
+	Engine.orderedStoreFails = true
+	FameService.Refresh()
+	check("unpublished place: the board says so", fameRows.Note.Visible and fameRows.Note.Text:find("published") ~= nil)
+	Engine.orderedStoreFails = false
+	FameService.Refresh()
+end
 
 print("== daily gift ==")
 local GiftService = Engine.loaded(modules.GiftService)
@@ -549,7 +580,7 @@ do
 	local signText = plot.Sign:FindFirstChildWhichIsA("SurfaceGui", true):FindFirstChildWhichIsA("TextLabel").Text
 	check("the sign says so", signText:find("Master Brewer") ~= nil, signText)
 	SocialService.RedrawBoard()
-	local firstRow = town.MarketStars.StarsBoard.StarsGui.Page.Rows.Row1.PlayerName
+	local firstRow = town.MarketStars.StarsBoard.BoardGui.Page.Rows.Row1.PlayerName
 	check("gold name on the Market Stars board", firstRow.TextColor3 ~= Config.Palette.TextDark)
 	data.Potions = stock
 	PlayerData.Push(player)
@@ -579,6 +610,7 @@ check("customers removed", plot:FindFirstChild("Customer") == nil)
 check("plot visuals reset", plot.Sources:FindFirstChild("Starflower") == nil and plot:FindFirstChild("DecorGold") == nil)
 check("cauldron back to black", cauldron.Belly.Material == roblox.Enum.Material.Metal)
 check("counter display emptied", plot.Display.Slot1.Body.Transparency == 1)
+check("hall of fame saved on leave", Engine.orderedStores.HallOfFame_CoinsEarned_v1["1001"] == data.Stats.CoinsEarned)
 local savedCoins = data.Coins
 task.wait(1.5)
 

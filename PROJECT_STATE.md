@@ -46,7 +46,7 @@ ServerScriptService
   Main (Script)
   Modules (Folder): Net, PlayerData, ProfileStore, Guard, Kit, ShopBuilder, CustomerBuilder, MarketBuilder,
                     WorldService, PlotService, IngredientService, BrewService, CustomerService, UpgradeService,
-                    SocialService, GiftService
+                    SocialService, GiftService, FameService, BoardKit
 StarterPlayer > StarterPlayerScripts
   ClientMain (LocalScript = ClientMain/init.client.lua)
     children: Ui, Sfx, Hud, UpgradesPanel, RecipeBook, CauldronMenu, CauldronFx, PromptUi, Popups,
@@ -115,6 +115,7 @@ Brew times shown at Faster Brewing level 0; all numbers live in `Config`.
 * **Market news:** when someone discovers a recipe or buys a big upgrade (Starflower Bed, Second Counter Spot, Frost Grotto), everyone else gets a violet toast.
 * **Cheer stand:** a pink heart at the front of every shop. At someone else's shop, press it to cheer: hearts burst out for everyone, the owner gets a pink toast, and the shop's cheer count goes up (saved). One cheer per shop per visit. No coins involved.
 * **Market Stars board** in the plaza (across from the welcome sign): everyone in the server ranked by coins earned, with recipes found and cheers.
+* **Hall of Fame board** (another spot on the plaza): the top 10 brewers of all time across every server, by coins earned (an OrderedDataStore, saved when you leave and every 3 minutes, read every minute). In an unpublished place it just says it fills up once the game is published.
 
 The goal banner suggests upgrades along a set path (`Config.Tuning.UpgradePath`): new potions early, boosts after, and it saves up for the next step instead of spending on whatever is cheapest. Cozy Decor and Magic Familiar are cosmetic, suggested only when nothing useful is left.
 
@@ -183,6 +184,7 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 * **Prices:** `MarketplaceService:GetProductInfoAsync(id, Enum.InfoType.Product / GamePass)`, read `PriceInRobux`. The old `GetProductInfo` is deprecated.
 * **Developer products:** grant only through `ProcessReceipt` (or `BindReceiptHandler`), key on `PurchaseId`, save the grant in the profile, return granted only after that. Never grant from `PromptProductPurchaseFinished`.
 * **Game passes:** `UserOwnsGamePassAsync(userId, passId)`.
+* **Leaderboards:** `DataStoreService:GetOrderedDataStore(name)`, `:SetAsync(key, integer)`, `:GetSortedAsync(false, 10):GetCurrentPage()` gives `{ key, value }` items. Names in one call: `UserService:GetUserInfosByUserIdsAsync(ids)` gives `{ Id, Username, DisplayName }`.
 
 ## Unresolved bugs / known gaps
 
@@ -198,4 +200,4 @@ Send any red Output errors and what you did right before. Yellow `[Effects] ... 
 2. Fix what the playtest finds; tune lighting, colors and economy numbers (re-run `tests/pacing_bot.luau` after price changes).
 3. Listen to the 4 chosen sounds and the music; fill the empty effect sound slots from the Toolbox (`Config/Sounds.lua`).
 4. More content for rebirth runs: more decor themes, special orders, a rebirth-only potion or ingredient.
-5. Later: monetization (see the API notes above), a global all-time leaderboard (OrderedDataStore), trading between friends.
+5. Later: monetization (see the API notes above), trading between friends.

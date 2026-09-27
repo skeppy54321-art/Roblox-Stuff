@@ -17,6 +17,7 @@ local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
 local GiftService = require(Modules:WaitForChild("GiftService"))
+local FameService = require(Modules:WaitForChild("FameService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -26,6 +27,7 @@ BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
 GiftService.Init()
+FameService.Init(PlotService.GetMarket().FameBoard)
 
 -- Keep the cauldron's suggested potion, the counter display, the player list and the
 -- Market Stars board fresh.
@@ -110,6 +112,7 @@ local function onPlayerRemoving(player: Player)
 		IngredientService.ApplyOwner(plot, nil, true)
 	end
 	SocialService.PlayerLeft(player, plot)
+	task.spawn(FameService.Save, player, PlayerData.Get(player)) -- all-time total for the Hall of Fame
 	PlotService.Release(player) -- also resets the shop's visuals
 	PlayerData.Release(player) -- final save
 	Guard.Clear(player)

@@ -10,13 +10,13 @@ local PlayerData = require(Modules:WaitForChild("PlayerData"))
 local Guard = require(Modules:WaitForChild("Guard"))
 local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
+local BoardKit = require(Modules:WaitForChild("BoardKit"))
 
 type Plot = PlotService.Plot
 type Data = PlayerData.Data
 
 local P = Config.Palette
 local S = Config.Tuning.Social
-local FONT = Enum.Font.FredokaOne
 
 local SocialService = {}
 
@@ -161,29 +161,9 @@ local COLUMNS = {
 local rows: { Row } = {}
 local emptyLabel: TextLabel? = nil
 
-local function new(className: string, props: { [string]: any }): any
-	local inst = Instance.new(className)
-	for key, value in props do
-		if key ~= "Parent" then
-			(inst :: any)[key] = value
-		end
-	end
-	inst.Parent = props.Parent
-	return inst
-end
-
-local function corner(parent: Instance, scale: number)
-	new("UICorner", { CornerRadius = UDim.new(scale, 0), Parent = parent })
-end
-
-local function text(parent: Instance, props: { [string]: any }): TextLabel
-	props.BackgroundTransparency = 1
-	props.Font = FONT
-	props.TextScaled = true
-	props.TextColor3 = props.TextColor3 or P.TextDark
-	props.Parent = parent
-	return new("TextLabel", props)
-end
+local new = BoardKit.New
+local corner = BoardKit.Corner
+local text = BoardKit.Text
 
 -- A small icon + number column in a row, starting `x` (scale) across, `width` wide.
 local function stat(parent: Instance, name: string, x: number, width: number, icon: Color3, round: boolean): TextLabel
@@ -207,43 +187,7 @@ local function stat(parent: Instance, name: string, x: number, width: number, ic
 end
 
 local function buildBoard(board: BasePart)
-	local gui = new("SurfaceGui", {
-		Name = "StarsGui",
-		Face = Enum.NormalId.Front,
-		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 50,
-		LightInfluence = 0,
-		Parent = board,
-	})
-	local page = new("Frame", {
-		Name = "Page",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = P.PanelLight,
-		BorderSizePixel = 0,
-		Parent = gui,
-	})
-	new("UIPadding", {
-		PaddingLeft = UDim.new(0, 18),
-		PaddingRight = UDim.new(0, 18),
-		PaddingTop = UDim.new(0, 10),
-		PaddingBottom = UDim.new(0, 12),
-		Parent = page,
-	})
-	local title = new("Frame", {
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 58),
-		BackgroundColor3 = P.PanelDark,
-		BorderSizePixel = 0,
-		Parent = page,
-	})
-	corner(title, 0.3)
-	text(title, {
-		Name = "Label",
-		Size = UDim2.fromScale(1, 0.78),
-		Position = UDim2.fromScale(0, 0.11),
-		Text = "Market Stars",
-		TextColor3 = P.Gold,
-	})
+	local page = BoardKit.Page(board, "Market Stars", 50)
 	-- column headings
 	local heading = new("Frame", {
 		Name = "Heading",

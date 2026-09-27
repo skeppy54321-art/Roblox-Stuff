@@ -2408,6 +2408,7 @@ local CustomerService = require(Modules:WaitForChild("CustomerService"))
 local UpgradeService = require(Modules:WaitForChild("UpgradeService"))
 local SocialService = require(Modules:WaitForChild("SocialService"))
 local GiftService = require(Modules:WaitForChild("GiftService"))
+local FameService = require(Modules:WaitForChild("FameService"))
 
 WorldService.Apply()
 PlotService.Init()
@@ -2417,6 +2418,7 @@ BrewService.Init(plots)
 UpgradeService.Init(plots)
 SocialService.Init(plots)
 GiftService.Init()
+FameService.Init(PlotService.GetMarket().FameBoard)
 
 -- Keep the cauldron's suggested potion, the counter display, the player list and the
 -- Market Stars board fresh.
@@ -2501,6 +2503,7 @@ local function onPlayerRemoving(player: Player)
 		IngredientService.ApplyOwner(plot, nil, true)
 	end
 	SocialService.PlayerLeft(player, plot)
+	task.spawn(FameService.Save, player, PlayerData.Get(player)) -- all-time total for the Hall of Fame
 	PlotService.Release(player) -- also resets the shop's visuals
 	PlayerData.Release(player) -- final save
 	Guard.Clear(player)
@@ -2521,6 +2524,95 @@ print("[Brew a Potion] Server started")
         <string name="Name">Modules</string>
       </Properties>
       <Item class="ModuleScript" referent="26">
+        <Properties>
+          <string name="Name">BoardKit</string>
+          <string name="Source"><![CDATA[--!strict
+-- BoardKit (ModuleScript) — ServerScriptService.Modules.BoardKit
+-- Little helpers for the notice boards in the plaza (Market Stars, Hall of Fame):
+-- building SurfaceGui content from plain property tables.
+
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+
+local P = Config.Palette
+
+local BoardKit = {}
+
+BoardKit.FONT = Enum.Font.FredokaOne
+
+-- Instance.new with properties (Parent is set last).
+function BoardKit.New(className: string, props: { [string]: any }): any
+	local inst = Instance.new(className)
+	for key, value in props do
+		if key ~= "Parent" then
+			(inst :: any)[key] = value
+		end
+	end
+	inst.Parent = props.Parent
+	return inst
+end
+
+function BoardKit.Corner(parent: Instance, scale: number)
+	BoardKit.New("UICorner", { CornerRadius = UDim.new(scale, 0), Parent = parent })
+end
+
+-- A transparent, scaled text label (dark text unless TextColor3 is given).
+function BoardKit.Text(parent: Instance, props: { [string]: any }): TextLabel
+	props.BackgroundTransparency = 1
+	props.Font = BoardKit.FONT
+	props.TextScaled = true
+	props.TextColor3 = props.TextColor3 or P.TextDark
+	props.Parent = parent
+	return BoardKit.New("TextLabel", props)
+end
+
+-- The board's page: a SurfaceGui on the front of `board` with a cream page and a title bar.
+-- Returns the page frame (padded) to put rows into.
+function BoardKit.Page(board: BasePart, title: string, pixelsPerStud: number): Frame
+	local gui = BoardKit.New("SurfaceGui", {
+		Name = "BoardGui",
+		Face = Enum.NormalId.Front,
+		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
+		PixelsPerStud = pixelsPerStud,
+		LightInfluence = 0,
+		Parent = board,
+	})
+	local page = BoardKit.New("Frame", {
+		Name = "Page",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = P.PanelLight,
+		BorderSizePixel = 0,
+		Parent = gui,
+	})
+	BoardKit.New("UIPadding", {
+		PaddingLeft = UDim.new(0, 18),
+		PaddingRight = UDim.new(0, 18),
+		PaddingTop = UDim.new(0, 10),
+		PaddingBottom = UDim.new(0, 12),
+		Parent = page,
+	})
+	local bar = BoardKit.New("Frame", {
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 58),
+		BackgroundColor3 = P.PanelDark,
+		BorderSizePixel = 0,
+		Parent = page,
+	})
+	BoardKit.Corner(bar, 0.3)
+	BoardKit.Text(bar, {
+		Name = "Label",
+		Size = UDim2.fromScale(1, 0.78),
+		Position = UDim2.fromScale(0, 0.11),
+		Text = title,
+		TextColor3 = P.Gold,
+	})
+	return page
+end
+
+return BoardKit
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="27">
         <Properties>
           <string name="Name">BrewService</string>
           <string name="Source"><![CDATA[--!strict
@@ -2822,7 +2914,7 @@ return BrewService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="27">
+      <Item class="ModuleScript" referent="28">
         <Properties>
           <string name="Name">CustomerBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -3144,7 +3236,7 @@ return CustomerBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="28">
+      <Item class="ModuleScript" referent="29">
         <Properties>
           <string name="Name">CustomerService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3536,7 +3628,258 @@ return CustomerService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="29">
+      <Item class="ModuleScript" referent="30">
+        <Properties>
+          <string name="Name">FameService</string>
+          <string name="Source"><![CDATA[--!strict
+-- FameService (ModuleScript) — ServerScriptService.Modules.FameService
+-- The Hall of Fame board in the plaza: the top 10 brewers of all time, across every
+-- server, by coins earned. Each player's total goes into an OrderedDataStore when they
+-- leave and every few minutes while they play; the board reads the top 10 every minute.
+-- Everything is best effort: if data stores aren't available (an unpublished place in
+-- Studio) the board says so and nothing else is affected.
+
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local UserService = game:GetService("UserService")
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Config"))
+local Modules = script.Parent
+local PlayerData = require(Modules:WaitForChild("PlayerData"))
+local BoardKit = require(Modules:WaitForChild("BoardKit"))
+
+local P = Config.Palette
+
+local STORE_NAME = "HallOfFame_CoinsEarned_v1"
+local ROWS = 10
+local READ_EVERY = 60 -- seconds between board refreshes
+local WRITE_EVERY = 180 -- seconds between saving the totals of everyone playing
+
+local FameService = {}
+
+type Row = { Frame: Frame, Rank: TextLabel, Name: TextLabel, Coins: TextLabel }
+
+local store: OrderedDataStore? = nil
+local rows: { Row } = {}
+local note: TextLabel? = nil
+local names: { [number]: string } = {}
+local lastSaved: { [number]: number } = {}
+
+------------------------------------------------------------------
+-- Board
+------------------------------------------------------------------
+
+local function buildBoard(board: BasePart)
+	local page = BoardKit.Page(board, "Hall of Fame", 50)
+	BoardKit.Text(page, {
+		Name = "Subtitle",
+		Position = UDim2.fromOffset(0, 62),
+		Size = UDim2.new(1, 0, 0, 22),
+		Text = "Most coins earned, all time, every market",
+		TextColor3 = P.TextMuted,
+	})
+	local list = BoardKit.New("Frame", {
+		Name = "Rows",
+		Position = UDim2.fromOffset(0, 90),
+		Size = UDim2.new(1, 0, 1, -90),
+		BackgroundTransparency = 1,
+		Parent = page,
+	})
+	BoardKit.New("UIListLayout", {
+		Padding = UDim.new(0, 3),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = list,
+	})
+	for i = 1, ROWS do
+		local frame = BoardKit.New("Frame", {
+			Name = `Row{i}`,
+			LayoutOrder = i,
+			Size = UDim2.new(1, 0, 0, 29),
+			BackgroundColor3 = if i % 2 == 1 then P.PanelCream else P.PanelLight,
+			BorderSizePixel = 0,
+			Visible = false,
+			Parent = list,
+		})
+		BoardKit.Corner(frame, 0.3)
+		local medal = P.Medals[i]
+		local badge = BoardKit.New("Frame", {
+			Name = "Badge",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 3, 0.5, 0),
+			Size = UDim2.fromOffset(25, 25),
+			BackgroundColor3 = medal or P.PanelMid,
+			BorderSizePixel = 0,
+			Parent = frame,
+		})
+		BoardKit.Corner(badge, 0.5)
+		local rank = BoardKit.Text(badge, {
+			Name = "Rank",
+			Size = UDim2.fromScale(1, 0.72),
+			Position = UDim2.fromScale(0, 0.14),
+			Text = tostring(i),
+			TextColor3 = if medal then P.TextDark else P.TextLight,
+		})
+		local name = BoardKit.Text(frame, {
+			Name = "PlayerName",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0, 36, 0.5, 0),
+			Size = UDim2.new(0.62, -40, 0.7, 0),
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		local coinDot = BoardKit.New("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.fromScale(0.64, 0.5),
+			Size = UDim2.fromOffset(16, 16),
+			BackgroundColor3 = P.Gold,
+			BorderSizePixel = 0,
+			Parent = frame,
+		})
+		BoardKit.Corner(coinDot, 0.5)
+		local coins = BoardKit.Text(frame, {
+			Name = "Coins",
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0.64, 22, 0.5, 0),
+			Size = UDim2.new(0.36, -24, 0.7, 0),
+			TextXAlignment = Enum.TextXAlignment.Left,
+		})
+		table.insert(rows, { Frame = frame, Rank = rank, Name = name, Coins = coins })
+	end
+	note = BoardKit.Text(list, {
+		Name = "Note",
+		LayoutOrder = 99,
+		Size = UDim2.new(1, 0, 0, 30),
+		Text = "Loading the Hall of Fame...",
+		TextColor3 = P.TextMuted,
+	})
+end
+
+local function setNote(text: string?)
+	local label = note
+	if label then
+		label.Visible = text ~= nil
+		label.Text = text or ""
+	end
+end
+
+------------------------------------------------------------------
+-- Names (the store only keeps user ids)
+------------------------------------------------------------------
+
+local function resolveNames(userIds: { number })
+	local missing: { number } = {}
+	for _, id in userIds do
+		if not names[id] then
+			local online = Players:GetPlayerByUserId(id)
+			if online then
+				names[id] = online.DisplayName
+			else
+				table.insert(missing, id)
+			end
+		end
+	end
+	if #missing == 0 then
+		return
+	end
+	local ok, infos = pcall(function(): any
+		return UserService:GetUserInfosByUserIdsAsync(missing)
+	end)
+	if ok and typeof(infos) == "table" then
+		for _, info in infos :: { any } do
+			if typeof(info) == "table" and typeof(info.Id) == "number" and typeof(info.DisplayName) == "string" then
+				names[info.Id] = info.DisplayName
+			end
+		end
+	end
+	-- ids still missing (the lookup failed) show as "Brewer <id>" and are tried again next time
+end
+
+------------------------------------------------------------------
+-- Reading and writing
+------------------------------------------------------------------
+
+-- Reads the top 10 and redraws the board. Yields.
+function FameService.Refresh()
+	local ordered = store
+	if not ordered then
+		setNote("The Hall of Fame fills up once the game is published.")
+		return
+	end
+	local ok, result = pcall(function(): any
+		return ordered:GetSortedAsync(false, ROWS):GetCurrentPage()
+	end)
+	if not ok or typeof(result) ~= "table" then
+		setNote("The Hall of Fame fills up once the game is published.")
+		return
+	end
+	local entries: { { UserId: number, Coins: number } } = {}
+	for _, item in result :: { any } do
+		local id = tonumber(item.key)
+		if id and typeof(item.value) == "number" and item.value > 0 then
+			table.insert(entries, { UserId = id, Coins = item.value })
+		end
+	end
+	local ids = {}
+	for _, entry in entries do
+		table.insert(ids, entry.UserId)
+	end
+	resolveNames(ids)
+	for i, row in rows do
+		local entry = entries[i]
+		row.Frame.Visible = entry ~= nil
+		if entry then
+			row.Name.Text = names[entry.UserId] or `Brewer {entry.UserId}`
+			row.Coins.Text = Config.FormatNumber(entry.Coins)
+		end
+	end
+	setNote(if #entries == 0 then "Be the first brewer in the Hall of Fame!" else nil)
+end
+
+-- Saves one player's all-time coins earned (skipped if unchanged). Yields.
+function FameService.Save(player: Player, data: PlayerData.Data?)
+	local ordered = store
+	if not ordered or not data then
+		return
+	end
+	local earned = math.floor(data.Stats.CoinsEarned or 0)
+	if earned <= 0 or lastSaved[player.UserId] == earned then
+		return
+	end
+	local ok = pcall(function(): any
+		ordered:SetAsync(tostring(player.UserId), earned)
+		return nil
+	end)
+	if ok then
+		lastSaved[player.UserId] = earned
+	end
+end
+
+function FameService.Init(board: BasePart)
+	buildBoard(board)
+	local ok, result = pcall(function(): any
+		return DataStoreService:GetOrderedDataStore(STORE_NAME)
+	end)
+	store = if ok then result else nil
+	task.spawn(function()
+		task.wait(5)
+		local sinceWrite = 0
+		while true do
+			FameService.Refresh()
+			task.wait(READ_EVERY)
+			sinceWrite += READ_EVERY
+			if sinceWrite >= WRITE_EVERY then
+				sinceWrite = 0
+				for _, player in Players:GetPlayers() do
+					FameService.Save(player, PlayerData.Get(player))
+				end
+			end
+		end
+	end)
+end
+
+return FameService
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="31">
         <Properties>
           <string name="Name">GiftService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3589,7 +3932,7 @@ return GiftService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="30">
+      <Item class="ModuleScript" referent="32">
         <Properties>
           <string name="Name">Guard</string>
           <string name="Source"><![CDATA[--!strict
@@ -3650,7 +3993,7 @@ return Guard
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="31">
+      <Item class="ModuleScript" referent="33">
         <Properties>
           <string name="Name">IngredientService</string>
           <string name="Source"><![CDATA[--!strict
@@ -3809,7 +4152,7 @@ return IngredientService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="32">
+      <Item class="ModuleScript" referent="34">
         <Properties>
           <string name="Name">Kit</string>
           <string name="Source"><![CDATA[--!strict
@@ -4097,7 +4440,7 @@ return Kit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="33">
+      <Item class="ModuleScript" referent="35">
         <Properties>
           <string name="Name">MarketBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -4129,6 +4472,7 @@ export type MarketParts = {
 	Spawn: SpawnLocation,
 	Statue: BasePart, -- the giant glowing potion on the fountain (clients cycle its color)
 	Board: BasePart, -- the Market Stars board (SocialService draws on its front)
+	FameBoard: BasePart, -- the Hall of Fame board (FameService draws on its front)
 }
 
 local function flat(
@@ -4631,39 +4975,43 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	Kit.SurfaceText(board, Enum.NormalId.Front, "Potion Market", P.Gold, 40)
 	Kit.SurfaceText(board, Enum.NormalId.Back, "Potion Market", P.Gold, 40)
 
-	-- Market Stars board, across the plaza from the welcome sign
-	local boardAngle = plotAngle(1) + math.pi / W.PlotCount
-	local boardCf = CFrame.lookAt(polar(boardAngle, 24, 0.3), Vector3.new(0, 0.3, 0))
-	local stars = Kit.Model(market, "MarketStars")
-	for _, x in { -5.9, 5.9 } do
-		Kit.Part(stars, "BoardPost", Vector3.new(0.7, 10.2, 0.7), boardCf * CFrame.new(x, 5.1, 0.1), P.DarkWood, WOOD)
-		Kit.Lantern(stars, (boardCf * CFrame.new(x, 9.9, -0.9)).Position, 0.8, 14)
+	-- Notice boards: Market Stars across the plaza from the welcome sign, the Hall of Fame
+	-- between two other shops. A roofed wooden frame with lanterns; the face is filled in
+	-- by SocialService / FameService.
+	local function noticeBoard(name: string, boardName: string, angle: number, height: number): BasePart
+		local cf = CFrame.lookAt(polar(angle, 24, 0.3), Vector3.new(0, 0.3, 0))
+		local group = Kit.Model(market, name)
+		local mid = 1.7 + height / 2 + 0.2
+		local top = mid + height / 2 + 0.6
+		for _, x in { -5.9, 5.9 } do
+			local post = Vector3.new(0.7, top + 0.3, 0.7)
+			Kit.Part(group, "BoardPost", post, cf * CFrame.new(x, (top + 0.3) / 2, 0.1), P.DarkWood, WOOD)
+			Kit.Lantern(group, (cf * CFrame.new(x, top - 0.2, -0.9)).Position, 0.8, 14)
+		end
+		local frame = Vector3.new(11.8, height + 0.8, 0.4)
+		Kit.Decor(group, "BoardFrame", frame, cf * CFrame.new(0, mid, 0.15), P.DarkWood, WOOD)
+		local face = Kit.Part(
+			group,
+			boardName,
+			Vector3.new(11, height, 0.3),
+			cf * CFrame.new(0, mid, 0),
+			P.PanelLight,
+			Enum.Material.SmoothPlastic
+		)
+		Kit.Decor(
+			group,
+			"BoardRoof",
+			Vector3.new(13, 0.35, 2.2),
+			cf * CFrame.new(0, top + 0.2, -0.2) * CFrame.Angles(math.rad(-12), 0, 0),
+			P.Roof,
+			Enum.Material.ClayRoofTiles
+		)
+		local arm = Vector3.new(12.6, 0.3, 0.3)
+		Kit.Decor(group, "BoardArm", arm, cf * CFrame.new(0, top - 0.15, -0.9), P.Metal, Enum.Material.Metal)
+		return face
 	end
-	Kit.Decor(stars, "BoardFrame", Vector3.new(11.8, 8, 0.4), boardCf * CFrame.new(0, 5.6, 0.15), P.DarkWood, WOOD)
-	local starsBoard = Kit.Part(
-		stars,
-		"StarsBoard",
-		Vector3.new(11, 7.2, 0.3),
-		boardCf * CFrame.new(0, 5.6, 0),
-		P.PanelLight,
-		Enum.Material.SmoothPlastic
-	)
-	Kit.Decor(
-		stars,
-		"BoardRoof",
-		Vector3.new(13, 0.35, 2.2),
-		boardCf * CFrame.new(0, 10.1, -0.2) * CFrame.Angles(math.rad(-12), 0, 0),
-		P.Roof,
-		Enum.Material.ClayRoofTiles
-	)
-	Kit.Decor(
-		stars,
-		"BoardArm",
-		Vector3.new(12.6, 0.3, 0.3),
-		boardCf * CFrame.new(0, 9.75, -0.9),
-		P.Metal,
-		Enum.Material.Metal
-	)
+	local starsBoard = noticeBoard("MarketStars", "StarsBoard", plotAngle(1) + math.pi / W.PlotCount, 7.2)
+	local fameBoard = noticeBoard("HallOfFame", "FameBoard", plotAngle(3) + math.pi / W.PlotCount, 8.6)
 
 	-- fireflies drifting over the plaza
 	local fireflyBox = Kit.Decor(
@@ -4724,14 +5072,14 @@ function MarketBuilder.Build(parent: Instance): MarketParts
 	spawn.Parent = workspace
 
 	market.Parent = parent
-	return { Model = market, Spawn = spawn, Statue = statue, Board = starsBoard }
+	return { Model = market, Spawn = spawn, Statue = statue, Board = starsBoard, FameBoard = fameBoard }
 end
 
 return MarketBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="34">
+      <Item class="ModuleScript" referent="36">
         <Properties>
           <string name="Name">Net</string>
           <string name="Source"><![CDATA[--!strict
@@ -4804,7 +5152,7 @@ return Net
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="35">
+      <Item class="ModuleScript" referent="37">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--!strict
@@ -5032,7 +5380,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="36">
+      <Item class="ModuleScript" referent="38">
         <Properties>
           <string name="Name">PlotService</string>
           <string name="Source"><![CDATA[--!strict
@@ -5247,7 +5595,7 @@ return PlotService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="37">
+      <Item class="ModuleScript" referent="39">
         <Properties>
           <string name="Name">ProfileStore</string>
           <string name="Source">--[[
@@ -7495,7 +7843,7 @@ end)
 return ProfileStore</string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">ShopBuilder</string>
           <string name="Source"><![CDATA[--!strict
@@ -8478,7 +8826,7 @@ return ShopBuilder
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">SocialService</string>
           <string name="Source"><![CDATA[--!strict
@@ -8493,13 +8841,13 @@ local PlayerData = require(Modules:WaitForChild("PlayerData"))
 local Guard = require(Modules:WaitForChild("Guard"))
 local Net = require(Modules:WaitForChild("Net"))
 local PlotService = require(Modules:WaitForChild("PlotService"))
+local BoardKit = require(Modules:WaitForChild("BoardKit"))
 
 type Plot = PlotService.Plot
 type Data = PlayerData.Data
 
 local P = Config.Palette
 local S = Config.Tuning.Social
-local FONT = Enum.Font.FredokaOne
 
 local SocialService = {}
 
@@ -8644,29 +8992,9 @@ local COLUMNS = {
 local rows: { Row } = {}
 local emptyLabel: TextLabel? = nil
 
-local function new(className: string, props: { [string]: any }): any
-	local inst = Instance.new(className)
-	for key, value in props do
-		if key ~= "Parent" then
-			(inst :: any)[key] = value
-		end
-	end
-	inst.Parent = props.Parent
-	return inst
-end
-
-local function corner(parent: Instance, scale: number)
-	new("UICorner", { CornerRadius = UDim.new(scale, 0), Parent = parent })
-end
-
-local function text(parent: Instance, props: { [string]: any }): TextLabel
-	props.BackgroundTransparency = 1
-	props.Font = FONT
-	props.TextScaled = true
-	props.TextColor3 = props.TextColor3 or P.TextDark
-	props.Parent = parent
-	return new("TextLabel", props)
-end
+local new = BoardKit.New
+local corner = BoardKit.Corner
+local text = BoardKit.Text
 
 -- A small icon + number column in a row, starting `x` (scale) across, `width` wide.
 local function stat(parent: Instance, name: string, x: number, width: number, icon: Color3, round: boolean): TextLabel
@@ -8690,43 +9018,7 @@ local function stat(parent: Instance, name: string, x: number, width: number, ic
 end
 
 local function buildBoard(board: BasePart)
-	local gui = new("SurfaceGui", {
-		Name = "StarsGui",
-		Face = Enum.NormalId.Front,
-		SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud,
-		PixelsPerStud = 50,
-		LightInfluence = 0,
-		Parent = board,
-	})
-	local page = new("Frame", {
-		Name = "Page",
-		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = P.PanelLight,
-		BorderSizePixel = 0,
-		Parent = gui,
-	})
-	new("UIPadding", {
-		PaddingLeft = UDim.new(0, 18),
-		PaddingRight = UDim.new(0, 18),
-		PaddingTop = UDim.new(0, 10),
-		PaddingBottom = UDim.new(0, 12),
-		Parent = page,
-	})
-	local title = new("Frame", {
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 58),
-		BackgroundColor3 = P.PanelDark,
-		BorderSizePixel = 0,
-		Parent = page,
-	})
-	corner(title, 0.3)
-	text(title, {
-		Name = "Label",
-		Size = UDim2.fromScale(1, 0.78),
-		Position = UDim2.fromScale(0, 0.11),
-		Text = "Market Stars",
-		TextColor3 = P.Gold,
-	})
+	local page = BoardKit.Page(board, "Market Stars", 50)
 	-- column headings
 	local heading = new("Frame", {
 		Name = "Heading",
@@ -8939,7 +9231,7 @@ return SocialService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">UpgradeService</string>
           <string name="Source"><![CDATA[--!strict
@@ -9090,7 +9382,7 @@ return UpgradeService
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="41">
+      <Item class="ModuleScript" referent="43">
         <Properties>
           <string name="Name">WorldService</string>
           <string name="Source"><![CDATA[--!strict
@@ -9190,15 +9482,15 @@ return WorldService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="42">
+  <Item class="StarterPlayer" referent="44">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="43">
+    <Item class="StarterPlayerScripts" referent="45">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="44">
+      <Item class="LocalScript" referent="46">
         <Properties>
           <string name="Name">ClientMain</string>
           <string name="Source"><![CDATA[--!strict
@@ -9889,7 +10181,7 @@ task.spawn(function()
 end)
 ]]></string>
         </Properties>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">Ambience</string>
             <string name="Source"><![CDATA[--!strict
@@ -9964,7 +10256,7 @@ return Ambience
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">CauldronFx</string>
             <string name="Source"><![CDATA[--!strict
@@ -10187,7 +10479,7 @@ return CauldronFx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">CauldronMenu</string>
             <string name="Source"><![CDATA[--!strict
@@ -10463,7 +10755,7 @@ return CauldronMenu
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">CustomerAnimator</string>
             <string name="Source"><![CDATA[--!strict
@@ -10677,7 +10969,7 @@ return CustomerAnimator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">Familiars</string>
             <string name="Source"><![CDATA[--!strict
@@ -10988,7 +11280,7 @@ return Familiars
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">GoalMarker</string>
             <string name="Source"><![CDATA[--!strict
@@ -11073,7 +11365,7 @@ return GoalMarker
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">Hud</string>
             <string name="Source"><![CDATA[--!strict
@@ -11759,7 +12051,7 @@ return Hud
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">Juice</string>
             <string name="Source"><![CDATA[--!strict
@@ -11851,7 +12143,7 @@ return Juice
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">Popups</string>
             <string name="Source"><![CDATA[--!strict
@@ -11911,7 +12203,7 @@ return Popups
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">PromptUi</string>
             <string name="Source"><![CDATA[--!strict
@@ -12155,7 +12447,7 @@ return PromptUi
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">RecipeBook</string>
             <string name="Source"><![CDATA[--!strict
@@ -12370,7 +12662,7 @@ return RecipeBook
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">Sfx</string>
             <string name="Source"><![CDATA[--!strict
@@ -12595,7 +12887,7 @@ return Sfx
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">Townsfolk</string>
             <string name="Source"><![CDATA[--!strict
@@ -12864,7 +13156,7 @@ return Townsfolk
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">Ui</string>
             <string name="Source"><![CDATA[--!strict
@@ -13202,7 +13494,7 @@ return Ui
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">UpgradesPanel</string>
             <string name="Source"><![CDATA[--!strict
@@ -13538,7 +13830,7 @@ return UpgradesPanel
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="60">
+  <Item class="Workspace" referent="62">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>

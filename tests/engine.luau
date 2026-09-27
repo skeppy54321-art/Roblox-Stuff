@@ -432,6 +432,53 @@ function Engine.install(game, options)
 			end,
 		}
 	end)
+	-- Ordered data stores live in memory here (set Engine.orderedStoreFails = true to make
+	-- them error like an unpublished place does)
+	Engine.orderedStores = {}
+	roblox.implementMethod("DataStoreService", "GetOrderedDataStore", function(_, name)
+		local values = Engine.orderedStores[name] or {}
+		Engine.orderedStores[name] = values
+		local function check()
+			if Engine.orderedStoreFails then
+				error("You must publish this place to the web to access DataStore.")
+			end
+		end
+		return {
+			SetAsync = function(_, key, value)
+				check()
+				values[key] = value
+			end,
+			GetSortedAsync = function(_, ascending, pageSize)
+				check()
+				local list = {}
+				for key, value in values do
+					table.insert(list, { key = key, value = value })
+				end
+				table.sort(list, function(a, b)
+					if ascending then
+						return a.value < b.value
+					end
+					return a.value > b.value
+				end)
+				local page = {}
+				for i = 1, math.min(pageSize, #list) do
+					page[i] = list[i]
+				end
+				return {
+					GetCurrentPage = function()
+						return page
+					end,
+				}
+			end,
+		}
+	end)
+	roblox.implementMethod("UserService", "GetUserInfosByUserIdsAsync", function(_, ids)
+		local infos = {}
+		for _, id in ids do
+			table.insert(infos, { Id = id, Username = `user{id}`, DisplayName = `User{id}` })
+		end
+		return infos
+	end)
 	roblox.implementMethod("HttpService", "GenerateGUID", function()
 		return string.format("%08x-%04x", math.random(0, 0x7fffffff), math.random(0, 0xffff))
 	end)
