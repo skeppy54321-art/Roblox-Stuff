@@ -833,6 +833,11 @@ Tuning.Customers = {
 	TipShare = 0.2, -- the tip, as a share of the price (rounded up)
 	StuckPatience = 6, -- ...or after this long if your shelf is full and none of their potion is on it
 	StockBias = 0.6, -- chance a customer asks for a potion you already have on your shelf
+	BigOrderChance = 0.12, -- chance a customer wants several of one potion (after BigOrderMinSales sales)
+	BigOrderMinSales = 20,
+	BigOrderSize = 3,
+	BigOrderBonus = 1.5, -- big orders pay this much more per potion
+	BigOrderPatience = 2, -- ...and wait this many times longer
 	KidChance = 0.2, -- chance a customer is a kid (a bit smaller)
 	KidScale = 0.78,
 	VipChance = 0.12, -- chance a customer is a VIP (after VipMinSales sales)
@@ -2696,14 +2701,14 @@ function BrewService.ResetCauldron(plot: Plot)
 end
 
 -- What pressing the cauldron brews: a potion a customer is waiting for (and you don't
--- have yet), else the last one you brewed, else the priciest one you can make.
+-- have enough of yet), else the last one you brewed, else the priciest one you can make.
 local function suggest(player: Player, data: Data, plot: Plot): string?
 	local function canBrew(id: string): boolean
 		return Config.IsRecipeUnlocked(data.Upgrades, id) and Config.HasIngredientsFor(data.Ingredients, id)
 	end
-	for _, id in CustomerService.GetWants(plot) do
-		if (data.Potions[id] or 0) == 0 and canBrew(id) then
-			return id
+	for _, order in CustomerService.GetOrders(plot) do
+		if (data.Potions[order.Recipe] or 0) < order.Amount and canBrew(order.Recipe) then
+			return order.Recipe
 		end
 	end
 	local last = lastRecipe[player]
@@ -2953,6 +2958,7 @@ export type Options = {
 	WantsText: string,
 	WantsColor: Color3,
 	Bubble: boolean?, -- false = no speech bubble (townsfolk)
+	BigOrder: boolean?, -- wants several potions: a "BIG ORDER" tag on the bubble
 }
 
 local CustomerBuilder = {}
@@ -3092,9 +3098,14 @@ end
 ------------------------------------------------------------------
 
 local function buildBubble(headPart: BasePart, options: Options)
+	-- Billboards clip whatever sticks out of them, so the card sits inset by its outline,
+	-- with room above it for a VIP or BIG ORDER tag on its top edge.
+	local tagged = options.Vip == true or options.BigOrder == true
+	local top = if tagged then 12 else 3
+	local cardHeight = if tagged then 56 else 50
 	local bubble = Instance.new("BillboardGui")
 	bubble.Name = "Bubble"
-	bubble.Size = UDim2.fromOffset(220, 58)
+	bubble.Size = UDim2.fromOffset(226, top + cardHeight + 8)
 	bubble.StudsOffset = Vector3.new(0, 3.6, 0)
 	bubble.MaxDistance = 80
 	bubble.LightInfluence = 0
@@ -3102,7 +3113,8 @@ local function buildBubble(headPart: BasePart, options: Options)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Card"
-	frame.Size = UDim2.new(1, 0, 1, -8)
+	frame.Position = UDim2.fromOffset(3, top)
+	frame.Size = UDim2.fromOffset(220, cardHeight)
 	frame.BackgroundColor3 = P.PanelCream
 	frame.Parent = bubble
 	local corner = Instance.new("UICorner")
@@ -3144,8 +3156,8 @@ local function buildBubble(headPart: BasePart, options: Options)
 	local label = Instance.new("TextLabel")
 	label.Name = "Text"
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromOffset(42, 4)
-	label.Size = UDim2.new(1, -50, 1, -8)
+	label.Position = UDim2.fromOffset(42, if tagged then 10 else 4) -- (below the tag)
+	label.Size = UDim2.new(1, -50, 1, if tagged then -14 else -8)
 	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
 	label.TextWrapped = true
@@ -3153,11 +3165,29 @@ local function buildBubble(headPart: BasePart, options: Options)
 	label.Text = options.WantsText
 	label.Parent = frame
 
+	if options.BigOrder then
+		local tag = Instance.new("TextLabel")
+		tag.Name = "BigOrderTag"
+		tag.AnchorPoint = Vector2.new(0.5, 0.5)
+		tag.Position = UDim2.fromScale(0.5, 0)
+		tag.Size = UDim2.fromOffset(96, 20)
+		tag.BackgroundColor3 = Color3.fromRGB(90, 190, 255)
+		tag.Font = Enum.Font.FredokaOne
+		tag.TextScaled = true
+		tag.TextColor3 = P.TextDark
+		tag.Text = "BIG ORDER"
+		tag.ZIndex = 2
+		tag.Parent = frame
+		local tagCorner = Instance.new("UICorner")
+		tagCorner.CornerRadius = UDim.new(0.5, 0)
+		tagCorner.Parent = tag
+	end
+
 	if options.Vip then
 		local vip = Instance.new("TextLabel")
 		vip.Name = "VipTag"
-		vip.AnchorPoint = Vector2.new(0.5, 0.5)
-		vip.Position = UDim2.new(1, -6, 0, 2)
+		vip.AnchorPoint = Vector2.new(1, 0.5)
+		vip.Position = UDim2.new(1, -8, 0, 0)
 		vip.Size = UDim2.fromOffset(42, 20)
 		vip.BackgroundColor3 = P.Gold
 		vip.Font = Enum.Font.FredokaOne
@@ -3282,6 +3312,7 @@ type Slot = {
 	Model: Model?,
 	Wants: string,
 	Vip: boolean,
+	Amount: number, -- how many they want (big orders want several)
 	WaitingSince: number, -- server time they reached the counter
 }
 type Entry = { Owner: Player, Slots: { Slot } }
@@ -3415,20 +3446,32 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	end
 	local recipe = Config.Recipes[slot.Wants]
 	local have = data.Potions[slot.Wants] or 0
-	if have < 1 then
-		Net.Notify(player, `They want a {recipe.DisplayName}. Brew one at your cauldron!`, "bad")
+	local amount = slot.Amount
+	if have < amount then
+		Net.Notify(
+			player,
+			if amount > 1
+				then `They want {amount} {recipe.DisplayName}s and you have {have}. Brew more!`
+				else `They want a {recipe.DisplayName}. Brew one at your cauldron!`,
+			"bad"
+		)
 		return
 	end
 
 	-- All checks passed: change state immediately so a double-press can't sell twice.
 	slot.Phase = "Reacting"
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
-	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
+	local orderBonus = if amount > 1 then T.BigOrderBonus else 1
+	local coinBonus = Config.GetCoinMultiplier(data.Rebirths)
+	local price = math.floor(recipe.SellPrice * amount * orderBonus * vipBonus * coinBonus + 0.5)
 	local quick = now() - slot.WaitingSince <= T.TipWindow
 	local tip = if quick then math.ceil(price * T.TipShare) else 0
-	data.Potions[slot.Wants] = have - 1
+	data.Potions[slot.Wants] = have - amount
 	data.Coins += price + tip
-	PlayerData.AddStat(data, "PotionsSold", 1)
+	PlayerData.AddStat(data, "PotionsSold", amount)
+	if amount > 1 then
+		PlayerData.AddStat(data, "BigOrders", 1)
+	end
 	PlayerData.AddStat(data, "CoinsEarned", price + tip)
 	if tip > 0 then
 		PlayerData.AddStat(data, "Tips", 1)
@@ -3451,7 +3494,7 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	Net.Cue(
 		player,
 		"Sale",
-		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Position = torso.Position }
+		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Big = amount > 1, Position = torso.Position }
 	)
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
@@ -3477,13 +3520,25 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 	end
 	local wants = pickWants(data, taken)
 	local recipe = Config.Recipes[wants]
-	local vip = (data.Stats.PotionsSold or 0) >= T.VipMinSales and rng:NextNumber() < T.VipChance
+	local sold = data.Stats.PotionsSold or 0
+	local vip = sold >= T.VipMinSales and rng:NextNumber() < T.VipChance
+	local amount = if not vip
+			and sold >= T.BigOrderMinSales
+			and rng:NextNumber() < T.BigOrderChance
+		then T.BigOrderSize
+		else 1
+	if amount > 1 and shelfFull(data) and (data.Potions[wants] or 0) < amount then
+		amount = 1 -- nothing more can be brewed: only ask for what the shelf can fill
+	end
 	local spot = spotFor(plot, slot.Index, #entry.Slots)
 	local model = CustomerBuilder.Build(spot, {
 		Vip = vip,
-		WantsText = `I want a {recipe.DisplayName}!`,
+		BigOrder = amount > 1,
+		WantsText = if amount > 1 then `I want {amount} {recipe.DisplayName}s!` else `I want a {recipe.DisplayName}!`,
 		WantsColor = recipe.Color,
 	})
+	model:SetAttribute("Amount", amount)
+	model:SetAttribute("Patience", T.Patience * (if amount > 1 then T.BigOrderPatience else 1))
 	if rng:NextNumber() < T.KidChance then
 		model:ScaleTo(T.KidScale) -- around the feet, so they still stand on the ground
 		model:SetAttribute("Kid", true)
@@ -3498,6 +3553,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 	slot.Model = model
 	slot.Wants = wants
 	slot.Vip = vip
+	slot.Amount = amount
 	slot.Phase = "Arriving"
 	changed(plot)
 
@@ -3513,6 +3569,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 		if torso then
 			local objectText = if vip
 				then `{recipe.DisplayName} (VIP pays x{T.VipPriceMultiplier}!)`
+				elseif amount > 1 then `{amount} x {recipe.DisplayName} (big order!)`
 				else recipe.DisplayName
 			local prompt = Kit.Prompt(torso, "SellPrompt", "Sell", objectText)
 			prompt.Triggered:Connect(function(player)
@@ -3536,8 +3593,16 @@ end
 
 local function addSlot(plot: Plot, entry: Entry)
 	local index = #entry.Slots + 1
-	local slot: Slot =
-		{ Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false, WaitingSince = 0 }
+	local slot: Slot = {
+		Index = index,
+		Token = 1,
+		Phase = "Empty",
+		Model = nil,
+		Wants = "",
+		Vip = false,
+		Amount = 1,
+		WaitingSince = 0,
+	}
 	table.insert(entry.Slots, slot)
 	scheduleSpawn(plot, slot, T.FirstSpawnDelay + (index - 1) * 2.5)
 end
@@ -3582,20 +3647,20 @@ function CustomerService.StopPlot(plot: Plot)
 	changed(plot)
 end
 
--- Potions the customers at this plot want (waiting ones first).
-function CustomerService.GetWants(plot: Plot): { string }
-	local wants = {}
+-- What the customers at this plot want and how many (waiting ones first).
+function CustomerService.GetOrders(plot: Plot): { { Recipe: string, Amount: number } }
+	local orders = {}
 	local entry = byPlot[plot]
 	if entry then
 		for _, phase in { "Waiting", "Arriving" } do
 			for _, slot in entry.Slots do
 				if slot.Phase == phase then
-					table.insert(wants, slot.Wants)
+					table.insert(orders, { Recipe = slot.Wants, Amount = slot.Amount })
 				end
 			end
 		end
 	end
-	return wants
+	return orders
 end
 
 -- Called whenever a customer arrives, is served or leaves.
@@ -3625,10 +3690,11 @@ local function checkPatience()
 			local model = slot.Model
 			if slot.Phase == "Waiting" and model and data then
 				local waited = t - slot.WaitingSince
-				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) == 0
+				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) < slot.Amount
+				local patience = T.Patience * (if slot.Amount > 1 then T.BigOrderPatience else 1)
 				if stuck and waited >= T.StuckPatience then
 					giveUp(plot, slot, model, "Oh, you're all out!")
-				elseif waited >= T.Patience then
+				elseif waited >= patience then
 					giveUp(plot, slot, model, "Maybe next time!")
 				end
 			end
@@ -9864,7 +9930,7 @@ local function hitboxOf(model: Instance?): BasePart?
 	return if hitbox and hitbox:IsA("BasePart") then hitbox else nil
 end
 
-type CustomerInfo = { Model: Model, Wants: string, Phase: string }
+type CustomerInfo = { Model: Model, Wants: string, Phase: string, Amount: number }
 
 local function myCustomers(): { CustomerInfo }
 	local list = {}
@@ -9873,8 +9939,10 @@ local function myCustomers(): { CustomerInfo }
 		for _, child in plot:GetChildren() do
 			if child.Name == "Customer" and child:IsA("Model") then
 				local wants, phase = child:GetAttribute("Wants"), child:GetAttribute("Phase")
+				local amount = child:GetAttribute("Amount")
 				if typeof(wants) == "string" and typeof(phase) == "string" then
-					table.insert(list, { Model = child, Wants = wants, Phase = phase })
+					local count = if typeof(amount) == "number" then amount else 1
+					table.insert(list, { Model = child, Wants = wants, Phase = phase, Amount = count })
 				end
 			end
 		end
@@ -9955,8 +10023,9 @@ end
 -- have left (they give up at zero): green, then yellow, then red.
 local function updatePatienceBars()
 	local now = workspace:GetServerTimeNow()
-	local patience = Config.Tuning.Customers.Patience
 	for _, c in myCustomers() do
+		local limit = c.Model:GetAttribute("Patience")
+		local patience = if typeof(limit) == "number" then limit else Config.Tuning.Customers.Patience
 		local card = c.Model:FindFirstChild("Card", true)
 		if c.Phase == "Waiting" and card and card:IsA("Frame") then
 			local bar = card:FindFirstChild("Patience")
@@ -10004,9 +10073,10 @@ local function nextGoal(): (string, BasePart?, string?)
 
 	-- a waiting customer wants something you have: go sell it
 	for _, c in customers do
-		if c.Phase == "Waiting" and (s.Potions[c.Wants] or 0) > 0 then
+		if c.Phase == "Waiting" and (s.Potions[c.Wants] or 0) >= c.Amount then
 			local recipe = Config.Recipes[c.Wants]
-			return `Sell the {recipe.DisplayName} to your customer!`, c.Model.PrimaryPart, "Sell!"
+			local what = if c.Amount > 1 then `{c.Amount} {recipe.DisplayName}s` else `the {recipe.DisplayName}`
+			return `Sell {what} to your customer!`, c.Model.PrimaryPart, "Sell!"
 		end
 	end
 	if isBrewing(cauldron) then
@@ -10029,7 +10099,7 @@ local function nextGoal(): (string, BasePart?, string?)
 	-- work toward what a customer wants (or the first recipe if nobody is here yet)
 	local target = Config.RecipeOrder[1]
 	for _, c in customers do
-		if (s.Potions[c.Wants] or 0) == 0 then
+		if (s.Potions[c.Wants] or 0) < c.Amount then
 			target = c.Wants
 			break
 		end
@@ -10461,9 +10531,9 @@ function CauldronFx.Init(playerGui: PlayerGui)
 		TextStrokeColor3 = P.DarkWood,
 		Parent = bar,
 	}, 20)
-	local back = Ui.new("Frame", {
-		Position = UDim2.fromOffset(0, 28),
-		Size = UDim2.new(1, 0, 0, 22),
+	local back = Ui.new("Frame", { -- inset by its outline (billboards clip)
+		Position = UDim2.fromOffset(2, 28),
+		Size = UDim2.new(1, -4, 0, 22),
 		BackgroundColor3 = P.PanelDark,
 		Parent = bar,
 	}, { Ui.round(), Ui.stroke(P.Gold, 2) })
@@ -12326,6 +12396,7 @@ function Popups.Show(position: Vector3, text: string, color: Color3, big: boolea
 	billboard.LightInfluence = 0
 	billboard.Size = UDim2.fromOffset(size.X, size.Y)
 	billboard.StudsOffset = Vector3.new(0, 1, 0)
+	billboard.ClipsDescendants = false -- the pop-in grows the text past the edges for a moment
 	local label = Ui.label({
 		Size = UDim2.fromScale(1, 1),
 		Text = text,
@@ -12410,6 +12481,7 @@ local function show(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInpu
 	billboard.LightInfluence = 0
 	billboard.Size = UDim2.fromOffset(250, 76)
 	billboard.StudsOffset = Vector3.new(0, 1.2, 0)
+	billboard.ClipsDescendants = false -- the card pops a little past the edges when pressed
 	billboard.ResetOnSpawn = false
 	if adornee and (adornee:IsA("BasePart") or adornee:IsA("Attachment")) then
 		billboard.Adornee = adornee

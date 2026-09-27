@@ -27,6 +27,7 @@ function Popups.Show(position: Vector3, text: string, color: Color3, big: boolea
 	billboard.LightInfluence = 0
 	billboard.Size = UDim2.fromOffset(size.X, size.Y)
 	billboard.StudsOffset = Vector3.new(0, 1, 0)
+	billboard.ClipsDescendants = false -- the pop-in grows the text past the edges for a moment
 	local label = Ui.label({
 		Size = UDim2.fromScale(1, 1),
 		Text = text,

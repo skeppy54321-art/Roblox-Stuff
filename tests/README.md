@@ -11,8 +11,8 @@ runtime errors and broken game logic before you ever open Studio.
 ```sh
 rojo build default.project.json -o build/BrewAPotion.rbxlx   # always test the current code
 mkdir -p out
-lune run tests/server_test.luau build/BrewAPotion.rbxlx out   # server: ~100 checks, ~50s
-lune run tests/client_test.luau build/BrewAPotion.rbxlx       # server + client "play solo": ~65 checks
+lune run tests/server_test.luau build/BrewAPotion.rbxlx out   # server: ~170 checks, ~70s
+lune run tests/client_test.luau build/BrewAPotion.rbxlx       # server + client "play solo": ~110 checks
 ```
 
 Both print `ok` / `FAIL` per check and exit non-zero on any failure, error or warning.
@@ -59,7 +59,8 @@ text or real lighting) that is good for checking layout, sizes and colors.
 ## HUD and board previews
 
 `ui_snapshots.luau` dumps the HUD at a few moments, and `server_test.luau` dumps the Market
-Stars board (`out/ui_board.json`). `ui.html` draws those trees with Roblox-like layout rules:
+Stars board (`out/ui_board.json`), the Hall of Fame (`out/ui_fame.json`) and a big-order
+speech bubble (`out/ui_bubble_big.json`). `ui.html` draws those trees with Roblox-like layout rules:
 
 ```sh
 lune run tests/ui_snapshots.luau build/BrewAPotion.rbxlx out 844 390 phone

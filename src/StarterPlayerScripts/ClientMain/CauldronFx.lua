@@ -49,9 +49,9 @@ function CauldronFx.Init(playerGui: PlayerGui)
 		TextStrokeColor3 = P.DarkWood,
 		Parent = bar,
 	}, 20)
-	local back = Ui.new("Frame", {
-		Position = UDim2.fromOffset(0, 28),
-		Size = UDim2.new(1, 0, 0, 22),
+	local back = Ui.new("Frame", { -- inset by its outline (billboards clip)
+		Position = UDim2.fromOffset(2, 28),
+		Size = UDim2.new(1, -4, 0, 22),
 		BackgroundColor3 = P.PanelDark,
 		Parent = bar,
 	}, { Ui.round(), Ui.stroke(P.Gold, 2) })

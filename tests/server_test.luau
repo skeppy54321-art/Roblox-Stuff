@@ -438,6 +438,62 @@ end)
 check("kid customers are smaller", kid and kid:GetAttribute("Kid") == true and math.abs(kid:GetScale() - Config.Tuning.Customers.KidScale) < 0.01, kid and kid:GetScale())
 check("...and stand on the ground", kid and math.abs(kid:GetPivot().Position.Y - plot.CounterFront.CFrame.Position.Y) < 0.05)
 Config.Tuning.Customers.KidChance = kidChance
+-- big orders: several of one potion, for 50% more
+do
+	local T = Config.Tuning.Customers
+	local chance = T.BigOrderChance
+	local soldBefore = data.Stats.PotionsSold
+	local vipChance = T.VipChance
+	T.BigOrderChance = 1
+	T.VipChance = 0 -- VIPs never place big orders
+	data.Stats.PotionsSold = math.max(soldBefore, T.BigOrderMinSales)
+	data.Potions = {}
+	local seenBig = {}
+	for _, c in plot:GetChildren() do
+		seenBig[c] = true
+	end
+	-- fresh customers (the ones already at the counter would wait up to 45s)
+	local PlotService = Engine.loaded(modules.PlotService)
+	Engine.loaded(modules.CustomerService).StartPlot(PlotService.GetPlot(player), player)
+	local big = waitFor(15, function()
+		for _, c in plot:GetChildren() do
+			if c.Name == "Customer" and not seenBig[c] and c:GetAttribute("Phase") == "Waiting" then
+				return c
+			end
+		end
+		return nil
+	end)
+	check("a big order arrives", big and big:GetAttribute("Amount") == T.BigOrderSize, big and big:GetAttribute("Amount"))
+	if big then
+		local wants = big:GetAttribute("Wants")
+		local bubbleText = big:FindFirstChild("Text", true).Text
+		check("the bubble asks for several", bubbleText:find(tostring(T.BigOrderSize)) ~= nil and big:FindFirstChild("BigOrderTag", true) ~= nil, bubbleText)
+		check("big orders wait longer", big:GetAttribute("Patience") == T.Patience * T.BigOrderPatience)
+		do -- for tests/preview/ui.html: the speech bubble (220 x 58 pixels)
+			local gui = big:FindFirstChild("Bubble", true)
+			fs.writeFile(OUT .. "/ui_bubble_big.json", serde.encode("json", { width = 220, height = 58, device = "surface", tree = Engine.dumpGui(gui) }))
+		end
+		goTo(big.Torso)
+		data.Potions = { [wants] = T.BigOrderSize - 1 }
+		task.wait(0.6)
+		Engine.signal(big.Torso.SellPrompt, "Triggered"):Fire(player)
+		task.wait(0.2)
+		check("can't fill a big order short", big:GetAttribute("Phase") == "Waiting" and data.Potions[wants] == T.BigOrderSize - 1)
+		data.Potions = { [wants] = T.BigOrderSize }
+		local before = data.Coins
+		task.wait(0.6)
+		Engine.signal(big.Torso.SellPrompt, "Triggered"):Fire(player)
+		task.wait(0.2)
+		local cue = lastRemote("Cue")
+		local tipBig = if cue and cue.args[1] == "Sale" then cue.args[2].Tip else 0
+		local expected = math.floor(Config.Recipes[wants].SellPrice * T.BigOrderSize * T.BigOrderBonus + 0.5)
+		check("big order sold: all three, 50% more", (data.Potions[wants] or 0) == 0 and data.Coins - before == expected + tipBig, `{data.Coins - before} vs {expected}+{tipBig}`)
+	end
+	T.BigOrderChance = chance
+	T.VipChance = vipChance
+	data.Stats.PotionsSold = soldBefore + (if big then T.BigOrderSize else 0)
+	PlayerData.Push(player)
+end
 
 print("== social ==")
 local SocialService = Engine.loaded(modules.SocialService)

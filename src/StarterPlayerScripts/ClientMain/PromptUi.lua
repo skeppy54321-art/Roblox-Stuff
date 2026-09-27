@@ -51,6 +51,7 @@ local function show(prompt: ProximityPrompt, inputType: Enum.ProximityPromptInpu
 	billboard.LightInfluence = 0
 	billboard.Size = UDim2.fromOffset(250, 76)
 	billboard.StudsOffset = Vector3.new(0, 1.2, 0)
+	billboard.ClipsDescendants = false -- the card pops a little past the edges when pressed
 	billboard.ResetOnSpawn = false
 	if adornee and (adornee:IsA("BasePart") or adornee:IsA("Attachment")) then
 		billboard.Adornee = adornee

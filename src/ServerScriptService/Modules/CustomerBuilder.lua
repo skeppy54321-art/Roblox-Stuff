@@ -22,6 +22,7 @@ export type Options = {
 	WantsText: string,
 	WantsColor: Color3,
 	Bubble: boolean?, -- false = no speech bubble (townsfolk)
+	BigOrder: boolean?, -- wants several potions: a "BIG ORDER" tag on the bubble
 }
 
 local CustomerBuilder = {}
@@ -161,9 +162,14 @@ end
 ------------------------------------------------------------------
 
 local function buildBubble(headPart: BasePart, options: Options)
+	-- Billboards clip whatever sticks out of them, so the card sits inset by its outline,
+	-- with room above it for a VIP or BIG ORDER tag on its top edge.
+	local tagged = options.Vip == true or options.BigOrder == true
+	local top = if tagged then 12 else 3
+	local cardHeight = if tagged then 56 else 50
 	local bubble = Instance.new("BillboardGui")
 	bubble.Name = "Bubble"
-	bubble.Size = UDim2.fromOffset(220, 58)
+	bubble.Size = UDim2.fromOffset(226, top + cardHeight + 8)
 	bubble.StudsOffset = Vector3.new(0, 3.6, 0)
 	bubble.MaxDistance = 80
 	bubble.LightInfluence = 0
@@ -171,7 +177,8 @@ local function buildBubble(headPart: BasePart, options: Options)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Card"
-	frame.Size = UDim2.new(1, 0, 1, -8)
+	frame.Position = UDim2.fromOffset(3, top)
+	frame.Size = UDim2.fromOffset(220, cardHeight)
 	frame.BackgroundColor3 = P.PanelCream
 	frame.Parent = bubble
 	local corner = Instance.new("UICorner")
@@ -213,8 +220,8 @@ local function buildBubble(headPart: BasePart, options: Options)
 	local label = Instance.new("TextLabel")
 	label.Name = "Text"
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromOffset(42, 4)
-	label.Size = UDim2.new(1, -50, 1, -8)
+	label.Position = UDim2.fromOffset(42, if tagged then 10 else 4) -- (below the tag)
+	label.Size = UDim2.new(1, -50, 1, if tagged then -14 else -8)
 	label.Font = Enum.Font.FredokaOne
 	label.TextScaled = true
 	label.TextWrapped = true
@@ -222,11 +229,29 @@ local function buildBubble(headPart: BasePart, options: Options)
 	label.Text = options.WantsText
 	label.Parent = frame
 
+	if options.BigOrder then
+		local tag = Instance.new("TextLabel")
+		tag.Name = "BigOrderTag"
+		tag.AnchorPoint = Vector2.new(0.5, 0.5)
+		tag.Position = UDim2.fromScale(0.5, 0)
+		tag.Size = UDim2.fromOffset(96, 20)
+		tag.BackgroundColor3 = Color3.fromRGB(90, 190, 255)
+		tag.Font = Enum.Font.FredokaOne
+		tag.TextScaled = true
+		tag.TextColor3 = P.TextDark
+		tag.Text = "BIG ORDER"
+		tag.ZIndex = 2
+		tag.Parent = frame
+		local tagCorner = Instance.new("UICorner")
+		tagCorner.CornerRadius = UDim.new(0.5, 0)
+		tagCorner.Parent = tag
+	end
+
 	if options.Vip then
 		local vip = Instance.new("TextLabel")
 		vip.Name = "VipTag"
-		vip.AnchorPoint = Vector2.new(0.5, 0.5)
-		vip.Position = UDim2.new(1, -6, 0, 2)
+		vip.AnchorPoint = Vector2.new(1, 0.5)
+		vip.Position = UDim2.new(1, -8, 0, 0)
 		vip.Size = UDim2.fromOffset(42, 20)
 		vip.BackgroundColor3 = P.Gold
 		vip.Font = Enum.Font.FredokaOne

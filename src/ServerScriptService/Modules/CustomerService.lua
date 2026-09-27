@@ -29,6 +29,7 @@ type Slot = {
 	Model: Model?,
 	Wants: string,
 	Vip: boolean,
+	Amount: number, -- how many they want (big orders want several)
 	WaitingSince: number, -- server time they reached the counter
 }
 type Entry = { Owner: Player, Slots: { Slot } }
@@ -162,20 +163,32 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	end
 	local recipe = Config.Recipes[slot.Wants]
 	local have = data.Potions[slot.Wants] or 0
-	if have < 1 then
-		Net.Notify(player, `They want a {recipe.DisplayName}. Brew one at your cauldron!`, "bad")
+	local amount = slot.Amount
+	if have < amount then
+		Net.Notify(
+			player,
+			if amount > 1
+				then `They want {amount} {recipe.DisplayName}s and you have {have}. Brew more!`
+				else `They want a {recipe.DisplayName}. Brew one at your cauldron!`,
+			"bad"
+		)
 		return
 	end
 
 	-- All checks passed: change state immediately so a double-press can't sell twice.
 	slot.Phase = "Reacting"
 	local vipBonus = if slot.Vip then T.VipPriceMultiplier else 1
-	local price = math.floor(recipe.SellPrice * vipBonus * Config.GetCoinMultiplier(data.Rebirths) + 0.5)
+	local orderBonus = if amount > 1 then T.BigOrderBonus else 1
+	local coinBonus = Config.GetCoinMultiplier(data.Rebirths)
+	local price = math.floor(recipe.SellPrice * amount * orderBonus * vipBonus * coinBonus + 0.5)
 	local quick = now() - slot.WaitingSince <= T.TipWindow
 	local tip = if quick then math.ceil(price * T.TipShare) else 0
-	data.Potions[slot.Wants] = have - 1
+	data.Potions[slot.Wants] = have - amount
 	data.Coins += price + tip
-	PlayerData.AddStat(data, "PotionsSold", 1)
+	PlayerData.AddStat(data, "PotionsSold", amount)
+	if amount > 1 then
+		PlayerData.AddStat(data, "BigOrders", 1)
+	end
 	PlayerData.AddStat(data, "CoinsEarned", price + tip)
 	if tip > 0 then
 		PlayerData.AddStat(data, "Tips", 1)
@@ -198,7 +211,7 @@ local function sell(player: Player, plot: Plot, slot: Slot, model: Model)
 	Net.Cue(
 		player,
 		"Sale",
-		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Position = torso.Position }
+		{ Recipe = slot.Wants, Amount = price, Tip = tip, Vip = slot.Vip, Big = amount > 1, Position = torso.Position }
 	)
 	Net.PlayEffect:FireAllClients(model, recipe.Effect)
 	changed(plot)
@@ -224,13 +237,25 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 	end
 	local wants = pickWants(data, taken)
 	local recipe = Config.Recipes[wants]
-	local vip = (data.Stats.PotionsSold or 0) >= T.VipMinSales and rng:NextNumber() < T.VipChance
+	local sold = data.Stats.PotionsSold or 0
+	local vip = sold >= T.VipMinSales and rng:NextNumber() < T.VipChance
+	local amount = if not vip
+			and sold >= T.BigOrderMinSales
+			and rng:NextNumber() < T.BigOrderChance
+		then T.BigOrderSize
+		else 1
+	if amount > 1 and shelfFull(data) and (data.Potions[wants] or 0) < amount then
+		amount = 1 -- nothing more can be brewed: only ask for what the shelf can fill
+	end
 	local spot = spotFor(plot, slot.Index, #entry.Slots)
 	local model = CustomerBuilder.Build(spot, {
 		Vip = vip,
-		WantsText = `I want a {recipe.DisplayName}!`,
+		BigOrder = amount > 1,
+		WantsText = if amount > 1 then `I want {amount} {recipe.DisplayName}s!` else `I want a {recipe.DisplayName}!`,
 		WantsColor = recipe.Color,
 	})
+	model:SetAttribute("Amount", amount)
+	model:SetAttribute("Patience", T.Patience * (if amount > 1 then T.BigOrderPatience else 1))
 	if rng:NextNumber() < T.KidChance then
 		model:ScaleTo(T.KidScale) -- around the feet, so they still stand on the ground
 		model:SetAttribute("Kid", true)
@@ -245,6 +270,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 	slot.Model = model
 	slot.Wants = wants
 	slot.Vip = vip
+	slot.Amount = amount
 	slot.Phase = "Arriving"
 	changed(plot)
 
@@ -260,6 +286,7 @@ local function spawnCustomer(plot: Plot, entry: Entry, slot: Slot)
 		if torso then
 			local objectText = if vip
 				then `{recipe.DisplayName} (VIP pays x{T.VipPriceMultiplier}!)`
+				elseif amount > 1 then `{amount} x {recipe.DisplayName} (big order!)`
 				else recipe.DisplayName
 			local prompt = Kit.Prompt(torso, "SellPrompt", "Sell", objectText)
 			prompt.Triggered:Connect(function(player)
@@ -283,8 +310,16 @@ end
 
 local function addSlot(plot: Plot, entry: Entry)
 	local index = #entry.Slots + 1
-	local slot: Slot =
-		{ Index = index, Token = 1, Phase = "Empty", Model = nil, Wants = "", Vip = false, WaitingSince = 0 }
+	local slot: Slot = {
+		Index = index,
+		Token = 1,
+		Phase = "Empty",
+		Model = nil,
+		Wants = "",
+		Vip = false,
+		Amount = 1,
+		WaitingSince = 0,
+	}
 	table.insert(entry.Slots, slot)
 	scheduleSpawn(plot, slot, T.FirstSpawnDelay + (index - 1) * 2.5)
 end
@@ -329,20 +364,20 @@ function CustomerService.StopPlot(plot: Plot)
 	changed(plot)
 end
 
--- Potions the customers at this plot want (waiting ones first).
-function CustomerService.GetWants(plot: Plot): { string }
-	local wants = {}
+-- What the customers at this plot want and how many (waiting ones first).
+function CustomerService.GetOrders(plot: Plot): { { Recipe: string, Amount: number } }
+	local orders = {}
 	local entry = byPlot[plot]
 	if entry then
 		for _, phase in { "Waiting", "Arriving" } do
 			for _, slot in entry.Slots do
 				if slot.Phase == phase then
-					table.insert(wants, slot.Wants)
+					table.insert(orders, { Recipe = slot.Wants, Amount = slot.Amount })
 				end
 			end
 		end
 	end
-	return wants
+	return orders
 end
 
 -- Called whenever a customer arrives, is served or leaves.
@@ -372,10 +407,11 @@ local function checkPatience()
 			local model = slot.Model
 			if slot.Phase == "Waiting" and model and data then
 				local waited = t - slot.WaitingSince
-				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) == 0
+				local stuck = shelfFull(data) and (data.Potions[slot.Wants] or 0) < slot.Amount
+				local patience = T.Patience * (if slot.Amount > 1 then T.BigOrderPatience else 1)
 				if stuck and waited >= T.StuckPatience then
 					giveUp(plot, slot, model, "Oh, you're all out!")
-				elseif waited >= T.Patience then
+				elseif waited >= patience then
 					giveUp(plot, slot, model, "Maybe next time!")
 				end
 			end

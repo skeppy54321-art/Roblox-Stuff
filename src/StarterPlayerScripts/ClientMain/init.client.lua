@@ -284,7 +284,7 @@ local function hitboxOf(model: Instance?): BasePart?
 	return if hitbox and hitbox:IsA("BasePart") then hitbox else nil
 end
 
-type CustomerInfo = { Model: Model, Wants: string, Phase: string }
+type CustomerInfo = { Model: Model, Wants: string, Phase: string, Amount: number }
 
 local function myCustomers(): { CustomerInfo }
 	local list = {}
@@ -293,8 +293,10 @@ local function myCustomers(): { CustomerInfo }
 		for _, child in plot:GetChildren() do
 			if child.Name == "Customer" and child:IsA("Model") then
 				local wants, phase = child:GetAttribute("Wants"), child:GetAttribute("Phase")
+				local amount = child:GetAttribute("Amount")
 				if typeof(wants) == "string" and typeof(phase) == "string" then
-					table.insert(list, { Model = child, Wants = wants, Phase = phase })
+					local count = if typeof(amount) == "number" then amount else 1
+					table.insert(list, { Model = child, Wants = wants, Phase = phase, Amount = count })
 				end
 			end
 		end
@@ -375,8 +377,9 @@ end
 -- have left (they give up at zero): green, then yellow, then red.
 local function updatePatienceBars()
 	local now = workspace:GetServerTimeNow()
-	local patience = Config.Tuning.Customers.Patience
 	for _, c in myCustomers() do
+		local limit = c.Model:GetAttribute("Patience")
+		local patience = if typeof(limit) == "number" then limit else Config.Tuning.Customers.Patience
 		local card = c.Model:FindFirstChild("Card", true)
 		if c.Phase == "Waiting" and card and card:IsA("Frame") then
 			local bar = card:FindFirstChild("Patience")
@@ -424,9 +427,10 @@ local function nextGoal(): (string, BasePart?, string?)
 
 	-- a waiting customer wants something you have: go sell it
 	for _, c in customers do
-		if c.Phase == "Waiting" and (s.Potions[c.Wants] or 0) > 0 then
+		if c.Phase == "Waiting" and (s.Potions[c.Wants] or 0) >= c.Amount then
 			local recipe = Config.Recipes[c.Wants]
-			return `Sell the {recipe.DisplayName} to your customer!`, c.Model.PrimaryPart, "Sell!"
+			local what = if c.Amount > 1 then `{c.Amount} {recipe.DisplayName}s` else `the {recipe.DisplayName}`
+			return `Sell {what} to your customer!`, c.Model.PrimaryPart, "Sell!"
 		end
 	end
 	if isBrewing(cauldron) then
@@ -449,7 +453,7 @@ local function nextGoal(): (string, BasePart?, string?)
 	-- work toward what a customer wants (or the first recipe if nobody is here yet)
 	local target = Config.RecipeOrder[1]
 	for _, c in customers do
-		if (s.Potions[c.Wants] or 0) == 0 then
+		if (s.Potions[c.Wants] or 0) < c.Amount then
 			target = c.Wants
 			break
 		end

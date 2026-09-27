@@ -67,14 +67,14 @@ function BrewService.ResetCauldron(plot: Plot)
 end
 
 -- What pressing the cauldron brews: a potion a customer is waiting for (and you don't
--- have yet), else the last one you brewed, else the priciest one you can make.
+-- have enough of yet), else the last one you brewed, else the priciest one you can make.
 local function suggest(player: Player, data: Data, plot: Plot): string?
 	local function canBrew(id: string): boolean
 		return Config.IsRecipeUnlocked(data.Upgrades, id) and Config.HasIngredientsFor(data.Ingredients, id)
 	end
-	for _, id in CustomerService.GetWants(plot) do
-		if (data.Potions[id] or 0) == 0 and canBrew(id) then
-			return id
+	for _, order in CustomerService.GetOrders(plot) do
+		if (data.Potions[order.Recipe] or 0) < order.Amount and canBrew(order.Recipe) then
+			return order.Recipe
 		end
 	end
 	local last = lastRecipe[player]
